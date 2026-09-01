@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/cartograph-core",
+    "crates/cartograph-db",
+    "crates/cartograph-ast",
+    "crates/cartograph-engine",
+    "crates/cartograph-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Pankaj Redekar"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/pankajredekar/cartograph"
+readme = "README.md"
+
+[workspace.dependencies]
+cartograph-core = { path = "crates/cartograph-core" }
+cartograph-db = { path = "crates/cartograph-db" }
+cartograph-ast = { path = "crates/cartograph-ast" }
+cartograph-engine = { path = "crates/cartograph-engine" }
