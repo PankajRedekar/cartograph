@@ -1,7 +1,7 @@
 ## Purpose
 Performs blast-radius impact analysis across symbols, files, git branches, or pull requests to map downstream dependencies and flag potential breaking changes.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Symbol and File Blast-Radius Mapping
 The system SHALL traverse incoming and outgoing graph edges from a modified symbol or file to list all affected downstream components, views, models, and tests.

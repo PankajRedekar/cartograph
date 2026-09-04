@@ -1,7 +1,7 @@
 ## Purpose
 Delivers sub-3ms 1-turn hybrid AST code search and sub-graph context localization to return exact symbol definitions, connected dependencies, and syntax-highlighted code snippets for developers and AI agents.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 1-Turn Subgraph Code Retrieval
 The system SHALL resolve queries for ticket titles, symbol names, or features into exact file:line spans and inlined source code snippets in 1 turn.
