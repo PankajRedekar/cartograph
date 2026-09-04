@@ -44,13 +44,18 @@ pub fn configure_connection(conn: &Connection, config: &SqliteConfig) -> Result<
 
     // Disk PRAGMAs (skip journal mode / mmap for in-memory)
     if config.path != ":memory:" {
-        conn.pragma_update(None, "journal_mode", &config.journal_mode)
+        // journal_mode returns a row with the applied mode
+        let journal_sql = format!("PRAGMA journal_mode = {}", config.journal_mode);
+        conn.query_row(&journal_sql, [], |_| Ok(()))
             .map_err(|e| CartographError::Database(format!("Failed to set journal mode: {e}")))?;
 
+        // synchronous doesn't return rows
         conn.pragma_update(None, "synchronous", &config.synchronous)
             .map_err(|e| CartographError::Database(format!("Failed to set synchronous mode: {e}")))?;
 
-        conn.pragma_update(None, "mmap_size", config.mmap_size as i64)
+        // mmap_size returns a row with the resulting mmap limit
+        let mmap_sql = format!("PRAGMA mmap_size = {}", config.mmap_size);
+        conn.query_row(&mmap_sql, [], |_| Ok(()))
             .map_err(|e| CartographError::Database(format!("Failed to set mmap size: {e}")))?;
     }
 

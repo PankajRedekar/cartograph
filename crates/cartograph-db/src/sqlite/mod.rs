@@ -509,7 +509,7 @@ impl GraphStoreBackend for SqliteBackend {
     async fn flush(&self) -> Result<()> {
         let conn = self.conn.lock();
         if self.config.path != ":memory:" {
-            conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+            conn.query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |_| Ok(()))
                 .map_err(|e| CartographError::Database(format!("Failed to flush WAL checkpoint: {e}")))?;
         }
         Ok(())
