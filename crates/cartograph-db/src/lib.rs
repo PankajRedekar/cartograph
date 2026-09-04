@@ -1,5 +1,7 @@
+pub mod memory;
 pub mod sqlite;
 
+pub use memory::MemoryBackend;
 pub use sqlite::SqliteBackend;
 
 #[cfg(test)]
@@ -112,13 +114,11 @@ mod tests {
         let n1 = make_test_node("cartograph://src/a.rs::::node_a#function", "node_a", NodeKind::Function, "src/a.rs");
         let n2 = make_test_node("cartograph://src/b.rs::::node_b#function", "node_b", NodeKind::Function, "src/b.rs");
 
-        // Create mutually calling cycle: A -> B, B -> A
         let e1 = Edge::new(&n1.id, &n2.id, EdgeKind::Calls);
         let e2 = Edge::new(&n2.id, &n1.id, EdgeKind::Calls);
 
         backend.insert_batch(&[n1.clone(), n2.clone()], &[e1, e2]).await.unwrap();
 
-        // Should not loop infinitely
         let downstream = backend.get_downstream_dependencies(&n1.id, 10).await.unwrap();
         assert_eq!(downstream.len(), 1);
         assert_eq!(downstream[0].id, n2.id);
@@ -137,11 +137,58 @@ mod tests {
         assert_eq!(backend.get_file_hash("src/a.rs").await.unwrap(), Some("hash1".to_string()));
         assert!(backend.get_node(&n1.id).await.unwrap().is_some());
 
-        // Update file graph with v2
         let n2 = make_test_node("cartograph://src/a.rs::::v2#function", "v2", NodeKind::Function, "src/a.rs");
         backend.update_file_graph("src/a.rs", "hash2", &[n2.clone()], &[]).await.unwrap();
         assert_eq!(backend.get_file_hash("src/a.rs").await.unwrap(), Some("hash2".to_string()));
         assert!(backend.get_node(&n1.id).await.unwrap().is_none());
         assert!(backend.get_node(&n2.id).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_memory_backend_lifecycle_and_traversals() {
+        let backend = MemoryBackend::new();
+
+        // 1. File hashing
+        assert_eq!(backend.get_file_hash("src/lib.rs").await.unwrap(), None);
+        backend.set_file_hash("src/lib.rs", "hash_mem").await.unwrap();
+        assert_eq!(backend.get_file_hash("src/lib.rs").await.unwrap(), Some("hash_mem".to_string()));
+
+        // 2. Batch insertion
+        let n1 = make_test_node("cartograph://src/a.rs::::start#function", "start", NodeKind::Function, "src/a.rs");
+        let n2 = make_test_node("cartograph://src/b.rs::::middle#function", "middle", NodeKind::Function, "src/b.rs");
+        let n3 = make_test_node("cartograph://src/c.rs::::end#function", "end", NodeKind::Function, "src/c.rs");
+
+        let e1 = Edge::new(&n1.id, &n2.id, EdgeKind::Calls);
+        let e2 = Edge::new(&n2.id, &n3.id, EdgeKind::Calls);
+
+        backend.insert_batch(&[n1.clone(), n2.clone(), n3.clone()], &[e1, e2]).await.unwrap();
+
+        // 3. Lookups
+        assert_eq!(backend.get_node(&n1.id).await.unwrap(), Some(n1.clone()));
+        assert_eq!(backend.get_nodes_by_name("middle").await.unwrap().len(), 1);
+        assert_eq!(backend.get_nodes_by_filepath("src/c.rs").await.unwrap().len(), 1);
+
+        // 4. Substring Search
+        let res = backend.search("mid", 10).await.unwrap();
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].node.name, "middle");
+
+        // 5. Traversals
+        let downstream = backend.get_downstream_dependencies(&n1.id, 5).await.unwrap();
+        assert_eq!(downstream.len(), 2);
+
+        let upstream = backend.get_upstream_impact(&n3.id, 5).await.unwrap();
+        assert_eq!(upstream.len(), 2);
+
+        let path = backend.find_shortest_path(&n1.id, &n3.id).await.unwrap();
+        assert_eq!(path, vec![n1.id.clone(), n2.id.clone(), n3.id.clone()]);
+
+        // 6. Delete file data
+        backend.delete_file_data("src/b.rs").await.unwrap();
+        assert_eq!(backend.get_node(&n2.id).await.unwrap(), None);
+
+        // Traversals after deletion shouldn't find path n1 -> n3 because n2 was removed
+        let broken_path = backend.find_shortest_path(&n1.id, &n3.id).await.unwrap();
+        assert!(broken_path.is_empty());
     }
 }
