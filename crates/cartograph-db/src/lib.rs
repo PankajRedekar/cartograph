@@ -1,6 +1,8 @@
+pub mod factory;
 pub mod memory;
 pub mod sqlite;
 
+pub use factory::create_backend;
 pub use memory::MemoryBackend;
 pub use sqlite::SqliteBackend;
 
@@ -8,6 +10,7 @@ pub use sqlite::SqliteBackend;
 mod tests {
     use super::*;
     use cartograph_core::backend::GraphStoreBackend;
+    use cartograph_core::config::StorageConfig;
     use cartograph_core::model::{Edge, EdgeKind, Node, NodeKind};
 
     fn make_test_node(id: &str, name: &str, kind: NodeKind, filepath: &str) -> Node {
@@ -26,6 +29,27 @@ mod tests {
             checksum: Some("chk123".to_string()),
             metadata: None,
         }
+    }
+
+    #[tokio::test]
+    async fn test_factory_creation() {
+        // Test memory backend creation via factory
+        let mem_cfg = StorageConfig::memory();
+        let mem_backend = create_backend(&mem_cfg).expect("Failed to create memory backend via factory");
+        assert_eq!(mem_backend.stats().await.unwrap().total_nodes, 0);
+
+        // Test sqlite in-memory backend creation via factory
+        let sqlite_cfg = StorageConfig::sqlite(":memory:");
+        let sqlite_backend = create_backend(&sqlite_cfg).expect("Failed to create sqlite backend via factory");
+        assert_eq!(sqlite_backend.stats().await.unwrap().total_nodes, 0);
+
+        // Test invalid backend
+        let invalid_cfg = StorageConfig {
+            backend: "nonexistent".to_string(),
+            sqlite: None,
+            memory: None,
+        };
+        assert!(create_backend(&invalid_cfg).is_err());
     }
 
     #[tokio::test]
