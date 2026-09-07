@@ -125,3 +125,98 @@ impl ProfileConfig {
             .unwrap_or_default()
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GitDiffMode {
+    StagedOnly,
+    BranchRange(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IndexConfig {
+    #[serde(default = "default_exclude_patterns")]
+    pub exclude_patterns: Vec<String>,
+
+    #[serde(default = "default_max_file_size_bytes")]
+    pub max_file_size_bytes: usize,
+
+    #[serde(default = "default_mmap_threshold_bytes")]
+    pub mmap_threshold_bytes: usize,
+
+    #[serde(default)]
+    pub follow_symlinks: bool,
+
+    #[serde(default)]
+    pub num_threads: Option<usize>,
+}
+
+fn default_exclude_patterns() -> Vec<String> {
+    vec![
+        ".git".to_string(),
+        ".cartograph".to_string(),
+        "node_modules".to_string(),
+        "vendor".to_string(),
+        "target".to_string(),
+        "dist".to_string(),
+        "build".to_string(),
+        ".venv".to_string(),
+        "venv".to_string(),
+        "__pycache__".to_string(),
+        ".idea".to_string(),
+        ".vscode".to_string(),
+    ]
+}
+
+fn default_max_file_size_bytes() -> usize {
+    2 * 1024 * 1024 // 2MB
+}
+
+fn default_mmap_threshold_bytes() -> usize {
+    64 * 1024 // 64KB
+}
+
+impl Default for IndexConfig {
+    fn default() -> Self {
+        Self {
+            exclude_patterns: default_exclude_patterns(),
+            max_file_size_bytes: default_max_file_size_bytes(),
+            mmap_threshold_bytes: default_mmap_threshold_bytes(),
+            follow_symlinks: false,
+            num_threads: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WatchConfig {
+    #[serde(default = "default_debounce_ms")]
+    pub debounce_ms: u64,
+
+    #[serde(default = "default_cst_cache_capacity")]
+    pub cst_cache_capacity: usize,
+
+    #[serde(default = "default_track_blast_radius")]
+    pub track_blast_radius: bool,
+}
+
+fn default_debounce_ms() -> u64 {
+    25
+}
+
+fn default_cst_cache_capacity() -> usize {
+    500
+}
+
+fn default_track_blast_radius() -> bool {
+    true
+}
+
+impl Default for WatchConfig {
+    fn default() -> Self {
+        Self {
+            debounce_ms: default_debounce_ms(),
+            cst_cache_capacity: default_cst_cache_capacity(),
+            track_blast_radius: default_track_blast_radius(),
+        }
+    }
+}

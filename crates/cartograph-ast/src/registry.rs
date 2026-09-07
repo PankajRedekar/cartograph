@@ -18,6 +18,7 @@ const GENERATED_MARKERS: &[&str] = &[
 ];
 
 /// Registry and dispatcher for multi-language AST parsers.
+#[derive(Clone)]
 pub struct AstRegistry {
     parsers_by_ext: HashMap<String, Arc<dyn LanguageParser>>,
     parsers_by_name: HashMap<String, Arc<dyn LanguageParser>>,
@@ -103,6 +104,21 @@ impl AstRegistry {
             }
         }
 
+        false
+    }
+
+    /// Check if a path has a supported extension or special filename without reading content
+    pub fn is_supported_path(&self, path: &Path) -> bool {
+        if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+            if self.parsers_by_name.contains_key(filename) {
+                return true;
+            }
+        }
+        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            if self.parsers_by_ext.contains_key(&ext.to_lowercase()) {
+                return true;
+            }
+        }
         false
     }
 

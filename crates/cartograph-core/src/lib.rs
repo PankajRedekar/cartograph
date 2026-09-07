@@ -5,7 +5,9 @@ pub mod model;
 pub mod uri;
 
 pub use backend::GraphStoreBackend;
-pub use config::{MemoryConfig, ProfileConfig, SqliteConfig, StorageConfig};
+pub use config::{
+    GitDiffMode, IndexConfig, MemoryConfig, ProfileConfig, SqliteConfig, StorageConfig, WatchConfig,
+};
 pub use error::{CartographError, Result};
 pub use model::{Edge, EdgeKind, GraphStats, Node, NodeKind, SearchResult};
 pub use uri::{build_uri, parse_uri, CanonicalUri, URI_SCHEME};

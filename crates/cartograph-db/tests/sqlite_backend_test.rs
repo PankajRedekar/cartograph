@@ -135,3 +135,73 @@ async fn test_fts5_trigram_search_patterns() {
     let res_short = backend.search("id", 10).await.unwrap();
     assert!(!res_short.is_empty());
 }
+
+#[tokio::test]
+async fn test_get_all_file_hashes_and_differential_edge_preservation() {
+    let tmp = tempdir().expect("Failed to create tempdir");
+    let db_path = tmp.path().join("test_diff.db");
+    let config = SqliteConfig {
+        path: db_path.to_string_lossy().to_string(),
+        ..Default::default()
+    };
+    let backend: Arc<dyn GraphStoreBackend> = Arc::new(SqliteBackend::open(&config).expect("Failed to open disk SQLite"));
+
+    // 1. Set multiple file hashes
+    backend.set_file_hash("src/a.rs", "hash_a").await.unwrap();
+    backend.set_file_hash("src/b.rs", "hash_b").await.unwrap();
+    backend.set_file_hash("src/c.rs", "hash_c").await.unwrap();
+
+    let all_hashes = backend.get_all_file_hashes().await.unwrap();
+    assert_eq!(all_hashes.len(), 3);
+    assert_eq!(all_hashes.get("src/a.rs").unwrap(), "hash_a");
+    assert_eq!(all_hashes.get("src/b.rs").unwrap(), "hash_b");
+    assert_eq!(all_hashes.get("src/c.rs").unwrap(), "hash_c");
+
+    // 2. Setup nodes across file A and file B
+    let node_a = create_node("cartograph://src/a.rs::::caller#function", "caller", NodeKind::Function, "src/a.rs", "");
+    let node_b1 = create_node("cartograph://src/b.rs::::target_kept#function", "target_kept", NodeKind::Function, "src/b.rs", "");
+    let node_b2 = create_node("cartograph://src/b.rs::::target_removed#function", "target_removed", NodeKind::Function, "src/b.rs", "");
+
+    // Edge A -> B1, Edge A -> B2, Edge B1 -> A
+    let edge_a_b1 = Edge::new(&node_a.id, &node_b1.id, EdgeKind::Calls);
+    let edge_a_b2 = Edge::new(&node_a.id, &node_b2.id, EdgeKind::Calls);
+    let edge_b1_a = Edge::new(&node_b1.id, &node_a.id, EdgeKind::Calls);
+
+    backend.insert_batch(
+        &[node_a.clone(), node_b1.clone(), node_b2.clone()],
+        &[edge_a_b1.clone(), edge_a_b2.clone(), edge_b1_a.clone()],
+    ).await.unwrap();
+
+    let initial_stats = backend.stats().await.unwrap();
+    assert_eq!(initial_stats.total_nodes, 3);
+    assert_eq!(initial_stats.total_edges, 3);
+
+    // 3. Update file B: keep node_b1, remove node_b2, add new outgoing edge from B1 -> A
+    let mut updated_b1 = node_b1.clone();
+    updated_b1.docstring = Some("Updated docstring for target_kept".to_string());
+    let new_b1_out = Edge::new(&updated_b1.id, &node_a.id, EdgeKind::References);
+
+    backend.update_file_graph("src/b.rs", "hash_b_v2", &[updated_b1.clone()], &[new_b1_out.clone()]).await.unwrap();
+
+    // Verify file hash updated
+    assert_eq!(backend.get_file_hash("src/b.rs").await.unwrap(), Some("hash_b_v2".to_string()));
+
+    // Verify node counts: 2 nodes now (node_a, updated_b1)
+    let post_stats = backend.stats().await.unwrap();
+    assert_eq!(post_stats.total_nodes, 2);
+    assert!(backend.get_node(&node_b2.id).await.unwrap().is_none());
+    assert_eq!(backend.get_node(&node_b1.id).await.unwrap().unwrap().docstring, Some("Updated docstring for target_kept".to_string()));
+
+    // Verify edges:
+    // - Incoming edge A -> B1 (target_kept) MUST BE PRESERVED!
+    // - Incoming edge A -> B2 (target_removed) MUST BE DELETED!
+    // - Outgoing edge from B1 -> A was replaced by new_b1_out (References)
+    let callers_b1 = backend.get_upstream_impact(&node_b1.id, 1).await.unwrap();
+    let caller_ids: Vec<String> = callers_b1.iter().map(|n| n.id.clone()).collect();
+    assert!(caller_ids.contains(&node_a.id), "Incoming edge from A -> B1 should be preserved!");
+
+    let down_b1 = backend.get_downstream_dependencies(&node_b1.id, 1).await.unwrap();
+    let down_ids: Vec<String> = down_b1.iter().map(|n| n.id.clone()).collect();
+    assert!(down_ids.contains(&node_a.id));
+}
+

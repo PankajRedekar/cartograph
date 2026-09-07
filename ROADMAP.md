@@ -65,11 +65,13 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - **Rust / Go Parser**: Structs, impl blocks, functions, traits, modules.
   - **Documentation & Config Parser**: Markdown files, OpenAPI specs, YAML/JSON configuration files.
 
-- [ ] **1.3 High-Speed Parallel Indexer & File Watcher (`cartograph-engine`)**
-  - `cartograph index` CLI command.
-  - Incremental indexing using SHA-256 file content hashing (skips unchanged files).
-  - Multi-threaded file walking with `ignore` crate (respects `.gitignore`).
-  - Real-time file system watcher (`cartograph watch`) using `notify` to update the graph on file save in <10ms.
+- [ ] **1.3 High-Speed Parallel Indexer, Universal Linker & Real-Time File Watcher (`cartograph-engine`)**
+  - `cartograph index` CLI command with multi-threaded file walking via `ignore` (respecting `.gitignore`, `.ignore`, vendor filters) and zero-copy `memmap2` I/O.
+  - Bulk in-memory incremental indexing via SHA-256 (`<50ms` no-op re-index) and Git-diff aware indexing (`--staged`, `--branch`).
+  - Pipelined memory-bounded streaming (`crossbeam-channel`) capping peak footprint to `<150MB` RAM on 100k+ file monorepos.
+  - Universal multi-domain cross-file linker: systems code (traits, structs, call chains), distributed RPC (Protobuf/gRPC), data pipelines (SQL DDL to ORMs), web routes (`MapsTo`), and predictive tests (`Tests`).
+  - Real-time file system watcher (`cartograph watch`) using `notify` with debouncing, sub-50µs incremental CST re-parsing, and instant blast-radius reverse dependency notifications (`<10ms` total latency).
+  - Storage backend concurrency with non-blocking readers and true differential node/edge updates.
 
 - [ ] **1.4 1-Turn Subgraph Localization (`cartograph locate`)**
   - Hybrid search combining structural symbol matching and FTS5 text search.
@@ -154,8 +156,9 @@ Modern software engineering and AI-assisted development suffer from a critical c
 
 ```bash
 # Core Operations
-cartograph index [--path <path>] [--db <profile>] [--force]
-cartograph watch [--path <path>]
+cartograph index [--path <path>] [--db <profile>] [--force] [--staged] [--branch <range>] [--threads <n>] [--json]
+cartograph watch [--path <path>] [--db <profile>] [--debounce <ms>]
+cartograph status [--db <profile>] [--json]
 cartograph locate "<query>" [--code] [--limit 10] [--json]
 
 # Graph Analysis

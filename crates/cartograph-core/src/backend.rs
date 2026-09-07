@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use async_trait::async_trait;
 
 use crate::error::Result;
@@ -5,6 +6,9 @@ use crate::model::{Edge, GraphStats, Node, SearchResult};
 
 #[async_trait]
 pub trait GraphStoreBackend: Send + Sync {
+    /// Retrieve all tracked relative filepaths and their stored hashes in a single call.
+    async fn get_all_file_hashes(&self) -> Result<HashMap<String, String>>;
+
     /// Retrieve the stored hash for a given relative filepath.
     async fn get_file_hash(&self, filepath: &str) -> Result<Option<String>>;
 

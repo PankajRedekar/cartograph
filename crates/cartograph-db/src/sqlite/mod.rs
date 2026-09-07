@@ -2,6 +2,7 @@ pub mod connection;
 pub mod schema;
 pub mod traversal;
 
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -46,6 +47,26 @@ impl SqliteBackend {
 
 #[async_trait]
 impl GraphStoreBackend for SqliteBackend {
+    async fn get_all_file_hashes(&self) -> Result<HashMap<String, String>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn
+            .prepare("SELECT filepath, hash FROM file_hashes")
+            .map_err(|e| CartographError::Database(format!("Failed to prepare get_all_file_hashes: {e}")))?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|e| CartographError::Database(format!("Failed to query get_all_file_hashes: {e}")))?;
+
+        let mut map = HashMap::new();
+        for item in rows {
+            let (path, hash) = item.map_err(|e| CartographError::Database(format!("Failed to read file hash row: {e}")))?;
+            map.insert(path, hash);
+        }
+        Ok(map)
+    }
+
     async fn get_file_hash(&self, filepath: &str) -> Result<Option<String>> {
         let conn = self.conn.lock();
         let mut stmt = conn
@@ -205,22 +226,36 @@ impl GraphStoreBackend for SqliteBackend {
             .transaction()
             .map_err(|e| CartographError::Transaction(format!("Failed to begin update_file_graph transaction: {e}")))?;
 
-        // 1. Delete previous edges connected to file's nodes
+        // 1. Delete all outgoing edges originating from nodes in this file
         tx.execute(
             r#"
             DELETE FROM edges
             WHERE source_id IN (SELECT id FROM nodes WHERE filepath = ?1)
-               OR target_id IN (SELECT id FROM nodes WHERE filepath = ?1)
             "#,
             params![filepath],
         )
-        .map_err(|e| CartographError::Database(format!("Failed to delete existing edges: {e}")))?;
+        .map_err(|e| CartographError::Database(format!("Failed to delete existing outgoing edges: {e}")))?;
 
-        // 2. Delete previous nodes for file
-        tx.execute("DELETE FROM nodes WHERE filepath = ?1", params![filepath])
-            .map_err(|e| CartographError::Database(format!("Failed to delete existing nodes: {e}")))?;
+        // 2. Delete removed nodes and their incoming edges
+        let new_ids: HashSet<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
+        {
+            let mut old_nodes_stmt = tx.prepare("SELECT id FROM nodes WHERE filepath = ?1")
+                .map_err(|e| CartographError::Database(format!("Failed to prepare select old nodes: {e}")))?;
+            let old_node_rows = old_nodes_stmt.query_map(params![filepath], |row| row.get::<_, String>(0))
+                .map_err(|e| CartographError::Database(format!("Failed to query old nodes: {e}")))?;
 
-        // 3. Insert new nodes
+            for old_id_res in old_node_rows {
+                let old_id = old_id_res.map_err(|e| CartographError::Database(format!("Failed to read old node id: {e}")))?;
+                if !new_ids.contains(old_id.as_str()) {
+                    tx.execute("DELETE FROM edges WHERE target_id = ?1", params![old_id])
+                        .map_err(|e| CartographError::Database(format!("Failed to delete incoming edges for removed node: {e}")))?;
+                    tx.execute("DELETE FROM nodes WHERE id = ?1", params![old_id])
+                        .map_err(|e| CartographError::Database(format!("Failed to delete removed node: {e}")))?;
+                }
+            }
+        }
+
+        // 3. Upsert new nodes
         {
             let mut node_stmt = tx.prepare_cached(
                 r#"
@@ -229,6 +264,19 @@ impl GraphStoreBackend for SqliteBackend {
                     start_line, start_col, end_line, end_col,
                     signature, docstring, checksum, metadata
                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    kind = excluded.kind,
+                    filepath = excluded.filepath,
+                    scope = excluded.scope,
+                    start_line = excluded.start_line,
+                    start_col = excluded.start_col,
+                    end_line = excluded.end_line,
+                    end_col = excluded.end_col,
+                    signature = excluded.signature,
+                    docstring = excluded.docstring,
+                    checksum = excluded.checksum,
+                    metadata = excluded.metadata
                 "#,
             )
             .map_err(|e| CartographError::Database(format!("Failed to prepare node insert: {e}")))?;
