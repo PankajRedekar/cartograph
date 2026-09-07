@@ -50,14 +50,14 @@ Modern software engineering and AI-assisted development suffer from a critical c
 ### Phase 1: Core Engine & Multi-Language Graph Foundation (v1.0)
 *Objective: Build the core indexing pipeline, SQLite graph database schema, multi-language parser framework, and fast sub-graph localization.*
 
-- [ ] **1.1 Database Schema & Storage Layer (`cartograph-db`)**
+- [x] **1.1 Database Schema & Storage Layer (`cartograph-db`)**
   - High-performance SQLite schema with WAL (Write-Ahead Logging).
   - `nodes` table: `id`, `name`, `kind` (Module, Class, Function, Route, Model, Component, Test, Interface), `filepath`, `start_line`, `end_line`, `signature`, `docstring`, `hash`.
   - `edges` table: `source_id`, `target_id`, `kind` (Imports, Calls, Inherits, References, Tests, MapsTo), `metadata`.
   - FTS5 virtual table for lightning-fast full-text and fuzzy symbol search.
   - Multi-database profile support (`cartograph.toml` profiles: `--db default`, `--db ebill`).
 
-- [ ] **1.2 Multi-Language Tree-Sitter AST Engine (`cartograph-ast`)**
+- [x] **1.2 Multi-Language Tree-Sitter AST Engine (`cartograph-ast`)**
   - **Python / Django Parser**: Models, Views, URLs/Routes, DRF Serializers, Celery Tasks, Pytest test functions.
   - **TypeScript / JavaScript / React Parser**: TS interfaces, classes, functions, JSX/TSX React components, hooks, export/import dependencies.
   - **Ruby / Ruby on Rails Parser**: ActiveRecord Models, ActionControllers, Routes (`routes.rb`), Services, RSpec / Minitest specs, Gemfile dependencies.
