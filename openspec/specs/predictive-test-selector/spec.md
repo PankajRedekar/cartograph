@@ -1,7 +1,7 @@
 ## Purpose
 Identifies the minimal subset of unit and integration test functions that directly or indirectly execute changed symbols or target files, avoiding full test suite runs.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Graph-Based Test Case Resolution
 The system SHALL map code symbols to test functions via call graph paths and output executable test runner commands.

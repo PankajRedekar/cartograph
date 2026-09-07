@@ -1,7 +1,7 @@
 ## Purpose
 Enforces architectural boundaries, detects circular dependencies, calculates code complexity heatmaps, and identifies dead or orphaned code components.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Circular Dependency & Boundary Violations Detection
 The system SHALL lint graph edges to detect cycles and illegal import layers (e.g. database models importing web controller views).

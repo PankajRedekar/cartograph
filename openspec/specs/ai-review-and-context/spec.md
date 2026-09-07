@@ -1,7 +1,7 @@
 ## Purpose
 Provides AI-native PR reviews, business logic extraction, stack trace root-cause diagnosis, and a native Model Context Protocol (MCP) server for AI coding agents.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Contract-Aware AI PR Review
 The system SHALL evaluate pull request branch diffs against the structural graph to identify breaking contract changes, missing tests, and unhandled side-effects.
