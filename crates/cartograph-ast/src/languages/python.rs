@@ -394,12 +394,7 @@ impl<'a> PythonExtractor<'a> {
 
         // If parent class exists, emit `defines` edge
         if let Some(parent_uri) = parent_class_uri {
-            self.edges.push(Edge {
-                source_id: parent_uri.to_string(),
-                target_id: uri.clone(),
-                kind: EdgeKind::Defines,
-                metadata: None,
-            });
+            self.edges.push(Edge::new(parent_uri.to_string(), uri.clone(), EdgeKind::Defines));
         }
 
         // Enter function scope for body inspection

@@ -70,6 +70,14 @@ async fn test_sqlite_and_memory_parity() {
         let path = backend.find_shortest_path("node:1", "node:3").await.unwrap();
         assert_eq!(path, vec!["node:1", "node:2", "node:3"]);
 
+        // Batch edge retrieval and confidence filtering
+        let node2_edges = backend.get_edges_for_nodes(&["node:2".to_string()], 0.5).await.unwrap();
+        assert_eq!(node2_edges.len(), 2); // e1 (node:1 -> node:2) and e2 (node:2 -> node:3)
+
+        // Confidence filter test
+        let high_conf_edges = backend.get_edges_for_nodes(&["node:2".to_string()], 1.5).await.unwrap();
+        assert_eq!(high_conf_edges.len(), 0);
+
         // Search
         let search_res = backend.search("graph", 5).await.unwrap();
         assert_eq!(search_res.len(), 2);

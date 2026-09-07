@@ -89,6 +89,8 @@ mod tests {
             target_id: "cartograph://src/b.rs::::bar#function".to_string(),
             kind: EdgeKind::Calls,
             metadata: Some(serde_json::json!({ "call_count": 3 })),
+            confidence: Some(0.95),
+            weight: Some(1.0),
         };
 
         let json = serde_json::to_string(&edge).expect("Failed to serialize Edge");

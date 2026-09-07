@@ -65,7 +65,7 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - **Rust / Go Parser**: Structs, impl blocks, functions, traits, modules.
   - **Documentation & Config Parser**: Markdown files, OpenAPI specs, YAML/JSON configuration files.
 
-- [ ] **1.3 High-Speed Parallel Indexer, Universal Linker & Real-Time File Watcher (`cartograph-engine`)**
+- [x] **1.3 High-Speed Parallel Indexer, Universal Linker & Real-Time File Watcher (`cartograph-engine`)**
   - `cartograph index` CLI command with multi-threaded file walking via `ignore` (respecting `.gitignore`, `.ignore`, vendor filters) and zero-copy `memmap2` I/O.
   - Bulk in-memory incremental indexing via SHA-256 (`<50ms` no-op re-index) and Git-diff aware indexing (`--staged`, `--branch`).
   - Pipelined memory-bounded streaming (`crossbeam-channel`) capping peak footprint to `<150MB` RAM on 100k+ file monorepos.
@@ -74,9 +74,13 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - Storage backend concurrency with non-blocking readers and true differential node/edge updates.
 
 - [ ] **1.4 1-Turn Subgraph Localization (`cartograph locate`)**
-  - Hybrid search combining structural symbol matching and FTS5 text search.
-  - Inline code snippet retrieval with context padding lines.
-  - Structured output formats: JSON, Markdown, Terminal (colorized).
+  - **Centrality- & Churn-Aware Hybrid Search**: Combines exact identifier lookups, qualified scope matching (`Scope::name`), SQLite FTS5 trigram BM25 text search, topological degree centrality, and git recency/churn velocity ranking (`<1.2ms`).
+  - **Bi-Directional Subgraphs, Flow Chains & Type Inlining**: Supports radial BFS (`--depth 1..5`), linear end-to-end execution flow chains (`--flow`), and automatic parameter/return type contract inlining (`--resolve-types`).
+  - **Edge Confidence & Static vs. Dynamic Filtering**: First-class `confidence REAL` edge weighting with threshold filtering (`--min-confidence 0.8`) to eliminate ambiguous dynamic candidate calls.
+  - **Context Density Tiers & AI Token Budgeting**: Configurable context tiers (`--detail minimal|signatures|full`), context padding (`--context 3`), and hierarchical token degradation (`--max-tokens 4000`) preventing LLM context window overflow.
+  - **Quad-Engine Presentation & Interactive TUI**: Interactive ANSI-colorized terminal with ASCII trees, split-pane interactive TUI (`-i`), GitHub-flavored Markdown with auto-generated Mermaid.js flowcharts (`graph LR`), MCP-compatible JSON, and structured Agent XML blocks.
+  - **Inline Directives & Project Config**: In-query filter directives (`kind:fn path:src/ min-conf:0.8`) and centralized repository configuration via `cartograph.toml`.
+  - **Performance SLA**: Complete 1-turn end-to-end subgraph retrieval and formatting in **<3ms** on 50,000-node codebases.
 
 ---
 

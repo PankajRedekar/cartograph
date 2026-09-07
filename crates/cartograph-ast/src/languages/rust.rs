@@ -365,12 +365,7 @@ impl<'a> RustExtractor<'a> {
         // defines edge if inside an impl block
         if let Some(parent) = self.scope_stack.last() {
             let parent_uri = build_uri(self.filepath, "", parent, &NodeKind::Struct);
-            self.edges.push(Edge {
-                source_id: parent_uri,
-                target_id: uri,
-                kind: EdgeKind::Defines,
-                metadata: None,
-            });
+            self.edges.push(Edge::new(parent_uri, uri, EdgeKind::Defines));
         }
 
         if let Some(body) = node.child_by_field_name("body") {

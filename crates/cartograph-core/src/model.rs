@@ -173,6 +173,23 @@ pub struct Edge {
     pub kind: EdgeKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weight: Option<f64>,
+}
+
+impl Default for Edge {
+    fn default() -> Self {
+        Self {
+            source_id: String::new(),
+            target_id: String::new(),
+            kind: EdgeKind::Calls,
+            metadata: None,
+            confidence: Some(1.0),
+            weight: Some(1.0),
+        }
+    }
 }
 
 impl Edge {
@@ -182,7 +199,19 @@ impl Edge {
             target_id: target_id.into(),
             kind,
             metadata: None,
+            confidence: Some(1.0),
+            weight: Some(1.0),
         }
+    }
+
+    pub fn with_confidence(mut self, confidence: f64) -> Self {
+        self.confidence = Some(confidence);
+        self
+    }
+
+    pub fn with_weight(mut self, weight: f64) -> Self {
+        self.weight = Some(weight);
+        self
     }
 }
 

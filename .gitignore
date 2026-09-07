@@ -1,3 +1,4 @@
 openspec/changes
 .agent/
 target/
+.cartograph/

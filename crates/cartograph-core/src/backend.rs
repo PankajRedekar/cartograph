@@ -52,6 +52,10 @@ pub trait GraphStoreBackend: Send + Sync {
     /// Find the shortest path between two nodes, returning the ordered sequence of node IDs.
     async fn find_shortest_path(&self, source_id: &str, target_id: &str) -> Result<Vec<String>>;
 
+    /// Retrieve all incoming and outgoing edges connecting any of the specified node IDs
+    /// whose confidence is greater than or equal to min_confidence.
+    async fn get_edges_for_nodes(&self, node_ids: &[String], min_confidence: f64) -> Result<Vec<Edge>>;
+
     /// Return aggregate statistics of the graph store.
     async fn stats(&self) -> Result<GraphStats>;
 
