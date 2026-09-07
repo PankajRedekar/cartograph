@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/PankajRedekar/cartograph/actions"><img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-2024%20edition-orange?style=flat-square&logo=rust" alt="Rust 2024" /></a>
-  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/roadmap-Phase%201%20Complete-blue?style=flat-square" alt="Roadmap" /></a>
+  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/roadmap-Phase%202.1%20Complete-blue?style=flat-square" alt="Roadmap" /></a>
   <a href="openspec/specs/"><img src="https://img.shields.io/badge/specs-OpenSpec%20verified-purple?style=flat-square" alt="OpenSpec" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue?style=flat-square" alt="License" /></a>
 </p>
@@ -21,7 +21,7 @@ Modern software development with AI agents (Claude Code, Cursor, Windsurf, Copil
 - **Fragmented Context**: Raw text matching lacks structural awareness—it confuses variable names with function declarations, misses cross-file interface implementations, and cannot trace execution flow across architectural layers.
 - **Token Exhaustion**: Feeding entire files into prompt context windows quickly burns rate limits and budget ceilings while degrading model reasoning.
 
-**Cartograph solves this in a single turn.** By parsing multi-language source code into an embedded, highly optimized AST structural graph database (`cartograph.db`), Cartograph enables **sub-3ms 1-turn subgraph localization (`cartograph locate`)**. It extracts exact symbol definitions, bidirectional callers/callees, inlined type contracts, predictive test coverage, and token-budgeted code slices in one deterministic shot.
+**Cartograph solves this in a single turn.** By parsing multi-language source code into an embedded, highly optimized AST structural graph database (`cartograph.db`), Cartograph enables **sub-3ms 1-turn subgraph localization (`cartograph locate`)** and **sub-25ms blast-radius impact analysis (`cartograph impact`)**. It extracts exact symbol definitions, bidirectional callers/callees, inlined type contracts, predictive test coverage, breaking changes, and token-budgeted code slices in one deterministic shot.
 
 ---
 
@@ -29,13 +29,14 @@ Modern software development with AI agents (Claude Code, Cursor, Windsurf, Copil
 
 | Feature | Description | Performance |
 | :--- | :--- | :--- |
+| **💥 Blast-Radius Impact Analysis** | Reverse transitive dependency propagation, AST-grounded git diff mapping, SemVer 2.0 release guard, God-object coupling smell detector, and speculative refactoring simulations. | **< 25ms** |
 | **⚡ Sub-3ms 1-Turn Localization** | Resolves queries directly into localized subgraphs containing target symbols, callers, callees, and code snippets in a single command. | **< 3ms** |
 | **🧠 Centrality- & Churn-Aware Search** | Blends exact matching, qualified scope (`Scope::name`), column-weighted FTS5 BM25, topological degree centrality ($S_{\text{centrality}}$), and git churn velocity ($B_{\text{churn}}$). | **< 1ms** |
 | **🔄 Bi-Directional Subgraph Traversal** | Explores upstream callers (`Incoming`), downstream callees (`Outgoing`), cross-domain route mappings (`MapsTo`), and predictive tests (`Tests`) up to depth $N$. | **< 0.8ms** |
 | **🛤️ Execution Flow Tracing (`--flow`)** | Traces linear execution pathways across architecture layers: `Route` $\to$ `Handler` $\to$ `Service` $\to$ `Model`. | **< 1.5ms** |
 | **📐 Type-Contract Inlining (`--resolve-types`)** | Automatically inlines schema definitions of parameter and return types for function signatures without extra lookups. | **< 0.5ms** |
 | **🛡️ Hierarchical AI Token Budgeting** | Guarantees hard token limits (`--max-tokens <N>`) with 3-tier degradation: preserves root symbols and type contracts, then collapses neighbor bodies to signatures, retaining 100% graph topology. | Zero token blowup |
-| **🎨 Quad-Engine Presentation Layer** | Emits **Terminal UI** (ANSI badges, clickable `file:line` links), **Markdown** (with embedded Mermaid `graph LR`), **MCP JSON** (AI tool format), and **Agent XML** (`<code_context>`). | Native |
+| **🎨 Quad-Engine Presentation Layer** | Emits **Terminal UI** (ANSI badges, clickable `file:line` links), **Markdown** (with embedded Mermaid `graph LR` / `graph TD`), **MCP JSON** (AI tool format), and **Agent XML** (`<code_context>`, `<blast_radius_analysis>`). | Native |
 | **⚡ Real-Time Incremental Watcher** | Real-time file system watcher (`cartograph watch`) with CST caching, SHA-256 Merkle diffing, and sub-0.5ms reverse blast-radius impact warnings on save. | **< 10ms** |
 | **🌐 Polyglot Language Engine** | Native Tree-Sitter parsing for **Rust, TypeScript / TSX, Python, Ruby / Rails, Go, SQL, Markdown**. | Zero daemon required |
 
@@ -219,7 +220,104 @@ cartograph locate verify_token --format json
 
 ---
 
-### 3. `cartograph watch` — Real-Time File Watcher
+### 3. `cartograph impact` — Blast-Radius Impact & Risk Analysis
+Analyzes downstream callers, breaking changes, architectural coupling smells, and CI risk metrics for code changes or git pull requests in **<25ms**.
+
+```bash
+cartograph impact [OPTIONS] [TARGET] [PATH]
+```
+
+#### Core Flags & Options
+| Flag | Description | Default |
+| :--- | :--- | :--- |
+| `[TARGET]` or `-t, --target` | Target symbol query, scope, or filepath | Optional if `--branch` or `--staged` |
+| `--branch <RANGE>` | Analyze git branch diff range (e.g. `main...HEAD` or `origin/main...HEAD`) | `None` |
+| `--staged` | Analyze uncommitted git staged changes | `false` |
+| `--verify-semver <TARGET>`| Enforce Semantic Versioning 2.0 release policy (`patch`, `minor`, `major`) | `None` |
+| `--simulate-delete <SYM>` | Speculatively model deleting a symbol before modifying code | `None` |
+| `--simulate-rename <A:B>` | Speculatively model renaming a symbol (`old_name:new_name`) | `None` |
+| `-D, --depth <INT>` | Maximum reverse traversal depth | `3` |
+| `--direction <DIR>` | Traversal direction: `dependents` (callers), `dependencies` (callees), `both` | `dependents` |
+| `--min-confidence <F>` | Minimum edge confidence threshold (0.0 to 1.0) | `0.0` |
+| `--no-damping` | Disable utility damping on high-degree nodes | `false` |
+| `--fail-on <LEVEL>` | **CI Gate**: Exit with code 1 if risk meets or exceeds `low`, `medium`, `high`, `critical` | `None` |
+| `--min-test-coverage <F>`| **CI Gate**: Exit with code 1 if impacted test coverage ratio falls below threshold | `None` |
+| `-f, --format <FMT>` | Output format: `terminal`, `markdown`, `json`, `xml` | Auto |
+
+#### Common Usage Scenarios
+
+##### A. Direct Symbol Impact Analysis
+```bash
+cartograph impact "PaymentGateway"
+```
+*Traces all upstream callers, affected routes, models, and tests across multiple hops.*
+
+##### B. Pull Request Diff Blast-Radius (GitHub / GitLab CI)
+```bash
+cartograph impact --branch "origin/main...HEAD" --format markdown
+```
+*Parses unified diff hunks, maps them to AST symbols, classifies modifications (`DocstringOnly`, `BodyOnly`, `SignatureBreak`), and generates a PR review table with Mermaid graph.*
+
+##### C. Pre-Commit Hook Staged Changes
+```bash
+cartograph impact --staged
+```
+*Inspects staged files in <15ms before committing to ensure no unintended breaking changes.*
+
+##### D. Automated SemVer 2.0 Release Guard
+```bash
+cartograph impact --branch main...HEAD --verify-semver minor
+```
+*Fails with exit code 1 if any public API breaking change is detected under a requested `minor` or `patch` release target.*
+
+##### E. Speculative Refactoring Simulation (Zero Code Edits)
+```bash
+cartograph impact --simulate-delete "LegacyAuthHandler"
+```
+*Simulates removing a symbol to discover all breakages, call sites, and necessary refactoring tasks before touching code.*
+
+##### F. CI/CD Risk Quality Gating
+```bash
+cartograph impact --branch origin/main...HEAD --fail-on high --min-test-coverage 0.8
+```
+*Enforces engineering standards in CI: blocks merge if risk score exceeds High or if affected nodes have less than 80% test coverage.*
+
+#### Example Terminal Output (`--format terminal`)
+```
+💥 Cartograph Blast-Radius Impact Analysis
+Query: PaymentGateway::charge (depth: 3, dependents)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Impact Risk Score: 78 / 100 [CRITICAL] ▇▇▇▇▇▇▇▇░░
+  Affected Nodes: 14 symbols across 6 files
+  Impacted Call Sites: 9 locations
+  Test Coverage: 64.3% (9 of 14 nodes covered)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  SemVer 2.0 Release Policy: VIOLATION
+    Policy: minor | Detected: MAJOR BREAKING CHANGE
+    Reason: Public exported method 'PaymentGateway::charge' signature changed
+
+🚨 Architectural Coupling Smells:
+    • God-Object ISP Warning on 'PaymentGateway'
+      Coupling Concentration Ratio: 68.4% across 4 distinct subsystems:
+      auth, checkout, subscriptions, analytics
+      Recommendation: Split into segregated interfaces (e.g. Chargeable, Subscribable)
+
+📍 Critical Call Sites & AI Remediation Hints:
+    • src/checkout/order.rs:88:13 — order.process_payment()
+      Old: charge(&self, amount: u64) -> Result<()>
+      New: charge(&self, amount: u64, currency: Currency) -> Result<()>
+      Hint: Pass currency argument: order.process_payment(Currency::USD)
+    • src/subscriptions/recurring.rs:42:9 — gateway.charge()
+
+🧪 Suggested Test Verification Command:
+    cargo test --test test_checkout --test test_payment_gateway
+```
+
+---
+
+### 4. `cartograph watch` — Real-Time File Watcher
 Watches the workspace in the background and updates the code graph incrementally on file save (<10ms).
 
 ```bash
@@ -239,7 +337,7 @@ cartograph watch .
 
 ---
 
-### 4. `cartograph status` — Graph Health & Statistics
+### 5. `cartograph status` — Graph Health & Statistics
 Inspects the state and size of the current AST graph database.
 
 ```bash

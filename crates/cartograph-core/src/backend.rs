@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 
 use crate::error::Result;
-use crate::model::{Edge, GraphStats, Node, SearchResult};
+use crate::model::{Edge, GraphStats, Node, RawImpactRecord, SearchResult};
 
 #[async_trait]
 pub trait GraphStoreBackend: Send + Sync {
@@ -55,6 +55,16 @@ pub trait GraphStoreBackend: Send + Sync {
     /// Retrieve all incoming and outgoing edges connecting any of the specified node IDs
     /// whose confidence is greater than or equal to min_confidence.
     async fn get_edges_for_nodes(&self, node_ids: &[String], min_confidence: f64) -> Result<Vec<Edge>>;
+
+    /// Multi-root impact traversal: traverses incoming edges (upstream) or outgoing edges (downstream)
+    /// from root_ids up to max_depth with min_confidence.
+    async fn get_impact_subgraph(
+        &self,
+        root_ids: &[String],
+        direction: &str,
+        max_depth: usize,
+        min_confidence: f64,
+    ) -> Result<Vec<RawImpactRecord>>;
 
     /// Return aggregate statistics of the graph store.
     async fn stats(&self) -> Result<GraphStats>;

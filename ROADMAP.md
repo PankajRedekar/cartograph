@@ -73,7 +73,7 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - Real-time file system watcher (`cartograph watch`) using `notify` with debouncing, sub-50µs incremental CST re-parsing, and instant blast-radius reverse dependency notifications (`<10ms` total latency).
   - Storage backend concurrency with non-blocking readers and true differential node/edge updates.
 
-- [ ] **1.4 1-Turn Subgraph Localization (`cartograph locate`)**
+- [x] **1.4 1-Turn Subgraph Localization (`cartograph locate`)**
   - **Centrality- & Churn-Aware Hybrid Search**: Combines exact identifier lookups, qualified scope matching (`Scope::name`), SQLite FTS5 trigram BM25 text search, topological degree centrality, and git recency/churn velocity ranking (`<1.2ms`).
   - **Bi-Directional Subgraphs, Flow Chains & Type Inlining**: Supports radial BFS (`--depth 1..5`), linear end-to-end execution flow chains (`--flow`), and automatic parameter/return type contract inlining (`--resolve-types`).
   - **Edge Confidence & Static vs. Dynamic Filtering**: First-class `confidence REAL` edge weighting with threshold filtering (`--min-confidence 0.8`) to eliminate ambiguous dynamic candidate calls.
@@ -87,10 +87,17 @@ Modern software engineering and AI-assisted development suffer from a critical c
 ### Phase 2: Structural Analysis & Intelligence Tools (v1.1)
 *Objective: Enable impact analysis, test selection, route mapping, and code health linting.*
 
-- [ ] **2.1 Blast-Radius Impact Analysis (`cartograph impact`)**
-  - Graph traversal algorithm (BFS/DFS) mapping downstream callers and dependents.
-  - Git integration: `cartograph impact --branch "master...HEAD"` to map all affected code boundaries from git diffs.
-  - Risk categorization: High/Medium/Low impact metrics based on topological node degree.
+- [x] **2.1 Blast-Radius Impact Analysis (`cartograph impact`)**
+  - **Multi-Root Reverse Graph Traversal**: Transitive caller & dependent propagation with cycle prevention, utility damping, edge confidence thresholds, and trait/interface dynamic dispatch cascading.
+  - **Git Diff-to-AST Mapper & Semantic Diffing**: Maps `git diff -U0` hunks directly to innermost AST coordinates; classifies modifications into `DocstringOnly` (zero risk), `BodyOnly`, `VisibilityReduced`, and `SignatureBreak`.
+  - **Automated SemVer Impact Guard (`--verify-semver`)**: Enforces Semantic Versioning 2.0 release policies (patch, minor, major) by detecting public API breaking changes across Rust, TypeScript, Python, and Go.
+  - **Architectural Coupling Smell Detector**: Quantifies Coupling Concentration Ratio and flags God-Objects / Interface Segregation Principle (ISP) violations when changes affect disproportionately wide subsystems.
+  - **Concrete Call-Site Coordinates & Remediation Hints**: Pinpoints exact caller line/column coordinates with invocation snippets and concrete AI migration advice.
+  - **Speculative Refactoring Simulation**: Enables zero-risk sandbox modeling via `--simulate-delete <symbol>` and `--simulate-rename <old:new>` before writing code.
+  - **6-Vector Impact Risk Score (IRS)**: Multi-factor risk model (entrypoint exposure, caller volume, depth, test coverage, semantic severity) scaled 0–100 with domain categorization (entrypoint, service, model, test) and targeted test runner command synthesis (`cargo test`, `pytest`, `npm test`, `go test`).
+  - **Quad-Engine Presentation**: Terminal with ANSI color meters, GitHub Markdown with auto-generated Mermaid `graph TD` diagrams, MCP JSON, and LLM `<blast_radius_analysis>` XML prompt blocks.
+  - **CI/CD Quality Gates**: Exit code 1 enforcement on risk thresholds (`--fail-on <low|medium|high|critical>`), SemVer policy violations, or inadequate test coverage (`--min-test-coverage`).
+  - **Performance SLA**: Complete end-to-end branch diff impact analysis in **<25ms**.
 
 - [ ] **2.2 Smart Predictive Test Selection (`cartograph test-selector`)**
   - Bidirectional graph resolution connecting code symbols to relevant unit/integration tests.
