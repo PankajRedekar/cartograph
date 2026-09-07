@@ -9,11 +9,15 @@ The engine SHALL parse source files in Python, TypeScript/JavaScript, React JSX/
 - **THEN** tree-sitter extracts class definitions, function signatures, routes, models, components, imports, and docstrings with exact byte spans (`start_byte..end_byte`) within sub-second runtime.
 
 ### Requirement: Incremental File Hashing and Indexing
-The engine SHALL compute SHA-256 hashes of source files and bypass re-parsing unmodified files during re-indexing.
+The engine SHALL compute SHA-256 hashes of source files, utilize bulk in-memory hash pre-fetching via `get_all_file_hashes()`, bypass re-parsing unmodified files during re-indexing in <15µs per file, and prune deleted files from the database.
 
 #### Scenario: Re-indexing an unchanged codebase
-- **WHEN** `cartograph index` is called a second time without code edits
-- **THEN** the indexer skips all unchanged files and completes in <50ms.
+- **WHEN** `cartograph index` is called a second time without code edits on a repository of 10,000 files
+- **THEN** the indexer skips all unchanged files via bulk in-memory hash verification and completes in <50ms.
+
+#### Scenario: Pruning deleted files
+- **WHEN** files are deleted from disk and `cartograph index` is executed
+- **THEN** the engine detects unvisited paths present in stored hashes and atomically removes their nodes, edges, and hash entries from the database.
 
 ### Requirement: Multi-Database Profile Management
 The system SHALL support named profile databases defined in `cartograph.toml` to prevent cross-domain search pollution.
@@ -96,4 +100,43 @@ The system SHALL inspect source file headers and filenames to detect autogenerat
 #### Scenario: Filtering generated protobuf code
 - **WHEN** a file containing a `@generated` or `DO NOT EDIT` header is parsed
 - **THEN** its nodes are flagged with `is_generated: true` and can be excluded from search and blast-radius graphs.
+
+### Requirement: Ripgrep-Grade Multi-Threaded File Walking and Git-Diff Acceleration
+The engine SHALL traverse repositories respecting `.gitignore`, `.ignore`, global git ignore rules, and vendor directories (`node_modules`, `target`, `venv`, `dist`, `.cartograph`), pre-filter file extensions against supported AST grammars, read files $>64\text{ KB}$ via zero-copy memory-mapping (`memmap2`), and support git-diff targeted discovery (`--staged` and `--branch`).
+
+#### Scenario: Staged file indexing in Git
+- **WHEN** `cartograph index --staged` is executed with staged file modifications
+- **THEN** the indexer reads the git index directly and updates the graph for only staged files in <10ms without performing a full filesystem walk.
+
+### Requirement: Universal Multi-Domain Cross-File Symbol Linking
+The system SHALL resolve `UnresolvedReference` items emitted by AST extractors into concrete cross-file `Edge` relationships across systems code (`Implements`, `Extends`, `Calls`), distributed microservices (Protobuf/gRPC `Implements`), data pipelines (SQL DDL to ORMs `References`), web routes (`MapsTo`), and predictive tests (`Tests`), with confidence scoring for polymorphic call candidate sets.
+
+#### Scenario: Linking cross-file trait implementations and struct embedding
+- **WHEN** a struct in file A implements a trait defined in file B
+- **THEN** the linker connects the implementing struct node to the trait node with `EdgeKind::Implements`.
+
+#### Scenario: Linking tests to target production symbols
+- **WHEN** a test function in `tests/test_auth.rs` or `test_auth.py` invokes a production function `verify_token`
+- **THEN** the linker establishes an `EdgeKind::Tests` edge from the test function to the target production symbol.
+
+### Requirement: Sub-10ms Real-Time File Watching with Blast-Radius Tracking
+The system SHALL monitor repository filesystem events recursively via `notify`, coalesce and debounce file saves with a 25ms window and OS lock retry jitter, re-parse modified files incrementally using an in-memory CST cache in <50µs, update the graph in <10ms, and perform an instant (<0.5ms) reverse CTE blast-radius lookup to identify affected dependent files.
+
+#### Scenario: Live file save and reverse blast-radius notification
+- **WHEN** a source file with dependent callers is edited and saved in an IDE
+- **THEN** the file watcher updates the database within <10ms and emits the list of affected upstream caller files directly to the terminal and event channel.
+
+### Requirement: Memory-Bounded Pipelined Streaming Indexing
+The system SHALL process repository indexing through a producer-consumer bounded pipeline (`crossbeam_channel::bounded(10_000)`), chunking database writes into periodic batches (~2,500 entities) to ensure peak memory consumption remains under 150MB RAM regardless of codebase scale.
+
+#### Scenario: Indexing large-scale monorepos
+- **WHEN** `cartograph index` is executed on a repository with >100,000 files
+- **THEN** parsing, linking, and storage persistence stream continuously with peak RAM consumption capped below 150MB.
+
+### Requirement: Unified Developer CLI Operations
+The system SHALL provide a unified command-line binary (`cartograph`) offering `cartograph index` (with `--path`, `--db`, `--force`, `--staged`, `--branch`, `--threads`, `--verbose`, `--json`), `cartograph watch` (with `--debounce`, `--verbose`), and `cartograph status` (reporting schema, storage engine, files, nodes by kind, edges, and DB size).
+
+#### Scenario: Machine-readable JSON index reporting
+- **WHEN** `cartograph index --json` is executed
+- **THEN** the CLI outputs valid JSON containing `status`, `files_scanned`, `files_indexed`, `files_skipped`, `files_deleted`, `nodes_indexed`, `edges_indexed`, and `elapsed_ms`.
 
