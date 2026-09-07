@@ -102,3 +102,59 @@ fn test_cli_error_handling_nonexistent_path() {
 
     assert!(!output.status.success());
 }
+
+#[test]
+fn test_cli_impact_help_and_simulation() {
+    // 1. Verify --help shows impact options
+    let help_output = Command::new(cartograph_bin())
+        .arg("impact")
+        .arg("--help")
+        .output()
+        .expect("Failed to execute cartograph impact --help");
+
+    assert!(help_output.status.success());
+    let help_stdout = String::from_utf8_lossy(&help_output.stdout);
+    assert!(help_stdout.contains("--target"));
+    assert!(help_stdout.contains("--branch"));
+    assert!(help_stdout.contains("--verify-semver"));
+    assert!(help_stdout.contains("--simulate-delete"));
+    assert!(help_stdout.contains("--fail-on"));
+
+    // 2. Setup workspace and index it
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        "pub fn core_calc() -> i32 { 42 }\npub fn api() -> i32 { core_calc() }",
+    )
+    .unwrap();
+
+    let index_output = Command::new(cartograph_bin())
+        .arg("index")
+        .arg(root.to_str().unwrap())
+        .output()
+        .expect("Failed to index test workspace");
+    assert!(index_output.status.success());
+
+    // 3. Run impact analysis using simulation mode
+    let impact_output = Command::new(cartograph_bin())
+        .arg("impact")
+        .arg(root.to_str().unwrap())
+        .arg("--simulate-delete")
+        .arg("core_calc")
+        .arg("--format")
+        .arg("json")
+        .output()
+        .expect("Failed to execute cartograph impact");
+
+    assert!(impact_output.status.success(), "Impact failed: {}", String::from_utf8_lossy(&impact_output.stderr));
+    let impact_stdout = String::from_utf8_lossy(&impact_output.stdout);
+    let impact_json: serde_json::Value = serde_json::from_str(&impact_stdout)
+        .unwrap_or_else(|e| panic!("Failed to parse impact JSON: {e}\nRaw: {impact_stdout}"));
+
+    assert!(!impact_json["root_nodes"].as_array().unwrap().is_empty());
+    assert_eq!(impact_json["root_nodes"][0]["node"]["name"], "core_calc");
+    assert!(impact_json["total_affected_nodes"].as_u64().unwrap() >= 1);
+}
+

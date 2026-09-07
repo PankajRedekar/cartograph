@@ -233,3 +233,251 @@ pub struct GraphStats {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size_bytes: Option<u64>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticChangeType {
+    DocstringOnly,
+    BodyOnly,
+    VisibilityReduced,
+    SignatureBreak,
+    Deleted,
+    Added,
+}
+
+impl SemanticChangeType {
+    pub fn risk_multiplier(&self) -> f64 {
+        match self {
+            SemanticChangeType::DocstringOnly => 0.0,
+            SemanticChangeType::BodyOnly => 0.6,
+            SemanticChangeType::VisibilityReduced => 0.9,
+            SemanticChangeType::SignatureBreak => 1.0,
+            SemanticChangeType::Deleted => 1.0,
+            SemanticChangeType::Added => 0.3,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SemVerTarget {
+    Patch,
+    Minor,
+    Major,
+}
+
+impl SemVerTarget {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SemVerTarget::Patch => "patch",
+            SemVerTarget::Minor => "minor",
+            SemVerTarget::Major => "major",
+        }
+    }
+}
+
+impl std::str::FromStr for SemVerTarget {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "patch" => Ok(SemVerTarget::Patch),
+            "minor" => Ok(SemVerTarget::Minor),
+            "major" => Ok(SemVerTarget::Major),
+            other => Err(format!("Unknown SemVer target '{other}', expected patch, minor, or major")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BreakingChangeDetail {
+    pub symbol_id: String,
+    pub symbol_name: String,
+    pub filepath: String,
+    pub line: u32,
+    pub reason: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_signature: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_signature: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SemVerClassification {
+    pub expected_policy: SemVerTarget,
+    pub actual_required_tier: SemVerTarget,
+    pub is_compliant: bool,
+    pub breaking_changes: Vec<BreakingChangeDetail>,
+    pub explanation: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ArchitecturalCouplingSmell {
+    pub symbol_id: String,
+    pub symbol_name: String,
+    pub in_degree: usize,
+    pub subsystems_impacted: Vec<String>,
+    pub coupling_ratio: f64,
+    pub recommendation: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RiskLevel {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+impl RiskLevel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RiskLevel::Low => "low",
+            RiskLevel::Medium => "medium",
+            RiskLevel::High => "high",
+            RiskLevel::Critical => "critical",
+        }
+    }
+}
+
+impl std::str::FromStr for RiskLevel {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "low" => Ok(RiskLevel::Low),
+            "medium" => Ok(RiskLevel::Medium),
+            "high" => Ok(RiskLevel::High),
+            "critical" => Ok(RiskLevel::Critical),
+            other => Err(format!("Unknown risk level '{other}', expected low, medium, high, or critical")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChangeStatus {
+    Modified,
+    Added,
+    Deleted,
+    Renamed,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImpactRoot {
+    pub node: Node,
+    pub status: ChangeStatus,
+    pub semantic_change: SemanticChangeType,
+    pub is_public_export: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modified_lines: Option<Vec<u32>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_signature: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_signature: Option<String>,
+    pub in_degree: usize,
+    pub out_degree: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CallSiteLocation {
+    pub caller_node_id: String,
+    pub filepath: String,
+    pub line: u32,
+    pub column: u32,
+    pub invocation_snippet: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remediation_hint: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImpactedNode {
+    pub node: Node,
+    pub min_hop_distance: usize,
+    pub impact_probability: f64,
+    pub direct_causes: Vec<String>,
+    pub edge_kinds_to_root: std::collections::HashSet<EdgeKind>,
+    pub call_sites: Vec<CallSiteLocation>,
+    pub is_tested: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PropagationPath {
+    pub root_id: String,
+    pub target_id: String,
+    pub hops: usize,
+    pub path_node_ids: Vec<String>,
+    pub path_edge_kinds: Vec<EdgeKind>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RiskBreakdown {
+    pub raw_score: f64,
+    pub semantic_multiplier: f64,
+    pub total_score: f64,
+    pub level: RiskLevel,
+    pub scale_score: f64,
+    pub centrality_score: f64,
+    pub entrypoint_score: f64,
+    pub data_model_score: f64,
+    pub boundary_score: f64,
+    pub test_deficit_score: f64,
+    pub primary_risk_drivers: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImpactedTest {
+    pub test_node: Node,
+    pub targets_tested: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runner_command: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CategorizedImpact {
+    pub entrypoints: Vec<ImpactedNode>,
+    pub services: Vec<ImpactedNode>,
+    pub data_models: Vec<ImpactedNode>,
+    pub other_internals: Vec<ImpactedNode>,
+    pub affected_tests: Vec<ImpactedTest>,
+    pub untested_symbols: Vec<ImpactedNode>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SimulationMode {
+    None,
+    SimulateDelete(String),
+    SimulateRename(String, String),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawImpactRecord {
+    pub node: Node,
+    pub root_id: String,
+    pub depth: usize,
+    pub path_str: String,
+    pub edge_kind: EdgeKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImpactReport {
+    pub query_target: Option<String>,
+    pub git_diff_range: Option<String>,
+    pub simulation_mode: SimulationMode,
+    pub traversal_direction: String,
+    pub max_depth: usize,
+    pub root_nodes: Vec<ImpactRoot>,
+    pub total_affected_nodes: usize,
+    pub total_affected_files: usize,
+    pub total_call_sites: usize,
+    pub risk: RiskBreakdown,
+    pub semver_guard: Option<SemVerClassification>,
+    pub coupling_insights: Vec<ArchitecturalCouplingSmell>,
+    pub categories: CategorizedImpact,
+    pub paths_to_entrypoints: Vec<PropagationPath>,
+    pub test_coverage_ratio: f64,
+    pub elapsed_ms: f64,
+}
+

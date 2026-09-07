@@ -7,7 +7,7 @@ use parking_lot::RwLock;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::MemoryConfig;
 use cartograph_core::error::Result;
-use cartograph_core::model::{Edge, GraphStats, Node, SearchResult};
+use cartograph_core::model::{Edge, EdgeKind, GraphStats, Node, RawImpactRecord, SearchResult};
 
 #[derive(Default)]
 struct MemoryGraphState {
@@ -414,6 +414,93 @@ impl GraphStoreBackend for MemoryBackend {
         edges.dedup_by(|a, b| a.source_id == b.source_id && a.target_id == b.target_id && a.kind == b.kind);
 
         Ok(edges)
+    }
+
+    async fn get_impact_subgraph(
+        &self,
+        root_ids: &[String],
+        direction: &str,
+        max_depth: usize,
+        min_confidence: f64,
+    ) -> Result<Vec<RawImpactRecord>> {
+        if root_ids.is_empty() || max_depth == 0 {
+            return Ok(Vec::new());
+        }
+
+        let is_downstream = direction == "downstream" || direction == "dependencies" || direction == "callees";
+        let is_both = direction == "both";
+
+        let state = self.state.read();
+        let mut results = Vec::new();
+        let mut visited: HashMap<String, usize> = HashMap::new();
+
+        let mut queue = VecDeque::new();
+
+        for root in root_ids {
+            visited.insert(root.clone(), 0);
+            queue.push_back((root.clone(), root.clone(), 0, root.clone(), EdgeKind::Other("root".to_string())));
+        }
+
+        while let Some((curr_id, root_id, depth, path_str, edge_kind)) = queue.pop_front() {
+            if depth > 0 {
+                if let Some(node) = state.nodes.get(&curr_id) {
+                    results.push(RawImpactRecord {
+                        node: node.clone(),
+                        root_id: root_id.clone(),
+                        depth,
+                        path_str: path_str.clone(),
+                        edge_kind,
+                    });
+                }
+            }
+
+            if depth >= max_depth {
+                continue;
+            }
+
+            if !is_downstream || is_both {
+                if let Some(b_edges) = state.backward_edges.get(&curr_id) {
+                    for edge in b_edges {
+                        if edge.confidence.unwrap_or(1.0) >= min_confidence {
+                            let next_id = &edge.source_id;
+                            let next_depth = depth + 1;
+                            let should_visit = match visited.get(next_id) {
+                                None => true,
+                                Some(&d) => next_depth < d,
+                            };
+                            if should_visit && !path_str.contains(next_id) {
+                                visited.insert(next_id.clone(), next_depth);
+                                let new_path = format!("{path_str}->{next_id}");
+                                queue.push_back((next_id.clone(), root_id.clone(), next_depth, new_path, edge.kind.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+
+            if is_downstream || is_both {
+                if let Some(f_edges) = state.forward_edges.get(&curr_id) {
+                    for edge in f_edges {
+                        if edge.confidence.unwrap_or(1.0) >= min_confidence {
+                            let next_id = &edge.target_id;
+                            let next_depth = depth + 1;
+                            let should_visit = match visited.get(next_id) {
+                                None => true,
+                                Some(&d) => next_depth < d,
+                            };
+                            if should_visit && !path_str.contains(next_id) {
+                                visited.insert(next_id.clone(), next_depth);
+                                let new_path = format!("{path_str}->{next_id}");
+                                queue.push_back((next_id.clone(), root_id.clone(), next_depth, new_path, edge.kind.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        results.sort_by(|a, b| a.depth.cmp(&b.depth).then_with(|| a.node.id.cmp(&b.node.id)));
+        Ok(results)
     }
 
     async fn stats(&self) -> Result<GraphStats> {

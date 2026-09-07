@@ -5,9 +5,10 @@ impl TriviaBinder {
     /// Clean a raw docstring string literal (e.g. Python triple quotes `"""..."""` or `'''...'''`)
     pub fn clean_python_docstring(raw: &str) -> String {
         let trimmed = raw.trim();
-        let stripped = if trimmed.starts_with("\"\"\"") && trimmed.ends_with("\"\"\"") && trimmed.len() >= 6 {
-            &trimmed[3..trimmed.len() - 3]
-        } else if trimmed.starts_with("'''") && trimmed.ends_with("'''") && trimmed.len() >= 6 {
+        let stripped = if ((trimmed.starts_with("\"\"\"") && trimmed.ends_with("\"\"\""))
+            || (trimmed.starts_with("'''") && trimmed.ends_with("'''")))
+            && trimmed.len() >= 6
+        {
             &trimmed[3..trimmed.len() - 3]
         } else if (trimmed.starts_with('"') && trimmed.ends_with('"')) || (trimmed.starts_with('\'') && trimmed.ends_with('\'')) {
             if trimmed.len() >= 2 {

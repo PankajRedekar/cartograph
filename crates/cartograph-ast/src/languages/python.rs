@@ -693,7 +693,7 @@ impl<'a> PythonExtractor<'a> {
     fn extract_body_docstring(&self, body_node: Option<TsNode>) -> Option<String> {
         let body = body_node?;
         let mut cursor = body.walk();
-        for child in body.children(&mut cursor) {
+        if let Some(child) = body.children(&mut cursor).next() {
             if child.kind() == "expression_statement" {
                 if let Some(str_node) = child.named_child(0) {
                     if str_node.kind() == "string" {
@@ -705,7 +705,6 @@ impl<'a> PythonExtractor<'a> {
                     }
                 }
             }
-            break;
         }
         None
     }

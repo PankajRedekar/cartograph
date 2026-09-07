@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 use cartograph_core::error::{CartographError, Result};
-use cartograph_core::model::{Node, NodeKind};
+use cartograph_core::model::{EdgeKind, Node, NodeKind, RawImpactRecord};
 
 pub(crate) fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<Node> {
     let id: String = row.get(0)?;
@@ -238,4 +238,124 @@ pub fn get_edges_for_nodes(
     edges.dedup_by(|a, b| a.source_id == b.source_id && a.target_id == b.target_id && a.kind == b.kind);
 
     Ok(edges)
+}
+
+pub fn get_impact_subgraph(
+    conn: &Connection,
+    root_ids: &[String],
+    direction: &str,
+    max_depth: usize,
+    min_confidence: f64,
+) -> Result<Vec<RawImpactRecord>> {
+    if root_ids.is_empty() || max_depth == 0 {
+        return Ok(Vec::new());
+    }
+
+    let is_downstream = direction == "downstream" || direction == "dependencies" || direction == "callees";
+    let is_both = direction == "both";
+
+    let mut results = Vec::new();
+
+    for chunk in root_ids.chunks(400) {
+        let placeholders = chunk.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+        let recursive_join = if is_downstream {
+            r#"
+            SELECT e.target_id, c.root_id, c.depth + 1, c.path || ',' || e.target_id, e.kind
+            FROM impact_cte c
+            JOIN edges e ON c.node_id = e.source_id
+            WHERE c.depth < ?
+              AND coalesce(e.confidence, 1.0) >= ?
+              AND instr(',' || c.path || ',', ',' || e.target_id || ',') = 0
+            "#
+        } else if is_both {
+            r#"
+            SELECT e.source_id, c.root_id, c.depth + 1, c.path || ',' || e.source_id, e.kind
+            FROM impact_cte c
+            JOIN edges e ON c.node_id = e.target_id
+            WHERE c.depth < ?
+              AND coalesce(e.confidence, 1.0) >= ?
+              AND instr(',' || c.path || ',', ',' || e.source_id || ',') = 0
+            UNION
+            SELECT e.target_id, c.root_id, c.depth + 1, c.path || ',' || e.target_id, e.kind
+            FROM impact_cte c
+            JOIN edges e ON c.node_id = e.source_id
+            WHERE c.depth < ?
+              AND coalesce(e.confidence, 1.0) >= ?
+              AND instr(',' || c.path || ',', ',' || e.target_id || ',') = 0
+            "#
+        } else {
+            // upstream (default)
+            r#"
+            SELECT e.source_id, c.root_id, c.depth + 1, c.path || ',' || e.source_id, e.kind
+            FROM impact_cte c
+            JOIN edges e ON c.node_id = e.target_id
+            WHERE c.depth < ?
+              AND coalesce(e.confidence, 1.0) >= ?
+              AND instr(',' || c.path || ',', ',' || e.source_id || ',') = 0
+            "#
+        };
+
+        let sql = format!(
+            r#"
+            WITH RECURSIVE impact_cte(node_id, root_id, depth, path, edge_kind) AS (
+                SELECT id, id, 0, id, 'root'
+                FROM nodes
+                WHERE id IN ({placeholders})
+                UNION
+                {recursive_join}
+            )
+            SELECT DISTINCT
+                n.id, n.name, n.kind, n.filepath, n.scope,
+                n.start_line, n.start_col, n.end_line, n.end_col,
+                n.signature, n.docstring, n.checksum, n.metadata,
+                c.root_id, c.depth, c.path, c.edge_kind
+            FROM impact_cte c
+            JOIN nodes n ON c.node_id = n.id
+            WHERE c.depth > 0
+            ORDER BY c.depth ASC, n.id ASC;
+            "#
+        );
+
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| CartographError::Database(format!("Failed to prepare get_impact_subgraph CTE: {e}")))?;
+
+        let depth_i64 = max_depth as i64;
+        let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len() + 4);
+        for id in chunk {
+            params.push(id);
+        }
+        params.push(&depth_i64);
+        params.push(&min_confidence);
+        if is_both {
+            params.push(&depth_i64);
+            params.push(&min_confidence);
+        }
+
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params), |row| {
+                let node = row_to_node(row)?;
+                let root_id: String = row.get(13)?;
+                let depth: i64 = row.get(14)?;
+                let path_str: String = row.get(15)?;
+                let edge_kind_str: String = row.get(16)?;
+                let edge_kind = edge_kind_str.parse().unwrap_or(EdgeKind::Other(edge_kind_str));
+
+                Ok(RawImpactRecord {
+                    node,
+                    root_id,
+                    depth: depth as usize,
+                    path_str,
+                    edge_kind,
+                })
+            })
+            .map_err(|e| CartographError::Database(format!("Failed to execute get_impact_subgraph CTE: {e}")))?;
+
+        for row in rows {
+            results.push(row.map_err(|e| CartographError::Database(format!("Failed to map impact record: {e}")))?);
+        }
+    }
+
+    Ok(results)
 }

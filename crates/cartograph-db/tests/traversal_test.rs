@@ -100,3 +100,51 @@ async fn test_cyclic_graph_traversal() {
     let no_path = backend.find_shortest_path("A", "X").await.unwrap();
     assert!(no_path.is_empty());
 }
+
+#[tokio::test]
+async fn test_multi_root_impact_subgraph() {
+    // Graph:
+    // Root1 -> Mid1 -> Leaf
+    // Root2 -> Mid2 -> Leaf
+    // Mid1 Calls Root1 (meaning Mid1 is upstream caller of Root1)
+    let sqlite_backend = SqliteBackend::open_memory().unwrap();
+    let memory_backend = cartograph_db::memory::MemoryBackend::new();
+
+    let nodes = vec![n("Root1"), n("Root2"), n("Caller1"), n("Caller2"), n("TopCaller")];
+    let edges = vec![
+        Edge::new("Caller1", "Root1", EdgeKind::Calls),
+        Edge::new("Caller2", "Root2", EdgeKind::References),
+        Edge::new("TopCaller", "Caller1", EdgeKind::Calls),
+    ];
+
+    for backend in [
+        &sqlite_backend as &dyn GraphStoreBackend,
+        &memory_backend as &dyn GraphStoreBackend,
+    ] {
+        backend.insert_batch(&nodes, &edges).await.unwrap();
+
+        // Query upstream from both roots simultaneously with depth 2
+        let roots = vec!["Root1".to_string(), "Root2".to_string()];
+        let impact = backend
+            .get_impact_subgraph(&roots, "upstream", 2, 0.0)
+            .await
+            .unwrap();
+
+        let impacted_ids: Vec<String> = impact.iter().map(|r| r.node.id.clone()).collect();
+        assert!(impacted_ids.contains(&"Caller1".to_string()));
+        assert!(impacted_ids.contains(&"Caller2".to_string()));
+        assert!(impacted_ids.contains(&"TopCaller".to_string()));
+
+        // Check depth mapping
+        let c1 = impact.iter().find(|r| r.node.id == "Caller1").unwrap();
+        assert_eq!(c1.depth, 1);
+        assert_eq!(c1.root_id, "Root1");
+
+        let c2 = impact.iter().find(|r| r.node.id == "Caller2").unwrap();
+        assert_eq!(c2.depth, 1);
+        assert_eq!(c2.root_id, "Root2");
+
+        let top = impact.iter().find(|r| r.node.id == "TopCaller").unwrap();
+        assert_eq!(top.depth, 2);
+    }
+}

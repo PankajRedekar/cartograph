@@ -4,8 +4,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use cartograph_core::config::{GitDiffMode, IndexConfig, StorageConfig};
+use cartograph_core::model::{RiskLevel, SemVerTarget, SimulationMode};
 use cartograph_db::create_backend;
 use cartograph_engine::discovery::DiscoveryConfig;
+use cartograph_engine::impact::{ImpactAnalyzer, ImpactOutputFormat, ImpactQuery};
 use cartograph_engine::locate::{LocateCliOptions, OutputFormat, QueryParser, SubgraphLocator};
 use cartograph_engine::pipeline::IndexPipeline;
 use cartograph_engine::watcher::{FileWatcher, WatchEvent, WatcherSettings};
@@ -170,6 +172,81 @@ enum Commands {
         format: Option<String>,
 
         /// Interactive terminal disambiguation prompt if query matches multiple symbols
+        #[arg(short, long)]
+        interactive: bool,
+    },
+
+    /// Analyze blast radius, breaking changes, and risk of code modifications (<25ms)
+    Impact {
+        /// Target symbol query or filepath (optional if using --branch or --staged)
+        #[arg(value_name = "TARGET")]
+        target: Option<String>,
+
+        /// Target symbol query or filepath (flag form)
+        #[arg(short = 't', long = "target")]
+        target_flag: Option<String>,
+
+        /// Root directory of repository
+        #[arg(short, long, value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Database profile or SQLite file path
+        #[arg(short, long, default_value = "default")]
+        db: String,
+
+        /// Analyze git branch diff range (e.g. main...HEAD or origin/master...HEAD)
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Analyze uncommitted git staged changes
+        #[arg(long)]
+        staged: bool,
+
+        /// Speculatively simulate deleting a symbol
+        #[arg(long)]
+        simulate_delete: Option<String>,
+
+        /// Speculatively simulate renaming a symbol (format: old_name:new_name)
+        #[arg(long)]
+        simulate_rename: Option<String>,
+
+        /// Enforce Semantic Versioning policy (patch, minor, major)
+        #[arg(long)]
+        verify_semver: Option<String>,
+
+        /// Graph traversal direction: dependents (callers), dependencies (callees), both (default: dependents)
+        #[arg(long, default_value = "dependents")]
+        direction: String,
+
+        /// Maximum traversal depth (default: 3)
+        #[arg(short = 'D', long, default_value_t = 3)]
+        depth: usize,
+
+        /// Minimum edge confidence threshold (0.0 to 1.0)
+        #[arg(long)]
+        min_confidence: Option<f64>,
+
+        /// Disable high-degree utility damping
+        #[arg(long)]
+        no_damping: bool,
+
+        /// CI/CD Gate: fail with exit code 1 if risk meets or exceeds threshold (low, medium, high, critical)
+        #[arg(long)]
+        fail_on: Option<String>,
+
+        /// CI/CD Gate: fail with exit code 1 if test coverage ratio is below threshold (0.0 to 1.0)
+        #[arg(long)]
+        min_test_coverage: Option<f64>,
+
+        /// Presentation output format: terminal, markdown, json, xml (auto-detected if omitted)
+        #[arg(short, long)]
+        format: Option<String>,
+
+        /// Output results formatted as JSON (shorthand for --format json)
+        #[arg(long)]
+        json: bool,
+
+        /// Interactive terminal TUI mode
         #[arg(short, long)]
         interactive: bool,
     },
@@ -527,6 +604,138 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             print!("{}", result.rendered_output);
             if !result.rendered_output.ends_with('\n') {
                 println!();
+            }
+        }
+
+        Commands::Impact {
+            target,
+            target_flag,
+            path,
+            db,
+            branch,
+            staged,
+            simulate_delete,
+            simulate_rename,
+            verify_semver,
+            direction,
+            depth,
+            min_confidence,
+            no_damping,
+            fail_on,
+            min_test_coverage,
+            format,
+            json,
+            interactive: _,
+        } => {
+            let mut target = target.or(target_flag);
+            let mut root_path = path;
+            if let Some(ref t) = target {
+                let candidate = PathBuf::from(t);
+                if candidate.is_dir() && root_path == std::path::Path::new(".") {
+                    root_path = candidate;
+                    target = None;
+                }
+            }
+            let canonical_root = fs::canonicalize(&root_path).unwrap_or(root_path.clone());
+            let (storage_cfg, _) = resolve_storage_config(&canonical_root, &db);
+            let backend = create_backend(&storage_cfg)?;
+
+            let sim_mode = if let Some(del) = simulate_delete {
+                SimulationMode::SimulateDelete(del)
+            } else if let Some(ren) = simulate_rename {
+                if let Some((old, new)) = ren.split_once(':') {
+                    SimulationMode::SimulateRename(old.to_string(), new.to_string())
+                } else {
+                    SimulationMode::SimulateDelete(ren)
+                }
+            } else {
+                SimulationMode::None
+            };
+
+            let semver_policy = verify_semver.as_deref().and_then(|s| s.parse::<SemVerTarget>().ok());
+
+            let is_tty = io::stdout().is_terminal();
+            let output_format = if json {
+                ImpactOutputFormat::Json
+            } else if let Some(fmt_str) = format.as_deref() {
+                match fmt_str.to_lowercase().as_str() {
+                    "json" => ImpactOutputFormat::Json,
+                    "markdown" | "md" => ImpactOutputFormat::Markdown,
+                    "xml" | "agent-xml" => ImpactOutputFormat::AgentXml,
+                    _ => ImpactOutputFormat::Terminal,
+                }
+            } else if !is_tty {
+                ImpactOutputFormat::Json
+            } else {
+                ImpactOutputFormat::Terminal
+            };
+
+            let query = ImpactQuery {
+                target,
+                branch_range: branch,
+                staged,
+                simulation_mode: sim_mode,
+                traversal_direction: direction,
+                max_depth: depth,
+                min_confidence: min_confidence.unwrap_or(0.0),
+                verify_semver: semver_policy,
+                no_damping,
+                format: output_format,
+            };
+
+            let analyzer = ImpactAnalyzer::new(backend, canonical_root);
+            let report = match analyzer.analyze_impact(&query).await {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("{}: {}", "Impact analysis error".bold().red(), e);
+                    std::process::exit(1);
+                }
+            };
+
+            let rendered = output_format.format_report(&report);
+            print!("{}", rendered);
+            if !rendered.ends_with('\n') {
+                println!();
+            }
+
+            // CI Gating Checks
+            let mut exit_code = 0;
+
+            if let Some(ref semver) = report.semver_guard {
+                if !semver.is_compliant {
+                    eprintln!("{}: {}", "CI SemVer Gate Failure".bold().red(), semver.explanation);
+                    exit_code = 1;
+                }
+            }
+
+            if let Some(ref threshold_str) = fail_on {
+                if let Ok(threshold) = threshold_str.parse::<RiskLevel>() {
+                    if report.risk.level >= threshold {
+                        eprintln!(
+                            "{}: Risk level '{}' meets or exceeds threshold '{}'",
+                            "CI Risk Gate Failure".bold().red(),
+                            report.risk.level.as_str(),
+                            threshold.as_str()
+                        );
+                        exit_code = 1;
+                    }
+                }
+            }
+
+            if let Some(min_cov) = min_test_coverage {
+                if report.test_coverage_ratio < min_cov {
+                    eprintln!(
+                        "{}: Test coverage ratio {:.1}% is below required {:.1}%",
+                        "CI Test Coverage Gate Failure".bold().red(),
+                        report.test_coverage_ratio * 100.0,
+                        min_cov * 100.0
+                    );
+                    exit_code = 1;
+                }
+            }
+
+            if exit_code != 0 {
+                std::process::exit(exit_code);
             }
         }
     }
