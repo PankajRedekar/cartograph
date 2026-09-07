@@ -88,6 +88,8 @@ pub enum EdgeKind {
     Contains,
     Returns,
     ParameterOf,
+    Tests,
+    MapsTo,
     #[serde(untagged)]
     Other(String),
 }
@@ -104,6 +106,8 @@ impl EdgeKind {
             EdgeKind::Contains => "contains",
             EdgeKind::Returns => "returns",
             EdgeKind::ParameterOf => "parameter_of",
+            EdgeKind::Tests => "tests",
+            EdgeKind::MapsTo => "maps_to",
             EdgeKind::Other(s) => s.as_str(),
         }
     }
@@ -129,6 +133,8 @@ impl FromStr for EdgeKind {
             "contains" => EdgeKind::Contains,
             "returns" => EdgeKind::Returns,
             "parameter_of" => EdgeKind::ParameterOf,
+            "tests" => EdgeKind::Tests,
+            "maps_to" | "mapsto" => EdgeKind::MapsTo,
             other => EdgeKind::Other(other.to_string()),
         };
         Ok(kind)

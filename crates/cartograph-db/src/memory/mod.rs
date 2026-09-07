@@ -82,6 +82,11 @@ impl MemoryBackend {
 
 #[async_trait]
 impl GraphStoreBackend for MemoryBackend {
+    async fn get_all_file_hashes(&self) -> Result<HashMap<String, String>> {
+        let state = self.state.read();
+        Ok(state.file_hashes.clone())
+    }
+
     async fn get_file_hash(&self, filepath: &str) -> Result<Option<String>> {
         let state = self.state.read();
         Ok(state.file_hashes.get(filepath).cloned())
