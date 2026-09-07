@@ -384,6 +384,38 @@ impl GraphStoreBackend for MemoryBackend {
         Ok(Vec::new())
     }
 
+    async fn get_edges_for_nodes(&self, node_ids: &[String], min_confidence: f64) -> Result<Vec<Edge>> {
+        if node_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let state = self.state.read();
+        let id_set: HashSet<&str> = node_ids.iter().map(|s| s.as_str()).collect();
+        let mut edges = Vec::new();
+
+        for id in &id_set {
+            if let Some(f_edges) = state.forward_edges.get(*id) {
+                for edge in f_edges {
+                    if edge.confidence.unwrap_or(1.0) >= min_confidence {
+                        edges.push(edge.clone());
+                    }
+                }
+            }
+            if let Some(b_edges) = state.backward_edges.get(*id) {
+                for edge in b_edges {
+                    if !id_set.contains(edge.source_id.as_str()) && edge.confidence.unwrap_or(1.0) >= min_confidence {
+                        edges.push(edge.clone());
+                    }
+                }
+            }
+        }
+
+        edges.sort_by(|a, b| (&a.source_id, &a.target_id, a.kind.as_str()).cmp(&(&b.source_id, &b.target_id, b.kind.as_str())));
+        edges.dedup_by(|a, b| a.source_id == b.source_id && a.target_id == b.target_id && a.kind == b.kind);
+
+        Ok(edges)
+    }
+
     async fn stats(&self) -> Result<GraphStats> {
         let state = self.state.read();
         let total_nodes = state.nodes.len();

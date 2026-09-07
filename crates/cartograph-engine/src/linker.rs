@@ -151,13 +151,15 @@ impl<'a> ReferenceResolver<'a> {
                 };
 
                 let all_candidate_ids: Vec<String> = candidates.iter().map(|c| c.id.clone()).collect();
+                let conf_val = 1.0 / (candidates.len() as f64);
                 let mut edge = Edge::new(&reference.source_node_id, &target.id, kind);
+                edge.confidence = Some(conf_val);
                 edge.metadata = Some(json!({
                     "fidelity": "dynamic_candidate",
                     "resolution": "proximity",
                     "proximity_score": best_score,
                     "candidates": all_candidate_ids,
-                    "confidence": 1.0 / (candidates.len() as f64)
+                    "confidence": conf_val
                 }));
                 return Some(edge);
             }

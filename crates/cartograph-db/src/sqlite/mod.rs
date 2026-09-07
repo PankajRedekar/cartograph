@@ -190,8 +190,8 @@ impl GraphStoreBackend for SqliteBackend {
         {
             let mut edge_stmt = tx.prepare_cached(
                 r#"
-                INSERT OR REPLACE INTO edges (source_id, target_id, kind, metadata)
-                VALUES (?1, ?2, ?3, ?4)
+                INSERT OR REPLACE INTO edges (source_id, target_id, kind, metadata, confidence, weight)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                 "#,
             )
             .map_err(|e| CartographError::Database(format!("Failed to prepare edge insert: {e}")))?;
@@ -203,6 +203,8 @@ impl GraphStoreBackend for SqliteBackend {
                     edge.target_id,
                     edge.kind.as_str(),
                     metadata_json,
+                    edge.confidence.unwrap_or(1.0),
+                    edge.weight.unwrap_or(1.0),
                 ])
                 .map_err(|e| CartographError::Database(format!("Failed to insert edge: {e}")))?;
             }
@@ -306,8 +308,8 @@ impl GraphStoreBackend for SqliteBackend {
         {
             let mut edge_stmt = tx.prepare_cached(
                 r#"
-                INSERT OR REPLACE INTO edges (source_id, target_id, kind, metadata)
-                VALUES (?1, ?2, ?3, ?4)
+                INSERT OR REPLACE INTO edges (source_id, target_id, kind, metadata, confidence, weight)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                 "#,
             )
             .map_err(|e| CartographError::Database(format!("Failed to prepare edge insert: {e}")))?;
@@ -319,6 +321,8 @@ impl GraphStoreBackend for SqliteBackend {
                     edge.target_id,
                     edge.kind.as_str(),
                     metadata_json,
+                    edge.confidence.unwrap_or(1.0),
+                    edge.weight.unwrap_or(1.0),
                 ])
                 .map_err(|e| CartographError::Database(format!("Failed to insert edge: {e}")))?;
             }
@@ -427,7 +431,7 @@ impl GraphStoreBackend for SqliteBackend {
                 SELECT n.id, n.name, n.kind, n.filepath, n.scope,
                        n.start_line, n.start_col, n.end_line, n.end_col,
                        n.signature, n.docstring, n.checksum, n.metadata,
-                       bm25(nodes_fts) AS rank
+                       bm25(nodes_fts, 0.0, 5.0, 1.0, 3.0, 2.0, 1.5) AS rank
                 FROM nodes_fts
                 JOIN nodes n ON nodes_fts.id = n.id
                 WHERE nodes_fts MATCH ?1
@@ -506,6 +510,11 @@ impl GraphStoreBackend for SqliteBackend {
     async fn find_shortest_path(&self, source_id: &str, target_id: &str) -> Result<Vec<String>> {
         let conn = self.conn.lock();
         traversal::find_shortest_path(&conn, source_id, target_id)
+    }
+
+    async fn get_edges_for_nodes(&self, node_ids: &[String], min_confidence: f64) -> Result<Vec<Edge>> {
+        let conn = self.conn.lock();
+        traversal::get_edges_for_nodes(&conn, node_ids, min_confidence)
     }
 
     async fn stats(&self) -> Result<GraphStats> {

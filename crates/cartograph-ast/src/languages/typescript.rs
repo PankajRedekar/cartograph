@@ -354,12 +354,7 @@ impl<'a> TypeScriptExtractor<'a> {
         });
 
         // defines edge
-        self.edges.push(Edge {
-            source_id: parent_class_uri.to_string(),
-            target_id: uri,
-            kind: EdgeKind::Defines,
-            metadata: None,
-        });
+        self.edges.push(Edge::new(parent_class_uri.to_string(), uri, EdgeKind::Defines));
 
         // Visit body
         self.scope_stack.push(method_name.to_string());

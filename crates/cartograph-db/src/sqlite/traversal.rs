@@ -167,3 +167,75 @@ pub fn find_shortest_path(
         Ok(Vec::new())
     }
 }
+
+pub(crate) fn row_to_edge(row: &rusqlite::Row) -> rusqlite::Result<cartograph_core::model::Edge> {
+    let source_id: String = row.get(0)?;
+    let target_id: String = row.get(1)?;
+    let kind_str: String = row.get(2)?;
+    let metadata_str: Option<String> = row.get(3)?;
+    let confidence: Option<f64> = row.get(4)?;
+    let weight: Option<f64> = row.get(5)?;
+
+    let kind = kind_str.parse().unwrap_or(cartograph_core::model::EdgeKind::Other(kind_str));
+    let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
+
+    Ok(cartograph_core::model::Edge {
+        source_id,
+        target_id,
+        kind,
+        metadata,
+        confidence,
+        weight,
+    })
+}
+
+pub fn get_edges_for_nodes(
+    conn: &Connection,
+    node_ids: &[String],
+    min_confidence: f64,
+) -> Result<Vec<cartograph_core::model::Edge>> {
+    if node_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut edges = Vec::new();
+    // Chunk in batches of 400 to respect SQLite parameter limits
+    for chunk in node_ids.chunks(400) {
+        let placeholders = chunk.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            r#"
+            SELECT source_id, target_id, kind, metadata, confidence, weight
+            FROM edges
+            WHERE (source_id IN ({placeholders}) OR target_id IN ({placeholders}))
+              AND coalesce(confidence, 1.0) >= ?
+            ORDER BY source_id ASC, target_id ASC
+            "#
+        );
+
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| CartographError::Database(format!("Failed to prepare get_edges_for_nodes: {e}")))?;
+
+        let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len() * 2 + 1);
+        for id in chunk {
+            params.push(id);
+        }
+        for id in chunk {
+            params.push(id);
+        }
+        params.push(&min_confidence);
+
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params), row_to_edge)
+            .map_err(|e| CartographError::Database(format!("Failed to execute get_edges_for_nodes: {e}")))?;
+
+        for row in rows {
+            edges.push(row.map_err(|e| CartographError::Database(format!("Failed to map edge row: {e}")))?);
+        }
+    }
+
+    edges.sort_by(|a, b| (&a.source_id, &a.target_id, a.kind.as_str()).cmp(&(&b.source_id, &b.target_id, b.kind.as_str())));
+    edges.dedup_by(|a, b| a.source_id == b.source_id && a.target_id == b.target_id && a.kind == b.kind);
+
+    Ok(edges)
+}

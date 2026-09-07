@@ -2,7 +2,7 @@ use rusqlite::Connection;
 
 use cartograph_core::error::{CartographError, Result};
 
-pub const CURRENT_SCHEMA_VERSION: &str = "1";
+pub const CURRENT_SCHEMA_VERSION: &str = "2";
 
 pub fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(
@@ -45,6 +45,8 @@ pub fn migrate(conn: &Connection) -> Result<()> {
             target_id TEXT NOT NULL,
             kind TEXT NOT NULL,
             metadata TEXT,
+            confidence REAL DEFAULT 1.0,
+            weight REAL DEFAULT 1.0,
             PRIMARY KEY (source_id, target_id, kind)
         );
 
@@ -92,6 +94,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         "#,
     )
     .map_err(|e| CartographError::Database(format!("Failed to execute schema migration: {e}")))?;
+
+    // Safe backwards-compatible migrations for existing SQLite databases
+    let _ = conn.execute("ALTER TABLE edges ADD COLUMN confidence REAL DEFAULT 1.0;", []);
+    let _ = conn.execute("ALTER TABLE edges ADD COLUMN weight REAL DEFAULT 1.0;", []);
 
     conn.execute(
         "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', ?1)",

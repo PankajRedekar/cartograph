@@ -368,12 +368,7 @@ impl<'a> RubyExtractor<'a> {
         // defines edge if inside class/module
         if let Some(parent_name) = self.scope_stack.last() {
             let parent_uri = build_uri(self.filepath, "", parent_name, &NodeKind::Class);
-            self.edges.push(Edge {
-                source_id: parent_uri,
-                target_id: uri,
-                kind: EdgeKind::Defines,
-                metadata: None,
-            });
+            self.edges.push(Edge::new(parent_uri, uri, EdgeKind::Defines));
         }
 
         self.scope_stack.push(method_name.to_string());

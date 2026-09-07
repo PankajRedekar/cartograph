@@ -1,10 +1,12 @@
 use std::fs;
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use cartograph_core::config::{GitDiffMode, IndexConfig, StorageConfig};
 use cartograph_db::create_backend;
 use cartograph_engine::discovery::DiscoveryConfig;
+use cartograph_engine::locate::{LocateCliOptions, OutputFormat, QueryParser, SubgraphLocator};
 use cartograph_engine::pipeline::IndexPipeline;
 use cartograph_engine::watcher::{FileWatcher, WatchEvent, WatcherSettings};
 use clap::{Parser, Subcommand};
@@ -91,6 +93,85 @@ enum Commands {
         /// Output status formatted as JSON
         #[arg(long)]
         json: bool,
+    },
+
+    /// Localize and retrieve a 1-turn comprehensive code subgraph context (<3ms)
+    Locate {
+        /// Target symbol query, path, or natural language intent (supports inline directives e.g. 'kind:function')
+        #[arg(value_name = "QUERY")]
+        query: String,
+
+        /// Root directory of repository
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Database profile or SQLite file path
+        #[arg(short, long, default_value = "default")]
+        db: String,
+
+        /// Filter target symbol AST kind (e.g. function, method, class, struct, interface)
+        #[arg(short, long)]
+        kind: Option<String>,
+
+        /// Path filter (substring or glob)
+        #[arg(long)]
+        file: Option<String>,
+
+        /// Language filter (e.g. rust, typescript, python, go)
+        #[arg(short, long)]
+        lang: Option<String>,
+
+        /// BFS subgraph traversal depth (default: 1)
+        #[arg(short = 'D', long)]
+        depth: Option<usize>,
+
+        /// Enable end-to-end execution flow tracing (auto depth along Calls/MapsTo)
+        #[arg(long)]
+        flow: bool,
+
+        /// Subgraph traversal direction: in (callers), out (callees), both (default)
+        #[arg(long)]
+        direction: Option<String>,
+
+        /// Comma-separated edge types to follow (e.g. 'Calls,MapsTo,Tests,Imports')
+        #[arg(short, long)]
+        edges: Option<String>,
+
+        /// Minimum edge confidence threshold (0.0 to 1.0)
+        #[arg(long)]
+        min_confidence: Option<f64>,
+
+        /// Inline parameter and return type signatures
+        #[arg(long)]
+        resolve_types: bool,
+
+        /// Context density tier: minimal, signatures, full (default: full)
+        #[arg(long, default_value = "full")]
+        detail: String,
+
+        /// Include implementation source code snippet
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        code: bool,
+
+        /// Extra lines of source context before/after target definition
+        #[arg(short = 'C', long)]
+        context: Option<usize>,
+
+        /// AI token budget ceiling for context pruning
+        #[arg(short = 'm', long)]
+        max_tokens: Option<usize>,
+
+        /// Maximum number of candidate clusters to return (default: 5)
+        #[arg(short = 'n', long)]
+        limit: Option<usize>,
+
+        /// Presentation output format: terminal, markdown, json, xml (auto-detected if omitted)
+        #[arg(short, long)]
+        format: Option<String>,
+
+        /// Interactive terminal disambiguation prompt if query matches multiple symbols
+        #[arg(short, long)]
+        interactive: bool,
     },
 }
 
@@ -339,6 +420,113 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("  {:<24} {:>30}", "Database File Size", format!("{mb:.2} MB"));
                 }
                 println!("{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan());
+            }
+        }
+
+        Commands::Locate {
+            query,
+            path,
+            db,
+            kind,
+            file,
+            lang,
+            depth,
+            flow,
+            direction,
+            edges,
+            min_confidence,
+            resolve_types,
+            detail,
+            code,
+            context,
+            max_tokens,
+            limit,
+            format,
+            interactive,
+        } => {
+            let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
+            let (storage_cfg, _db_path) = resolve_storage_config(&canonical_root, &db);
+            let backend = create_backend(&storage_cfg)?;
+
+            let default_format = if io::stdout().is_terminal() {
+                "terminal".to_string()
+            } else {
+                "json".to_string()
+            };
+            let chosen_format = format.unwrap_or(default_format);
+
+            let cli_opts = LocateCliOptions {
+                kind,
+                path: file,
+                lang,
+                depth,
+                flow,
+                direction,
+                edges,
+                min_confidence,
+                resolve_types,
+                detail: Some(detail),
+                code,
+                context_lines: context,
+                max_tokens,
+                limit,
+                format: Some(chosen_format.clone()),
+                interactive,
+            };
+
+            let query_obj = QueryParser::parse(&query, cli_opts.clone());
+            let locator = SubgraphLocator::new(backend, canonical_root);
+            let result = locator.locate(query_obj.clone()).await?;
+
+            // Interactive disambiguation if requested and multiple clusters match
+            if (interactive || query_obj.format == OutputFormat::InteractiveTui)
+                && result.clusters.len() > 1
+                && io::stdin().is_terminal()
+            {
+                eprintln!("\n{}", "Multiple candidate symbol clusters found:".yellow().bold());
+                for (idx, cluster) in result.clusters.iter().enumerate() {
+                    if let Some(primary) = cluster.nodes.first() {
+                        eprintln!(
+                            "  [{}] {} ({}) in {}:{}",
+                            idx + 1,
+                            primary.node.name.cyan().bold(),
+                            primary.node.kind,
+                            primary.node.filepath,
+                            primary.node.start_line.unwrap_or(1)
+                        );
+                    } else {
+                        eprintln!("  [{}] {}", idx + 1, cluster.domain.cyan().bold());
+                    }
+                }
+                eprint!("Select symbol cluster [1-{}]: ", result.clusters.len());
+                let _ = io::stderr().flush();
+
+                let mut input = String::new();
+                if io::stdin().read_line(&mut input).is_ok() {
+                    if let Ok(choice) = input.trim().parse::<usize>() {
+                        if choice >= 1 && choice <= result.clusters.len() {
+                            let chosen = &result.clusters[choice - 1];
+                            if let Some(primary) = chosen.nodes.first() {
+                                let mut specific_opts = cli_opts;
+                                specific_opts.format = Some(chosen_format);
+                                let mut specific_query =
+                                    QueryParser::parse(&primary.node.name, specific_opts);
+                                specific_query.path_filter = Some(primary.node.filepath.clone());
+                                let specific_result = locator.locate(specific_query).await?;
+                                print!("{}", specific_result.rendered_output);
+                                if !specific_result.rendered_output.ends_with('\n') {
+                                    println!();
+                                }
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+            }
+
+            print!("{}", result.rendered_output);
+            if !result.rendered_output.ends_with('\n') {
+                println!();
             }
         }
     }
