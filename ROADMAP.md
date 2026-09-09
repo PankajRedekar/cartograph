@@ -99,10 +99,15 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - **CI/CD Quality Gates**: Exit code 1 enforcement on risk thresholds (`--fail-on <low|medium|high|critical>`), SemVer policy violations, or inadequate test coverage (`--min-test-coverage`).
   - **Performance SLA**: Complete end-to-end branch diff impact analysis in **<25ms**.
 
-- [ ] **2.2 Smart Predictive Test Selection (`cartograph test-selector`)**
-  - Bidirectional graph resolution connecting code symbols to relevant unit/integration tests.
-  - Outputs exact executable test invocation strings (e.g. `pytest tests/test_accruals.py -k test_update_period`).
-  - Execution speed: Resolves minimal test target suite in <3ms.
+- [x] **2.2 Smart Predictive Test Selection (`cartograph test-selector`)**
+  - **Multi-Hop Graph Test Resolution**: Transitive upstream/downstream graph resolution mapping modified code symbols to both direct ($d=1$) and transitive ($d \ge 2$) unit, integration, and E2E tests across Rust, TypeScript, Python, and Go.
+  - **Semantic Diff Damping & Zero-Test Early Exit (`--ignore-docstrings`)**: AST-level diff inspection classifying modifications into `DocstringOnly`, `BodyOnly`, and `SignatureBreak`. PRs modifying only markdown, documentation, comments, or docstrings trigger instant early exit (`<1ms`) with 0 tests executed.
+  - **Fail-Fast Prioritization & Granularity Aggregation**: Ranks test candidates by hop distance, confidence, and execution speed. Supports granular execution scoping (`--granularity auto|case|suite|file|package`).
+  - **Direct Test Edit & Manifest Elevation**: Automatically includes directly edited test functions ($d=0$) and elevates entire package suites when build manifests (`Cargo.toml`, `package.json`, `go.mod`, `requirements.txt`) are modified.
+  - **Subprocess Execution & Fail-Fast Bail (`--run`, `--bail`)**: Sequentially launches synthesized test runner commands (`cargo test`, `nextest`, `pytest`, `jest`, `vitest`, `go test`, `rspec`), streams output in real time, and aborts immediately upon first test failure.
+  - **Coverage Deficit Analysis & CI Gating**: Flags untested modified symbols, generates test scaffolding templates, and gates CI pipelines via `--fail-on-untested` and `--min-coverage <percentage>`.
+  - **Multi-Engine Formatting**: Colorized terminal badges, GitHub PR Markdown comment tables, JSON schema for pipelines, GitHub Actions Matrix JSON (`--format matrix`), and executable bash scripts (`--format script`).
+  - **Performance SLA**: Sub-15ms latency budget for full PR diff test selection and runner synthesis.
 
 - [ ] **2.3 Interactive Full-Stack Route Mapper (`cartograph routes`)**
   - Full-stack request tracing: `URL Pattern -> Controller/View -> Business Handler -> DB Model`.

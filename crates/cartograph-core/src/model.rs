@@ -481,3 +481,196 @@ pub struct ImpactReport {
     pub elapsed_ms: f64,
 }
 
+/// Granularity of test selection and execution
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TestGranularity {
+    /// Auto-detect optimal granularity based on runner and impacted ratio
+    Auto,
+    /// Exact test function or test case (e.g. test_calc_interest)
+    Case,
+    /// Test class or describe block (e.g. TestBillingService)
+    Suite,
+    /// Entire test file (e.g. tests/test_billing.py)
+    File,
+    /// Entire test package or directory (e.g. crates/billing/...)
+    Package,
+}
+
+impl TestGranularity {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TestGranularity::Auto => "auto",
+            TestGranularity::Case => "case",
+            TestGranularity::Suite => "suite",
+            TestGranularity::File => "file",
+            TestGranularity::Package => "package",
+        }
+    }
+}
+
+impl std::str::FromStr for TestGranularity {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "auto" => Ok(TestGranularity::Auto),
+            "case" => Ok(TestGranularity::Case),
+            "suite" => Ok(TestGranularity::Suite),
+            "file" => Ok(TestGranularity::File),
+            "package" => Ok(TestGranularity::Package),
+            other => Err(format!("Unknown test granularity: '{other}'. Use auto, case, suite, file, or package.")),
+        }
+    }
+}
+
+/// Supported test runner engines
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TestRunnerKind {
+    CargoTest,
+    CargoNextest,
+    Pytest,
+    Jest,
+    Vitest,
+    Mocha,
+    GoTest,
+    RSpec,
+    Custom(String),
+}
+
+impl TestRunnerKind {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TestRunnerKind::CargoTest => "cargo",
+            TestRunnerKind::CargoNextest => "cargo-nextest",
+            TestRunnerKind::Pytest => "pytest",
+            TestRunnerKind::Jest => "jest",
+            TestRunnerKind::Vitest => "vitest",
+            TestRunnerKind::Mocha => "mocha",
+            TestRunnerKind::GoTest => "go test",
+            TestRunnerKind::RSpec => "rspec",
+            TestRunnerKind::Custom(s) => s.as_str(),
+        }
+    }
+}
+
+/// Test execution classification
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TestCategory {
+    Unit,
+    Integration,
+    E2E,
+    Benchmark,
+    Unknown,
+}
+
+/// A selected test case or test suite with provenance metadata
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SelectedTest {
+    /// The AST node representing the test function or suite
+    pub test_node: Node,
+    /// Detected test runner framework
+    pub runner_kind: TestRunnerKind,
+    /// Test classification (unit, integration, e2e)
+    pub category: TestCategory,
+    /// Granularity at which this test is addressed
+    pub granularity: TestGranularity,
+    /// Minimum graph distance (hop count) from modified root symbol
+    /// 1 = direct test, 2+ = transitive test
+    pub hop_distance: usize,
+    /// Computed selection confidence / relevance score (0.0 to 1.0)
+    pub relevance_score: f64,
+    /// Fail-fast priority ranking score (higher = run earlier)
+    pub priority_score: f64,
+    /// Target symbols verified by this test
+    pub targets_verified: Vec<String>,
+    /// Step-by-step propagation path from target symbol to test node
+    pub propagation_path: Vec<String>,
+    /// Synthesized standalone command to run this specific test
+    pub standalone_command: String,
+    /// Estimated execution duration in milliseconds (if available from history)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimated_duration_ms: Option<u64>,
+    /// Historical failure rate (0.0 to 1.0) from previous test runs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub historical_failure_rate: Option<f64>,
+}
+
+/// Grouped runner invocation batch
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TestRunnerInvocation {
+    /// Runner framework
+    pub runner_kind: TestRunnerKind,
+    /// Working directory for execution
+    pub working_dir: String,
+    /// Executable binary (e.g. "cargo", "pytest", "npx")
+    pub program: String,
+    /// Command line arguments
+    pub args: Vec<String>,
+    /// Full display string
+    pub display_command: String,
+    /// Tests included in this invocation
+    pub included_tests: Vec<String>,
+    /// Target files executed
+    pub target_files: Vec<String>,
+}
+
+/// Information about changed symbols that have no test coverage
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UntestedSymbolDeficit {
+    /// Node that was modified
+    pub node: Node,
+    /// Why this deficit is critical (e.g. "Public API exported symbol")
+    pub reason: String,
+    /// Recommended test file path for adding coverage
+    pub suggested_test_file: String,
+    /// Scaffolding template snippet for the test
+    pub suggested_test_template: String,
+}
+
+/// Raw test record directly returned from database graph queries
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawTestRecord {
+    pub test_node: Node,
+    pub target_symbol_id: String,
+    pub hop_distance: usize,
+    pub path_str: String,
+    pub confidence: f64,
+}
+
+/// Complete Predictive Test Selection Report
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TestSelectionReport {
+    /// Repository root path
+    pub repo_root: String,
+    /// Number of modified root AST nodes analyzed
+    pub modified_symbols_count: usize,
+    /// Total test cases selected
+    pub total_tests_selected: usize,
+    /// Total test files touched
+    pub total_test_files_count: usize,
+    /// Total test cases in repository (for savings calculation)
+    pub total_repo_tests_count: usize,
+    /// Percentage of repository test suite avoided (e.g. 94.2%)
+    pub test_reduction_percentage: f64,
+    /// Estimated time savings in seconds
+    pub estimated_time_saved_seconds: f64,
+    /// Selected tests ordered by priority (highest priority first)
+    pub selected_tests: Vec<SelectedTest>,
+    /// Synthesized executable runner invocations
+    pub runner_invocations: Vec<TestRunnerInvocation>,
+    /// Untested changed symbols (coverage gap)
+    pub untested_deficits: Vec<UntestedSymbolDeficit>,
+    /// Test coverage ratio: tested changed symbols / total changed symbols (0.0 to 1.0)
+    pub test_coverage_ratio: f64,
+    /// Whether all changes were non-functional comments/docstrings, resulting in zero tests
+    pub is_zero_risk_bypass: bool,
+    /// Number of symbols classified as docstring-only (pruned from test selection)
+    pub docstring_only_symbols_count: usize,
+    /// Number of active functional symbols driving test selection
+    pub active_functional_symbols_count: usize,
+    /// Total duration of test selection analysis in milliseconds (<15ms)
+    pub analysis_duration_ms: f64,
+}
+

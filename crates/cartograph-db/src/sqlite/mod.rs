@@ -13,7 +13,7 @@ use rusqlite::{params, Connection};
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::SqliteConfig;
 use cartograph_core::error::{CartographError, Result};
-use cartograph_core::model::{Edge, GraphStats, Node, RawImpactRecord, SearchResult};
+use cartograph_core::model::{Edge, GraphStats, Node, RawImpactRecord, RawTestRecord, SearchResult};
 
 use traversal::row_to_node;
 
@@ -526,6 +526,16 @@ impl GraphStoreBackend for SqliteBackend {
     ) -> Result<Vec<RawImpactRecord>> {
         let conn = self.conn.lock();
         traversal::get_impact_subgraph(&conn, root_ids, direction, max_depth, min_confidence)
+    }
+
+    async fn get_tests_for_targets(
+        &self,
+        target_ids: &[String],
+        max_depth: usize,
+        min_confidence: f64,
+    ) -> Result<Vec<RawTestRecord>> {
+        let conn = self.conn.lock();
+        traversal::get_tests_for_targets(&conn, target_ids, max_depth, min_confidence)
     }
 
     async fn stats(&self) -> Result<GraphStats> {

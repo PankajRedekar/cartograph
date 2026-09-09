@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 
 use crate::error::Result;
-use crate::model::{Edge, GraphStats, Node, RawImpactRecord, SearchResult};
+use crate::model::{Edge, GraphStats, Node, RawImpactRecord, RawTestRecord, SearchResult};
 
 #[async_trait]
 pub trait GraphStoreBackend: Send + Sync {
@@ -65,6 +65,15 @@ pub trait GraphStoreBackend: Send + Sync {
         max_depth: usize,
         min_confidence: f64,
     ) -> Result<Vec<RawImpactRecord>>;
+
+    /// Retrieve all tests exercising any of the target node IDs directly or transitively
+    /// up to max_depth with min_confidence.
+    async fn get_tests_for_targets(
+        &self,
+        target_ids: &[String],
+        max_depth: usize,
+        min_confidence: f64,
+    ) -> Result<Vec<RawTestRecord>>;
 
     /// Return aggregate statistics of the graph store.
     async fn stats(&self) -> Result<GraphStats>;

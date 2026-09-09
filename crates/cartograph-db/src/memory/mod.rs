@@ -7,7 +7,7 @@ use parking_lot::RwLock;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::MemoryConfig;
 use cartograph_core::error::Result;
-use cartograph_core::model::{Edge, EdgeKind, GraphStats, Node, RawImpactRecord, SearchResult};
+use cartograph_core::model::{Edge, EdgeKind, GraphStats, Node, RawImpactRecord, RawTestRecord, SearchResult};
 
 #[derive(Default)]
 struct MemoryGraphState {
@@ -500,6 +500,125 @@ impl GraphStoreBackend for MemoryBackend {
         }
 
         results.sort_by(|a, b| a.depth.cmp(&b.depth).then_with(|| a.node.id.cmp(&b.node.id)));
+        Ok(results)
+    }
+
+    async fn get_tests_for_targets(
+        &self,
+        target_ids: &[String],
+        max_depth: usize,
+        min_confidence: f64,
+    ) -> Result<Vec<RawTestRecord>> {
+        if target_ids.is_empty() || max_depth == 0 {
+            return Ok(Vec::new());
+        }
+
+        let state = self.state.read();
+        let mut results = Vec::new();
+        let mut seen_test_nodes: HashSet<(String, String)> = HashSet::new();
+
+        // 1. Direct edits: check if any target_id itself is a test node
+        for target_id in target_ids {
+            if let Some(node) = state.nodes.get(target_id) {
+                let is_test = node
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m.get("is_test"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                    || node.filepath.contains("test_")
+                    || node.filepath.starts_with("tests/")
+                    || node.filepath.ends_with("_test.go")
+                    || node.filepath.ends_with(".spec.ts")
+                    || node.filepath.ends_with(".test.ts")
+                    || node.filepath.ends_with(".spec.tsx")
+                    || node.filepath.ends_with(".test.tsx")
+                    || node.filepath.ends_with("_spec.rb");
+
+                if is_test && seen_test_nodes.insert((node.id.clone(), target_id.clone())) {
+                    results.push(RawTestRecord {
+                        test_node: node.clone(),
+                        target_symbol_id: target_id.clone(),
+                        hop_distance: 0,
+                        path_str: node.id.clone(),
+                        confidence: 1.0,
+                    });
+                }
+            }
+        }
+
+        // 2. Multi-hop upstream traversal along calls/implements/extends/maps_to/references
+        let mut queue = VecDeque::new();
+        let mut visited: HashMap<String, usize> = HashMap::new();
+
+        for target in target_ids {
+            visited.insert(target.clone(), 0);
+            queue.push_back((target.clone(), target.clone(), 0, target.clone(), 1.0));
+        }
+
+        while let Some((curr_id, target_id, depth, path_str, current_conf)) = queue.pop_front() {
+            // Check incoming tests edges verifying curr_id
+            if let Some(b_edges) = state.backward_edges.get(&curr_id) {
+                for edge in b_edges {
+                    let conf = edge.confidence.unwrap_or(1.0);
+                    if conf >= min_confidence && edge.kind == EdgeKind::Tests {
+                        if let Some(test_node) = state.nodes.get(&edge.source_id) {
+                            if seen_test_nodes.insert((test_node.id.clone(), target_id.clone())) {
+                                results.push(RawTestRecord {
+                                    test_node: test_node.clone(),
+                                    target_symbol_id: target_id.clone(),
+                                    hop_distance: depth + 1,
+                                    path_str: format!("{path_str},{}", test_node.id),
+                                    confidence: current_conf * conf,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            if depth >= max_depth {
+                continue;
+            }
+
+            // Upstream propagation along calls, implements, extends, maps_to, references
+            if let Some(b_edges) = state.backward_edges.get(&curr_id) {
+                for edge in b_edges {
+                    let conf = edge.confidence.unwrap_or(1.0);
+                    if conf >= min_confidence {
+                        let is_traversable = matches!(
+                            edge.kind,
+                            EdgeKind::Calls
+                                | EdgeKind::Implements
+                                | EdgeKind::Extends
+                                | EdgeKind::MapsTo
+                                | EdgeKind::References
+                        );
+                        if is_traversable {
+                            let next_id = &edge.source_id;
+                            let next_depth = depth + 1;
+                            let should_visit = match visited.get(next_id) {
+                                None => true,
+                                Some(&d) => next_depth < d,
+                            };
+                            if should_visit && !path_str.contains(next_id) {
+                                visited.insert(next_id.clone(), next_depth);
+                                let new_path = format!("{path_str},{next_id}");
+                                queue.push_back((
+                                    next_id.clone(),
+                                    target_id.clone(),
+                                    next_depth,
+                                    new_path,
+                                    current_conf * conf,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        results.sort_by(|a, b| a.hop_distance.cmp(&b.hop_distance).then_with(|| a.test_node.id.cmp(&b.test_node.id)));
         Ok(results)
     }
 

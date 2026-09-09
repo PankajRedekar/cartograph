@@ -250,6 +250,82 @@ enum Commands {
         #[arg(short, long)]
         interactive: bool,
     },
+
+    /// Select and execute predictive tests impacted by code modifications (<15ms)
+    #[command(alias = "tests", alias = "select-tests", alias = "test_selector")]
+    TestSelector {
+        /// Root directory of repository
+        #[arg(short, long, value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Database profile or SQLite file path
+        #[arg(short, long, default_value = "default")]
+        db: String,
+
+        /// Analyze git branch diff range (e.g. main...HEAD or origin/main...HEAD)
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Analyze uncommitted git staged changes
+        #[arg(long)]
+        staged: bool,
+
+        /// Test granularity: auto, case, suite, file, package (default: auto)
+        #[arg(short, long, default_value = "auto")]
+        granularity: String,
+
+        /// Maximum number of tests to select (fail-fast truncation)
+        #[arg(long)]
+        max_tests: Option<usize>,
+
+        /// Minimum edge confidence threshold (0.0 to 1.0)
+        #[arg(long, default_value_t = 0.5)]
+        min_confidence: f64,
+
+        /// Maximum graph traversal depth (default: 5)
+        #[arg(short = 'D', long, default_value_t = 5)]
+        depth: usize,
+
+        /// Bypass test execution when changes are only docstrings/comments/markdown (default: true)
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        ignore_docstrings: bool,
+
+        /// CI/CD Gate: fail with exit code 1 if any modified symbol has zero test coverage
+        #[arg(long)]
+        fail_on_untested: bool,
+
+        /// CI/CD Gate: fail with exit code 1 if test coverage ratio is below percentage (e.g. 80.0)
+        #[arg(long)]
+        min_coverage: Option<f64>,
+
+        /// Execute the selected test runner commands
+        #[arg(short, long)]
+        run: bool,
+
+        /// Stop execution immediately on first test failure when using --run
+        #[arg(long)]
+        bail: bool,
+
+        /// Print execution commands without running
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output only executable runner commands, newline separated (ideal for piping to bash)
+        #[arg(long)]
+        command_only: bool,
+
+        /// Output only unique test file paths, newline separated
+        #[arg(long)]
+        files_only: bool,
+
+        /// Presentation output format: terminal, markdown, json, matrix, script
+        #[arg(short, long)]
+        format: Option<String>,
+
+        /// Output results formatted as JSON (shorthand for --format json)
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 /// Resolve storage config and ensure database parent directories exist
@@ -736,6 +812,100 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if exit_code != 0 {
                 std::process::exit(exit_code);
+            }
+        }
+
+        Commands::TestSelector {
+            path,
+            db,
+            branch,
+            staged,
+            granularity,
+            max_tests,
+            min_confidence,
+            depth,
+            ignore_docstrings,
+            fail_on_untested,
+            min_coverage,
+            run,
+            bail,
+            dry_run,
+            command_only,
+            files_only,
+            format,
+            json,
+        } => {
+            let (storage_config, _db_path) = resolve_storage_config(&path, &db);
+            let backend = match create_backend(&storage_config) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("{}: Failed to open database: {e}", "Error".bold().red());
+                    std::process::exit(1);
+                }
+            };
+
+            let test_granularity = granularity
+                .parse::<cartograph_core::model::TestGranularity>()
+                .unwrap_or(cartograph_core::model::TestGranularity::Auto);
+
+            let output_format = if json {
+                cartograph_engine::TestSelectorOutputFormat::Json
+            } else if let Some(ref f) = format {
+                f.parse::<cartograph_engine::TestSelectorOutputFormat>()
+                    .unwrap_or(cartograph_engine::TestSelectorOutputFormat::Terminal)
+            } else {
+                cartograph_engine::TestSelectorOutputFormat::Terminal
+            };
+
+            let selector = cartograph_engine::TestSelector::new(backend.as_ref());
+            let options = cartograph_engine::TestSelectorOptions {
+                repo_root: path.clone(),
+                branch_range: branch,
+                staged,
+                diff_content: None,
+                granularity: test_granularity,
+                max_tests,
+                min_confidence,
+                max_hops: depth,
+                ignore_docstrings,
+                fail_on_untested,
+                min_coverage,
+                format: output_format,
+                dry_run,
+                command_only,
+                files_only,
+                bail,
+                run,
+            };
+
+            let report = match selector.select_tests(&options).await {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("{}: {}", "Test selection error".bold().red(), e);
+                    std::process::exit(1);
+                }
+            };
+
+            if !run || dry_run {
+                let rendered = output_format
+                    .format(&report, command_only, files_only)
+                    .unwrap_or_else(|e| format!("Error formatting report: {e}"));
+                print!("{}", rendered);
+                if !rendered.ends_with('\n') {
+                    println!();
+                }
+            } else {
+                match cartograph_engine::TestExecutor::execute(&report.runner_invocations, bail) {
+                    Ok(summary) => {
+                        if summary.exit_code != 0 {
+                            std::process::exit(summary.exit_code);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{}: {}", "Test execution error".bold().red(), e);
+                        std::process::exit(1);
+                    }
+                }
             }
         }
     }

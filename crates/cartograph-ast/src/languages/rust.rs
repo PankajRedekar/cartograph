@@ -343,6 +343,24 @@ impl<'a> RustExtractor<'a> {
             None
         };
 
+        let is_test = self.is_test_function(node, fn_name);
+        let mut metadata_json = serde_json::json!({
+            "visibility": visibility.as_str(),
+            "span": span,
+        });
+        if is_test {
+            if let Some(map) = metadata_json.as_object_mut() {
+                map.insert("is_test".to_string(), serde_json::json!(true));
+                map.insert("framework".to_string(), serde_json::json!("cargo"));
+                let test_type = if self.filepath.starts_with("tests/") {
+                    "integration"
+                } else {
+                    "unit"
+                };
+                map.insert("test_type".to_string(), serde_json::json!(test_type));
+            }
+        }
+
         self.nodes.push(Node {
             id: uri.clone(),
             name: fn_name.to_string(),
@@ -356,10 +374,7 @@ impl<'a> RustExtractor<'a> {
             signature: Some(SignatureNormalizer::normalize(&format!("fn {fn_name}()"))),
             docstring,
             checksum,
-            metadata: Some(serde_json::json!({
-                "visibility": visibility.as_str(),
-                "span": span,
-            })),
+            metadata: Some(metadata_json),
         });
 
         // defines edge if inside an impl block
@@ -443,6 +458,37 @@ impl<'a> RustExtractor<'a> {
 
         None
     }
+
+    fn is_test_function(&self, node: TsNode, fn_name: &str) -> bool {
+        if self.filepath.starts_with("tests/") || self.filepath.contains("test_") {
+            return true;
+        }
+        if fn_name.starts_with("test_") {
+            return true;
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "attribute_item" {
+                let text = self.node_text(child);
+                if text.contains("test") {
+                    return true;
+                }
+            }
+        }
+        let mut prev = node.prev_sibling();
+        while let Some(sibling) = prev {
+            if sibling.kind() == "attribute_item" {
+                let text = self.node_text(sibling);
+                if text.contains("test") {
+                    return true;
+                }
+                prev = sibling.prev_sibling();
+            } else {
+                break;
+            }
+        }
+        false
+    }
 }
 
 #[cfg(test)]
@@ -490,5 +536,30 @@ impl Authenticatable for User {
             .find(|r| r.target_symbol == "Authenticatable")
             .expect("Should resolve Authenticatable trait implementation");
         assert_eq!(impl_ref.kind, EdgeKind::Implements);
+    }
+
+    #[test]
+    fn test_rust_test_function_extraction() {
+        let code = r#"
+#[test]
+fn test_calculate_interest() {
+    assert_eq!(1 + 1, 2);
+}
+
+#[tokio::test]
+async fn test_async_fetch() {
+    assert!(true);
+}
+"#;
+        let parser = RustParser::new();
+        let ctx = ParseContext::new("src/lib.rs", code);
+        let parsed = parser.parse(&ctx).expect("Parsing Rust failed");
+
+        assert_eq!(parsed.nodes.len(), 2);
+        for node in &parsed.nodes {
+            let meta = node.metadata.as_ref().expect("metadata present");
+            assert_eq!(meta.get("is_test").and_then(|v| v.as_bool()), Some(true));
+            assert_eq!(meta.get("framework").and_then(|v| v.as_str()), Some("cargo"));
+        }
     }
 }

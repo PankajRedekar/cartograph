@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 use cartograph_core::error::{CartographError, Result};
-use cartograph_core::model::{EdgeKind, Node, NodeKind, RawImpactRecord};
+use cartograph_core::model::{EdgeKind, Node, NodeKind, RawImpactRecord, RawTestRecord};
 
 pub(crate) fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<Node> {
     let id: String = row.get(0)?;
@@ -359,3 +359,123 @@ pub fn get_impact_subgraph(
 
     Ok(results)
 }
+
+pub fn get_tests_for_targets(
+    conn: &Connection,
+    target_ids: &[String],
+    max_depth: usize,
+    min_confidence: f64,
+) -> Result<Vec<RawTestRecord>> {
+    if target_ids.is_empty() || max_depth == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut results = Vec::new();
+
+    for chunk in target_ids.chunks(400) {
+        let placeholders = chunk.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+        let sql = format!(
+            r#"
+            WITH RECURSIVE test_cte(node_id, target_id, depth, path) AS (
+                SELECT id, id, 0, id
+                FROM nodes
+                WHERE id IN ({placeholders})
+
+                UNION
+
+                SELECT
+                    e.source_id,
+                    c.target_id,
+                    c.depth + 1,
+                    c.path || ',' || e.source_id
+                FROM test_cte c
+                JOIN edges e ON c.node_id = e.target_id
+                WHERE c.depth < ?
+                  AND coalesce(e.confidence, 1.0) >= ?
+                  AND e.kind IN ('calls', 'implements', 'extends', 'maps_to', 'references')
+                  AND instr(',' || c.path || ',', ',' || e.source_id || ',') = 0
+            )
+            SELECT DISTINCT
+                n.id, n.name, n.kind, n.filepath, n.scope,
+                n.start_line, n.start_col, n.end_line, n.end_col,
+                n.signature, n.docstring, n.checksum, n.metadata,
+                c.target_id,
+                c.depth + 1 AS hop_distance,
+                c.path || ',' || test_edge.source_id AS propagation_path,
+                coalesce(test_edge.confidence, 1.0) AS test_confidence
+            FROM test_cte c
+            JOIN edges test_edge ON c.node_id = test_edge.target_id
+            JOIN nodes n ON test_edge.source_id = n.id
+            WHERE test_edge.kind = 'tests'
+              AND coalesce(test_edge.confidence, 1.0) >= ?
+
+            UNION
+
+            SELECT DISTINCT
+                n.id, n.name, n.kind, n.filepath, n.scope,
+                n.start_line, n.start_col, n.end_line, n.end_col,
+                n.signature, n.docstring, n.checksum, n.metadata,
+                n.id AS target_symbol_id,
+                0 AS hop_distance,
+                n.id AS propagation_path,
+                1.0 AS test_confidence
+            FROM nodes n
+            WHERE n.id IN ({placeholders})
+              AND (
+                json_extract(n.metadata, '$.is_test') = 1
+                OR n.filepath LIKE '%test_%'
+                OR n.filepath LIKE 'tests/%'
+                OR n.filepath LIKE '%_test.go'
+                OR n.filepath LIKE '%.spec.ts'
+                OR n.filepath LIKE '%.test.ts'
+                OR n.filepath LIKE '%.spec.tsx'
+                OR n.filepath LIKE '%.test.tsx'
+                OR n.filepath LIKE '%_spec.rb'
+              )
+            ORDER BY hop_distance ASC, n.id ASC;
+            "#
+        );
+
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| CartographError::Database(format!("Failed to prepare get_tests_for_targets CTE: {e}")))?;
+
+        let depth_i64 = max_depth as i64;
+        let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len() * 2 + 3);
+        for id in chunk {
+            params.push(id);
+        }
+        params.push(&depth_i64);
+        params.push(&min_confidence);
+        params.push(&min_confidence);
+        for id in chunk {
+            params.push(id);
+        }
+
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params), |row| {
+                let test_node = row_to_node(row)?;
+                let target_symbol_id: String = row.get(13)?;
+                let hop_distance: i64 = row.get(14)?;
+                let path_str: String = row.get(15)?;
+                let confidence: f64 = row.get(16)?;
+
+                Ok(RawTestRecord {
+                    test_node,
+                    target_symbol_id,
+                    hop_distance: hop_distance as usize,
+                    path_str,
+                    confidence,
+                })
+            })
+            .map_err(|e| CartographError::Database(format!("Failed to execute get_tests_for_targets CTE: {e}")))?;
+
+        for row in rows {
+            results.push(row.map_err(|e| CartographError::Database(format!("Failed to map test record: {e}")))?);
+        }
+    }
+
+    Ok(results)
+}
+
