@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/PankajRedekar/cartograph/actions"><img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-2024%20edition-orange?style=flat-square&logo=rust" alt="Rust 2024" /></a>
-  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/roadmap-Phase%202.1%20Complete-blue?style=flat-square" alt="Roadmap" /></a>
+  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/roadmap-Phase%202.2%20Complete-blue?style=flat-square" alt="Roadmap" /></a>
   <a href="openspec/specs/"><img src="https://img.shields.io/badge/specs-OpenSpec%20verified-purple?style=flat-square" alt="OpenSpec" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue?style=flat-square" alt="License" /></a>
 </p>
@@ -356,6 +356,65 @@ Database: /Users/dev/my-project/.cartograph/cartograph.db
   Total Graph Edges                                 3,190
   Database File Size                              2.14 MB
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+### 6. `cartograph test-selector` — Predictive Test Selection (<15ms)
+Automatically isolates, ranks, and executes only the tests impacted by code modifications in your branch or staged changes.
+
+```bash
+# Select impacted tests across a feature branch
+cartograph test-selector --branch main...HEAD
+
+# Run selected tests directly with fail-fast abort on first failure
+cartograph test-selector --branch main...HEAD --run --bail
+
+# Pipe synthesized commands directly to bash
+cartograph test-selector --staged --command-only | bash
+
+# Export dynamic GitHub Actions matrix JSON for CI workflows
+cartograph test-selector --branch main...HEAD --format matrix > matrix.json
+```
+
+#### Key Capabilities
+- **Multi-Hop Transitive Resolution**: Resolves tests that directly verify modified functions ($d=1$) and transitive callers across layers ($d \ge 2$) via bidirectional graph reachability.
+- **Semantic Diff Damping & Zero-Test Early Exit (`--ignore-docstrings`)**: PRs with changes solely to markdown, documentation, comments, or docstrings automatically skip 100% of test runs with instant `<1ms` turnaround.
+- **Fail-Fast Prioritization**: Orders direct tests before transitive tests, factoring in confidence, category (unit before e2e), and execution history.
+- **Direct Test Modifications ($d=0$)**: Directly edited test cases or files are always executed first.
+- **Build Manifest Elevation**: Edits to `Cargo.toml`, `package.json`, `go.mod`, or `requirements.txt` elevate test selection for the entire package.
+- **Execution Scoping (`--granularity`)**: Configurable test execution scopes: `auto`, `case`, `suite`, `file`, or `package`.
+- **Untested Symbol Deficit Gating**: Flags modified symbols missing test coverage and enforces CI quality gates via `--fail-on-untested` and `--min-coverage <pct>`.
+
+**Example Output:**
+```
+🎯 Predictive Test Selection Report
+════════════════════════════════════════════════════════════
+  • Modified Symbols: 3
+  • Docstring Bypassed: 1
+  • Selected Tests: 4 (in 2 file(s))
+  • Suite Reduction: 92.5%
+  • Estimated Time Saved: ~14.2s
+  • Test Coverage Ratio: 100.0%
+  • Analysis Latency: 2.14ms
+
+Selected Tests (Ranked by Fail-Fast Priority):
+────────────────────────────────────────────────────────────
+  1. [MODIFIED TEST] test_auth_edge_cases (unit)
+     File: tests/auth_test.rs
+     Verifies: src/auth.rs::login
+  2. [DIRECT TEST]   test_login_success (unit)
+     File: tests/auth_test.rs
+     Verifies: src/auth.rs::login
+  3. [TRANSITIVE d=2] test_checkout_session (integration)
+     File: tests/checkout_test.rs
+     Verifies: src/auth.rs::login
+     Path: src/auth.rs::login ➔ src/checkout.rs::create_session ➔ tests/checkout_test.rs::test_checkout_session
+
+Synthesized Runner Commands:
+────────────────────────────────────────────────────────────
+  $ cargo test --test auth_test -- test_auth_edge_cases test_login_success
+  $ cargo test --test checkout_test -- test_checkout_session
 ```
 
 ---

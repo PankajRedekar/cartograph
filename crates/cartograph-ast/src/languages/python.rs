@@ -243,6 +243,12 @@ impl<'a> PythonExtractor<'a> {
             metadata["superclasses"] = serde_json::json!(superclasses);
         }
 
+        let is_test_class = class_name.starts_with("Test") || class_name.ends_with("Test") || class_name.ends_with("Tests") || superclasses.iter().any(|s| s.contains("TestCase"));
+        if is_test_class {
+            metadata["is_test"] = serde_json::json!(true);
+            metadata["framework"] = serde_json::json!("pytest");
+        }
+
         self.nodes.push(Node {
             id: uri.clone(),
             name: class_name.to_string(),
@@ -360,8 +366,18 @@ impl<'a> PythonExtractor<'a> {
             None
         };
 
-        // Pytest detection
-        let is_pytest = fn_name.starts_with("test_") || fn_name.ends_with("_test");
+        // Pytest / test detection
+        let is_test = fn_name.starts_with("test_") || fn_name.ends_with("_test")
+            || (self.filepath.contains("test") && (fn_name.starts_with("test") || fn_name.ends_with("test")))
+            || (scope.starts_with("Test") && fn_name.starts_with("test"));
+
+        let test_type = if self.filepath.contains("e2e") {
+            "e2e"
+        } else if self.filepath.contains("integration") {
+            "integration"
+        } else {
+            "unit"
+        };
 
         let mut metadata = serde_json::json!({
             "visibility": visibility.as_str(),
@@ -372,8 +388,10 @@ impl<'a> PythonExtractor<'a> {
         if let Some(ret) = return_type {
             metadata["return_type"] = serde_json::json!(ret);
         }
-        if is_pytest {
+        if is_test {
             metadata["is_test"] = serde_json::json!(true);
+            metadata["framework"] = serde_json::json!("pytest");
+            metadata["test_type"] = serde_json::json!(test_type);
         }
 
         self.nodes.push(Node {
@@ -442,10 +460,15 @@ impl<'a> PythonExtractor<'a> {
     fn annotate_last_node_decorators(&mut self, decorators: &[String]) {
         if let Some(last_node) = self.nodes.last_mut() {
             let is_celery = decorators.iter().any(|d| d.contains("shared_task") || d.contains("task"));
+            let is_pytest_mark = decorators.iter().any(|d| d.starts_with("pytest.mark") || d.starts_with("mark."));
             if let Some(meta) = &mut last_node.metadata {
                 meta["decorators"] = serde_json::json!(decorators);
                 if is_celery {
                     meta["is_celery_task"] = serde_json::json!(true);
+                }
+                if is_pytest_mark {
+                    meta["is_test"] = serde_json::json!(true);
+                    meta["framework"] = serde_json::json!("pytest");
                 }
             }
         }
@@ -807,4 +830,44 @@ urlpatterns = [
             .expect("Should extract route node");
         assert_eq!(route_node.name, "api/v1/invoices/");
     }
+
+    #[test]
+    fn test_python_test_extraction() {
+        let code = r#"
+class TestUserService:
+    @pytest.mark.asyncio
+    def test_create_user(self):
+        assert True
+
+def test_standalone_helper():
+    pass
+"#;
+        let parser = PythonParser::new();
+        let ctx = ParseContext::new("tests/test_users.py", code);
+        let parsed = parser.parse(&ctx).expect("Parsing failed");
+
+        let class_node = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "TestUserService")
+            .expect("Should extract test class");
+        assert_eq!(class_node.metadata.as_ref().unwrap()["is_test"], true);
+        assert_eq!(class_node.metadata.as_ref().unwrap()["framework"], "pytest");
+
+        let method_node = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "test_create_user")
+            .expect("Should extract test method");
+        assert_eq!(method_node.metadata.as_ref().unwrap()["is_test"], true);
+        assert_eq!(method_node.metadata.as_ref().unwrap()["framework"], "pytest");
+
+        let fn_node = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "test_standalone_helper")
+            .expect("Should extract standalone test func");
+        assert_eq!(fn_node.metadata.as_ref().unwrap()["is_test"], true);
+    }
 }
+

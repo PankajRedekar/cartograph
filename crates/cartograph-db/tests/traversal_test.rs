@@ -148,3 +148,95 @@ async fn test_multi_root_impact_subgraph() {
         assert_eq!(top.depth, 2);
     }
 }
+
+#[tokio::test]
+async fn test_get_tests_for_targets() {
+    fn test_node(id: &str, filepath: &str) -> Node {
+        Node {
+            id: id.to_string(),
+            name: id.to_string(),
+            kind: NodeKind::Function,
+            filepath: filepath.to_string(),
+            scope: String::new(),
+            start_line: Some(1),
+            start_col: Some(1),
+            end_line: Some(10),
+            end_col: Some(1),
+            signature: None,
+            docstring: None,
+            checksum: None,
+            metadata: Some(serde_json::json!({ "is_test": true })),
+        }
+    }
+
+    fn prod_node(id: &str) -> Node {
+        Node {
+            id: id.to_string(),
+            name: id.to_string(),
+            kind: NodeKind::Function,
+            filepath: "src/service.rs".to_string(),
+            scope: String::new(),
+            start_line: Some(1),
+            start_col: Some(1),
+            end_line: Some(10),
+            end_col: Some(1),
+            signature: None,
+            docstring: None,
+            checksum: None,
+            metadata: None,
+        }
+    }
+
+    let sqlite_backend = SqliteBackend::open_memory().unwrap();
+    let memory_backend = cartograph_db::memory::MemoryBackend::new();
+
+    // Graph:
+    // DirectTest -> (Tests) -> Target1
+    // TransTest -> (Tests) -> Caller -> (Calls) -> Target2
+    // DirectlyModifiedTest
+    let nodes = vec![
+        prod_node("Target1"),
+        prod_node("Target2"),
+        prod_node("Caller"),
+        test_node("DirectTest", "tests/test_direct.rs"),
+        test_node("TransTest", "tests/test_trans.rs"),
+        test_node("DirectlyModifiedTest", "tests/test_mod.rs"),
+    ];
+
+    let edges = vec![
+        Edge::new("DirectTest", "Target1", EdgeKind::Tests),
+        Edge::new("Caller", "Target2", EdgeKind::Calls),
+        Edge::new("TransTest", "Caller", EdgeKind::Tests),
+    ];
+
+    for backend in [
+        &sqlite_backend as &dyn GraphStoreBackend,
+        &memory_backend as &dyn GraphStoreBackend,
+    ] {
+        backend.insert_batch(&nodes, &edges).await.unwrap();
+
+        let targets = vec![
+            "Target1".to_string(),
+            "Target2".to_string(),
+            "DirectlyModifiedTest".to_string(),
+        ];
+        let tests = backend.get_tests_for_targets(&targets, 3, 0.0).await.unwrap();
+
+        let test_ids: Vec<String> = tests.iter().map(|t| t.test_node.id.clone()).collect();
+        assert!(test_ids.contains(&"DirectTest".to_string()), "DirectTest should be found");
+        assert!(test_ids.contains(&"TransTest".to_string()), "TransTest should be found");
+        assert!(test_ids.contains(&"DirectlyModifiedTest".to_string()), "DirectlyModifiedTest should be found");
+
+        let direct = tests.iter().find(|t| t.test_node.id == "DirectTest").unwrap();
+        assert_eq!(direct.hop_distance, 1);
+        assert_eq!(direct.target_symbol_id, "Target1");
+
+        let trans = tests.iter().find(|t| t.test_node.id == "TransTest").unwrap();
+        assert_eq!(trans.hop_distance, 2);
+        assert_eq!(trans.target_symbol_id, "Target2");
+
+        let modified_test = tests.iter().find(|t| t.test_node.id == "DirectlyModifiedTest").unwrap();
+        assert_eq!(modified_test.hop_distance, 0);
+    }
+}
+

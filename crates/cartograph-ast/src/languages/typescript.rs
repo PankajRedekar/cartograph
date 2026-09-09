@@ -570,6 +570,108 @@ impl<'a> TypeScriptExtractor<'a> {
             None => return,
         };
 
+        let mut base_node = fn_node;
+        while base_node.kind() == "call_expression" {
+            if let Some(inner) = base_node.child_by_field_name("function") {
+                base_node = inner;
+            } else {
+                break;
+            }
+        }
+        let fn_base_name = if base_node.kind() == "member_expression" {
+            base_node
+                .child_by_field_name("object")
+                .map(|o| self.node_text(o))
+                .unwrap_or_else(|| self.node_text(base_node))
+        } else {
+            self.node_text(base_node)
+        };
+
+        // Check if this is a test suite: describe("...", () => { ... }) or suite("...", ...)
+        if fn_base_name == "describe" || fn_base_name == "suite" {
+            let mut suite_name = String::new();
+            if let Some(args) = node.child_by_field_name("arguments") {
+                if let Some(first_arg) = args.named_child(0) {
+                    suite_name = self.node_text(first_arg).trim_matches(['\'', '"', '`']).to_string();
+                }
+            }
+
+            if !suite_name.is_empty() {
+                self.scope_stack.push(suite_name.clone());
+            }
+
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                if child.id() != fn_node.id() {
+                    self.visit_node(child);
+                }
+            }
+
+            if !suite_name.is_empty() {
+                self.scope_stack.pop();
+            }
+            return;
+        }
+
+        // Check if this is a test case: it("...", () => { ... }) or test("...", () => { ... })
+        if fn_base_name == "it" || fn_base_name == "test" {
+            let mut test_name = String::new();
+            if let Some(args) = node.child_by_field_name("arguments") {
+                if let Some(first_arg) = args.named_child(0) {
+                    test_name = self.node_text(first_arg).trim_matches(['\'', '"', '`']).to_string();
+                }
+            }
+
+            if !test_name.is_empty() {
+                let scope = self.current_scope();
+                let span = self.line_index.span_for_node(&node, self.content);
+                let uri = build_uri(self.filepath, &scope, &test_name, &NodeKind::Function);
+
+                let framework = if self.filepath.contains("vitest") {
+                    "vitest"
+                } else {
+                    "jest"
+                };
+
+                let test_type = if self.filepath.contains("e2e") {
+                    "e2e"
+                } else if self.filepath.contains("integration") {
+                    "integration"
+                } else {
+                    "unit"
+                };
+
+                self.nodes.push(Node {
+                    id: uri,
+                    name: test_name,
+                    kind: NodeKind::Function,
+                    filepath: self.filepath.to_string(),
+                    scope,
+                    start_line: Some(span.start_line),
+                    start_col: Some(span.start_col),
+                    end_line: Some(span.end_line),
+                    end_col: Some(span.end_col),
+                    signature: Some(format!("test {fn_base_name}()")),
+                    docstring: None,
+                    checksum: None,
+                    metadata: Some(serde_json::json!({
+                        "is_test": true,
+                        "framework": framework,
+                        "test_type": test_type,
+                        "span": span,
+                    })),
+                });
+
+                let mut cursor = node.walk();
+                for child in node.children(&mut cursor) {
+                    if child.id() != fn_node.id() {
+                        self.visit_node(child);
+                    }
+                }
+                return;
+            }
+        }
+
         let span = self.line_index.span_for_node(&node, self.content);
         let caller_id = self.nodes.last().map(|n| n.id.clone()).unwrap_or_default();
 
@@ -799,4 +901,44 @@ export function Header(props: HeaderProps) {
             .expect("Should extract Button JSX element call");
         assert_eq!(button_call.kind, EdgeKind::Calls);
     }
+
+    #[test]
+    fn test_typescript_test_extraction() {
+        let code = r#"
+describe("AuthModule", () => {
+    it("should authenticate valid users", () => {
+        const result = login("user", "pass");
+        expect(result).toBe(true);
+    });
+
+    test.skip("should reject expired token", () => {
+        expect(true).toBe(true);
+    });
+});
+"#;
+        let parser = TypeScriptParser::typescript();
+        let ctx = ParseContext::new("tests/auth.test.ts", code);
+        let parsed = parser.parse(&ctx).expect("Parsing test TS failed");
+
+        let test_node = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "should authenticate valid users")
+            .expect("Should extract it test case");
+
+        assert_eq!(test_node.kind, NodeKind::Function);
+        assert_eq!(test_node.scope, "AuthModule");
+        let meta = test_node.metadata.as_ref().unwrap();
+        assert_eq!(meta["is_test"], true);
+        assert_eq!(meta["framework"], "jest");
+
+        let second_test = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "should reject expired token")
+            .expect("Should extract test.skip case");
+        assert_eq!(second_test.scope, "AuthModule");
+        assert_eq!(second_test.metadata.as_ref().unwrap()["is_test"], true);
+    }
 }
+

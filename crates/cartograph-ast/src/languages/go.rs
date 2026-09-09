@@ -225,6 +225,20 @@ impl<'a> GoExtractor<'a> {
             None
         };
 
+        let is_test = fn_name.starts_with("Test") || fn_name.starts_with("Benchmark") || fn_name.starts_with("Fuzz") || fn_name.starts_with("Example");
+        let is_test_file = self.filepath.ends_with("_test.go") || self.filepath.contains("/test/");
+
+        let mut metadata = serde_json::json!({
+            "visibility": visibility.as_str(),
+            "span": span,
+        });
+
+        if is_test && (is_test_file || fn_name.starts_with("Test")) {
+            metadata["is_test"] = serde_json::json!(true);
+            metadata["framework"] = serde_json::json!("gotest");
+            metadata["test_type"] = serde_json::json!(if fn_name.starts_with("Benchmark") { "benchmark" } else { "unit" });
+        }
+
         self.nodes.push(Node {
             id: uri,
             name: fn_name.to_string(),
@@ -238,10 +252,7 @@ impl<'a> GoExtractor<'a> {
             signature: Some(SignatureNormalizer::normalize(&format!("func {fn_name}()"))),
             docstring,
             checksum,
-            metadata: Some(serde_json::json!({
-                "visibility": visibility.as_str(),
-                "span": span,
-            })),
+            metadata: Some(metadata),
         });
 
         if let Some(body) = node.child_by_field_name("body") {
@@ -272,6 +283,19 @@ impl<'a> GoExtractor<'a> {
             None
         };
 
+        let is_test = method_name.starts_with("Test") || method_name.starts_with("Benchmark");
+        let is_test_file = self.filepath.ends_with("_test.go") || self.filepath.contains("/test/");
+
+        let mut metadata = serde_json::json!({
+            "visibility": visibility.as_str(),
+            "span": span,
+        });
+
+        if is_test && (is_test_file || method_name.starts_with("Test")) {
+            metadata["is_test"] = serde_json::json!(true);
+            metadata["framework"] = serde_json::json!("gotest");
+        }
+
         self.nodes.push(Node {
             id: uri.clone(),
             name: method_name.to_string(),
@@ -285,10 +309,7 @@ impl<'a> GoExtractor<'a> {
             signature: Some(SignatureNormalizer::normalize(&format!("func ({receiver_type}) {method_name}()"))),
             docstring,
             checksum,
-            metadata: Some(serde_json::json!({
-                "visibility": visibility.as_str(),
-                "span": span,
-            })),
+            metadata: Some(metadata),
         });
 
         if !receiver_type.is_empty() {
@@ -432,5 +453,42 @@ func NewServer() *Server {
         let fn_node = &parsed.nodes[3];
         assert_eq!(fn_node.name, "NewServer");
         assert_eq!(fn_node.kind, NodeKind::Function);
+    }
+
+    #[test]
+    fn test_go_test_extraction() {
+        let code = r#"
+package server_test
+
+import "testing"
+
+func TestServerStart(t *testing.T) {
+    s := NewServer()
+    s.Start()
+}
+
+func BenchmarkServer(b *testing.B) {
+}
+"#;
+        let parser = GoParser::new();
+        let ctx = ParseContext::new("server_test.go", code);
+        let parsed = parser.parse(&ctx).expect("Parsing Go test failed");
+
+        let test_fn = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "TestServerStart")
+            .expect("Should find TestServerStart");
+        assert_eq!(test_fn.kind, NodeKind::Function);
+        assert_eq!(test_fn.metadata.as_ref().unwrap()["is_test"], true);
+        assert_eq!(test_fn.metadata.as_ref().unwrap()["framework"], "gotest");
+
+        let bench_fn = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "BenchmarkServer")
+            .expect("Should find BenchmarkServer");
+        assert_eq!(bench_fn.metadata.as_ref().unwrap()["is_test"], true);
+        assert_eq!(bench_fn.metadata.as_ref().unwrap()["test_type"], "benchmark");
     }
 }

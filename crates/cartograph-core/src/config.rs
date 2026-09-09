@@ -220,3 +220,106 @@ impl Default for WatchConfig {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TestConfig {
+    #[serde(default = "default_test_granularity")]
+    pub granularity: String,
+
+    #[serde(default)]
+    pub min_coverage: f64,
+
+    #[serde(default)]
+    pub fail_on_untested: bool,
+
+    #[serde(default = "default_max_tests")]
+    pub max_tests: usize,
+
+    #[serde(default = "default_min_confidence")]
+    pub min_confidence: f64,
+
+    #[serde(default = "default_max_test_depth")]
+    pub max_depth: usize,
+
+    #[serde(default = "default_true")]
+    pub ignore_docstrings: bool,
+
+    #[serde(default)]
+    pub history: TestHistoryConfig,
+
+    #[serde(default)]
+    pub runners: HashMap<String, TestRunnerConfig>,
+}
+
+fn default_test_granularity() -> String {
+    "auto".to_string()
+}
+
+fn default_max_tests() -> usize {
+    500
+}
+
+fn default_min_confidence() -> f64 {
+    0.7
+}
+
+fn default_max_test_depth() -> usize {
+    5
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for TestConfig {
+    fn default() -> Self {
+        Self {
+            granularity: default_test_granularity(),
+            min_coverage: 0.0,
+            fail_on_untested: false,
+            max_tests: default_max_tests(),
+            min_confidence: default_min_confidence(),
+            max_depth: default_max_test_depth(),
+            ignore_docstrings: true,
+            history: TestHistoryConfig::default(),
+            runners: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TestHistoryConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    #[serde(default = "default_history_path")]
+    pub path: String,
+
+    #[serde(default = "default_failure_weight")]
+    pub failure_weight: u32,
+}
+
+fn default_history_path() -> String {
+    ".cartograph/test_history.json".to_string()
+}
+
+fn default_failure_weight() -> u32 {
+    25
+}
+
+impl Default for TestHistoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            path: default_history_path(),
+            failure_weight: default_failure_weight(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TestRunnerConfig {
+    pub command: Option<String>,
+    pub args: Option<Vec<String>>,
+}
+

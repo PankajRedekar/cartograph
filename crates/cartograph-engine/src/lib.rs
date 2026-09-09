@@ -7,6 +7,7 @@ pub mod locate;
 pub mod pipeline;
 pub mod stats;
 pub mod symbol_table;
+pub mod test_selector;
 pub mod watcher;
 
 // Re-export core abstractions
@@ -23,4 +24,7 @@ pub use locate::{
 pub use pipeline::IndexPipeline;
 pub use stats::IndexStats;
 pub use symbol_table::{NodeSummary, SymbolTable};
+pub use test_selector::{
+    ExecutionSummary, TestExecutor, TestSelector, TestSelectorOptions, TestSelectorOutputFormat,
+};
 pub use watcher::{FileWatcher, WatchEvent, WatcherSettings};
