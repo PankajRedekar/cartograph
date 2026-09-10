@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 
 use crate::error::Result;
-use crate::model::{Edge, GraphStats, Node, RawImpactRecord, RawTestRecord, SearchResult};
+use crate::model::{
+    Edge, GraphStats, Node, RawFrontendCallerRecord, RawImpactRecord, RawRouteModelRecord,
+    RawRouteTraceRecord, RawTestRecord, SearchResult,
+};
 
 #[async_trait]
 pub trait GraphStoreBackend: Send + Sync {
@@ -74,6 +77,37 @@ pub trait GraphStoreBackend: Send + Sync {
         max_depth: usize,
         min_confidence: f64,
     ) -> Result<Vec<RawTestRecord>>;
+
+    /// Retrieve all route nodes in the graph, optionally filtered by method and path substring.
+    async fn get_routes(
+        &self,
+        method: Option<&str>,
+        path_pattern: Option<&str>,
+    ) -> Result<Vec<Node>>;
+
+    /// Perform a vertical downstream full-stack trace from a set of route node IDs,
+    /// traversing MapsTo, Calls, and References edges up to max_depth.
+    async fn get_route_downstream_traces(
+        &self,
+        route_ids: &[String],
+        max_depth: usize,
+        min_confidence: f64,
+    ) -> Result<Vec<RawRouteTraceRecord>>;
+
+    /// Perform an inverted upstream trace from a set of model node IDs or table names,
+    /// traversing reverse Calls and MapsTo edges to discover all ingress Route nodes.
+    async fn get_routes_for_models(
+        &self,
+        model_identifiers: &[String],
+        max_depth: usize,
+        min_confidence: f64,
+    ) -> Result<Vec<RawRouteModelRecord>>;
+
+    /// Retrieve all frontend UI component call-sites that invoke the specified route IDs.
+    async fn get_frontend_callers_for_routes(
+        &self,
+        route_ids: &[String],
+    ) -> Result<Vec<RawFrontendCallerRecord>>;
 
     /// Return aggregate statistics of the graph store.
     async fn stats(&self) -> Result<GraphStats>;

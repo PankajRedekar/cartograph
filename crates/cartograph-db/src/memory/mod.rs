@@ -7,7 +7,10 @@ use parking_lot::RwLock;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::MemoryConfig;
 use cartograph_core::error::Result;
-use cartograph_core::model::{Edge, EdgeKind, GraphStats, Node, RawImpactRecord, RawTestRecord, SearchResult};
+use cartograph_core::model::{
+    Edge, EdgeKind, GraphStats, Node, NodeKind, RawFrontendCallerRecord, RawImpactRecord,
+    RawRouteModelRecord, RawRouteTraceRecord, RawTestRecord, SearchResult,
+};
 
 #[derive(Default)]
 struct MemoryGraphState {
@@ -619,6 +622,289 @@ impl GraphStoreBackend for MemoryBackend {
         }
 
         results.sort_by(|a, b| a.hop_distance.cmp(&b.hop_distance).then_with(|| a.test_node.id.cmp(&b.test_node.id)));
+        Ok(results)
+    }
+
+    async fn get_routes(
+        &self,
+        method: Option<&str>,
+        path_pattern: Option<&str>,
+    ) -> Result<Vec<Node>> {
+        let state = self.state.read();
+        let mut routes = Vec::new();
+
+        for node in state.nodes.values() {
+            if node.kind != NodeKind::Route {
+                continue;
+            }
+
+            if let Some(m) = method {
+                let upper = m.to_uppercase();
+                if upper != "ALL" && upper != "*" {
+                    let matches_name = node.name.to_uppercase().starts_with(&upper) || node.name.to_uppercase() == upper;
+                    let matches_meta = node.metadata.as_ref().and_then(|meta| {
+                        meta.get("method").and_then(|val| val.as_str()).map(|val_str| val_str.eq_ignore_ascii_case(&upper))
+                    }).unwrap_or(false);
+
+                    if !matches_name && !matches_meta {
+                        continue;
+                    }
+                }
+            }
+
+            if let Some(p) = path_pattern {
+                let matches_name = node.name.contains(p);
+                let matches_meta = node.metadata.as_ref().and_then(|meta| {
+                    let norm = meta.get("normalized_path").and_then(|v| v.as_str()).map(|s| s.contains(p)).unwrap_or(false);
+                    let raw = meta.get("route_pattern").and_then(|v| v.as_str()).map(|s| s.contains(p)).unwrap_or(false);
+                    Some(norm || raw)
+                }).unwrap_or(false);
+
+                if !matches_name && !matches_meta {
+                    continue;
+                }
+            }
+
+            routes.push(node.clone());
+        }
+
+        routes.sort_by(|a, b| a.filepath.cmp(&b.filepath).then_with(|| a.start_line.cmp(&b.start_line)));
+        Ok(routes)
+    }
+
+    async fn get_route_downstream_traces(
+        &self,
+        route_ids: &[String],
+        max_depth: usize,
+        min_confidence: f64,
+    ) -> Result<Vec<RawRouteTraceRecord>> {
+        if route_ids.is_empty() || max_depth == 0 {
+            return Ok(Vec::new());
+        }
+
+        let state = self.state.read();
+        let mut results = Vec::new();
+        let mut visited: HashMap<String, usize> = HashMap::new();
+        let mut queue: VecDeque<(String, String, usize, String, String, f64)> = VecDeque::new();
+
+        for route_id in route_ids {
+            if let Some(node) = state.nodes.get(route_id) {
+                if node.kind == NodeKind::Route {
+                    visited.insert(route_id.clone(), 0);
+                    queue.push_back((
+                        route_id.clone(),
+                        route_id.clone(),
+                        0,
+                        "root".to_string(),
+                        route_id.clone(),
+                        1.0,
+                    ));
+                }
+            }
+        }
+
+        while let Some((curr_id, route_id, depth, hop_kind, path_str, current_conf)) = queue.pop_front() {
+            if depth > 0 {
+                if let Some(target_node) = state.nodes.get(&curr_id) {
+                    results.push(RawRouteTraceRecord {
+                        target_node: target_node.clone(),
+                        route_id: route_id.clone(),
+                        hop_distance: depth,
+                        hop_kind: hop_kind.clone(),
+                        path_str: path_str.clone(),
+                        confidence: current_conf,
+                    });
+                }
+            }
+
+            if depth >= max_depth {
+                continue;
+            }
+
+            if let Some(f_edges) = state.forward_edges.get(&curr_id) {
+                for edge in f_edges {
+                    let conf = edge.confidence.unwrap_or(1.0);
+                    if conf >= min_confidence {
+                        let is_traversable = matches!(
+                            edge.kind,
+                            EdgeKind::MapsTo
+                                | EdgeKind::Calls
+                                | EdgeKind::References
+                                | EdgeKind::Defines
+                                | EdgeKind::Implements
+                                | EdgeKind::Extends
+                        );
+                        if is_traversable {
+                            let next_id = &edge.target_id;
+                            let next_depth = depth + 1;
+                            let should_visit = match visited.get(next_id) {
+                                None => true,
+                                Some(&d) => next_depth < d,
+                            };
+                            if should_visit && !path_str.contains(next_id) {
+                                visited.insert(next_id.clone(), next_depth);
+                                let new_path = format!("{path_str},{next_id}");
+                                queue.push_back((
+                                    next_id.clone(),
+                                    route_id.clone(),
+                                    next_depth,
+                                    edge.kind.as_str().to_string(),
+                                    new_path,
+                                    current_conf * conf,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        results.sort_by(|a, b| a.route_id.cmp(&b.route_id).then_with(|| a.hop_distance.cmp(&b.hop_distance)));
+        Ok(results)
+    }
+
+    async fn get_routes_for_models(
+        &self,
+        model_identifiers: &[String],
+        max_depth: usize,
+        min_confidence: f64,
+    ) -> Result<Vec<RawRouteModelRecord>> {
+        if model_identifiers.is_empty() || max_depth == 0 {
+            return Ok(Vec::new());
+        }
+
+        let state = self.state.read();
+        let mut results = Vec::new();
+        let mut visited: HashMap<String, usize> = HashMap::new();
+        let mut queue: VecDeque<(String, String, usize, String, f64)> = VecDeque::new();
+
+        let model_id_set: HashSet<&str> = model_identifiers.iter().map(|s| s.as_str()).collect();
+
+        for node in state.nodes.values() {
+            let is_match = model_id_set.contains(node.id.as_str()) || model_id_set.contains(node.name.as_str());
+            let is_model_like = matches!(node.kind, NodeKind::Model | NodeKind::Struct | NodeKind::Class | NodeKind::Other(_));
+            if is_match && is_model_like {
+                visited.insert(node.id.clone(), 0);
+                queue.push_back((
+                    node.id.clone(),
+                    node.id.clone(),
+                    0,
+                    node.id.clone(),
+                    1.0,
+                ));
+            }
+        }
+
+        while let Some((curr_id, model_id, depth, path_str, current_conf)) = queue.pop_front() {
+            if let Some(node) = state.nodes.get(&curr_id) {
+                if node.kind == NodeKind::Route && depth > 0 {
+                    results.push(RawRouteModelRecord {
+                        route_node: node.clone(),
+                        model_id: model_id.clone(),
+                        hop_distance: depth,
+                        path_str: path_str.clone(),
+                        confidence: current_conf,
+                    });
+                }
+            }
+
+            if depth >= max_depth {
+                continue;
+            }
+
+            if let Some(b_edges) = state.backward_edges.get(&curr_id) {
+                for edge in b_edges {
+                    let conf = edge.confidence.unwrap_or(1.0);
+                    if conf >= min_confidence {
+                        let is_traversable = matches!(
+                            edge.kind,
+                            EdgeKind::Calls
+                                | EdgeKind::References
+                                | EdgeKind::MapsTo
+                                | EdgeKind::Implements
+                                | EdgeKind::Defines
+                        );
+                        if is_traversable {
+                            let next_id = &edge.source_id;
+                            let next_depth = depth + 1;
+                            let should_visit = match visited.get(next_id) {
+                                None => true,
+                                Some(&d) => next_depth < d,
+                            };
+                            if should_visit && !path_str.contains(next_id) {
+                                visited.insert(next_id.clone(), next_depth);
+                                let new_path = format!("{path_str},{next_id}");
+                                queue.push_back((
+                                    next_id.clone(),
+                                    model_id.clone(),
+                                    next_depth,
+                                    new_path,
+                                    current_conf * conf,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        results.sort_by(|a, b| a.hop_distance.cmp(&b.hop_distance).then_with(|| a.route_node.id.cmp(&b.route_node.id)));
+        Ok(results)
+    }
+
+    async fn get_frontend_callers_for_routes(
+        &self,
+        route_ids: &[String],
+    ) -> Result<Vec<RawFrontendCallerRecord>> {
+        if route_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let state = self.state.read();
+        let mut results = Vec::new();
+        let route_set: HashSet<&str> = route_ids.iter().map(|s| s.as_str()).collect();
+
+        for &route_id in &route_set {
+            if let Some(b_edges) = state.backward_edges.get(route_id) {
+                for edge in b_edges {
+                    let is_client_call = edge.kind == EdgeKind::Calls
+                        || edge.metadata.as_ref().and_then(|m| m.get("type")).and_then(|t| t.as_str()) == Some("api_client_call");
+
+                    if is_client_call {
+                        if let Some(caller_node) = state.nodes.get(&edge.source_id) {
+                            let component_name = edge.metadata.as_ref().and_then(|m| {
+                                m.get("component").and_then(|c| c.as_str()).map(|s| s.to_string())
+                            }).or_else(|| Some(caller_node.name.clone()));
+
+                            let client_kind = edge.metadata.as_ref().and_then(|m| {
+                                m.get("client").and_then(|c| c.as_str()).map(|s| s.to_string())
+                            }).unwrap_or_else(|| "fetch".to_string());
+
+                            let line = caller_node.start_line.unwrap_or(1);
+                            let method = edge.metadata.as_ref().and_then(|m| {
+                                m.get("method").and_then(|c| c.as_str()).map(|s| s.to_string())
+                            }).unwrap_or_else(|| "GET".to_string());
+
+                            let url_pattern = edge.metadata.as_ref().and_then(|m| {
+                                m.get("url").and_then(|c| c.as_str()).map(|s| s.to_string())
+                            }).unwrap_or_default();
+
+                            results.push(RawFrontendCallerRecord {
+                                route_id: route_id.to_string(),
+                                caller_node: caller_node.clone(),
+                                component_name,
+                                client_kind,
+                                line,
+                                method,
+                                url_pattern,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        results.sort_by(|a, b| a.route_id.cmp(&b.route_id).then_with(|| a.caller_node.id.cmp(&b.caller_node.id)));
         Ok(results)
     }
 

@@ -5,6 +5,7 @@ pub mod impact;
 pub mod linker;
 pub mod locate;
 pub mod pipeline;
+pub mod routes;
 pub mod stats;
 pub mod symbol_table;
 pub mod test_selector;
@@ -22,6 +23,7 @@ pub use locate::{
     LocateCliOptions, LocateQuery, LocateResult, OutputFormat, QueryParser, SubgraphLocator,
 };
 pub use pipeline::IndexPipeline;
+pub use routes::RouteEngine;
 pub use stats::IndexStats;
 pub use symbol_table::{NodeSummary, SymbolTable};
 pub use test_selector::{

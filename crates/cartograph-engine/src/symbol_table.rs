@@ -40,6 +40,8 @@ pub struct SymbolTable {
     pub rpc_services: HashMap<String, Vec<NodeSummary>>,
     /// Database Tables and Models (SQL DDL and ORMs)
     pub db_tables: HashMap<String, Vec<NodeSummary>>,
+    /// Route definitions (for clientside 360° API linking)
+    pub routes: Vec<NodeSummary>,
 }
 
 impl SymbolTable {
@@ -109,6 +111,9 @@ impl SymbolTable {
                     .entry(summary.name.clone())
                     .or_default()
                     .push(summary.clone());
+            }
+            NodeKind::Route => {
+                self.routes.push(summary.clone());
             }
             _ => {}
         }

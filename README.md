@@ -419,6 +419,63 @@ Synthesized Runner Commands:
 
 ---
 
+### 7. `cartograph routes` — Interactive Full-Stack Route Mapper (<15ms)
+Maps polyglot backend API routes to controller handlers, domain services, ORM models, and database tables. Features 360° frontend-to-backend call linking and git branch contract verification.
+
+```bash
+# Discover and list all routes across your monorepo
+cartograph routes
+
+# Filter by HTTP method and route pattern
+cartograph routes /api/v1/orders --method POST
+
+# 360° Frontend Ingress: find which React components invoke your API routes
+cartograph routes --show-callers
+cartograph routes --component CheckoutButton
+
+# Inverted Model Impact: discover all routes reading or modifying an ORM model or table
+cartograph routes --model Order
+cartograph routes --table orders
+
+# API Contract Drift: detect breaking changes between git branches with CI gating
+cartograph routes --verify-contracts --branch main...HEAD --fail-on-breaking
+
+# Export complete API inventory as OpenAPI 3.1.0 specification
+cartograph routes --openapi > openapi.json
+
+# Export format options: terminal, markdown (with Mermaid sequence diagrams), json, xml
+cartograph routes /api/v1/orders --format markdown
+```
+
+#### Key Capabilities
+- **Polyglot AST Route Extraction**: Native static analysis of route declarations in TypeScript (Express, Next.js App & Pages Router, NestJS), Python (FastAPI, Flask, Django DRF), Go (Gin, Echo, net/http), Rust (Actix-web, Axum), and Ruby (Rails `resources` & nested namespaces).
+- **360° Frontend-to-Backend Linking (`--component`, `--show-callers`)**: Statically scans clientside UI components for `fetch`, `axios`, and React Query invocations, connecting React/Vue buttons directly to backend endpoints and SQL tables.
+- **Inverted Route-to-Model Mapping (`--model`, `--table`)**: Reverse graph traversal from database entities and SQL tables upstream to all public API endpoints that read or mutate them.
+- **Contract Drift & Breaking Change Verification (`--verify-contracts`)**: Detects removed endpoints, altered HTTP methods, new required parameters, and elevated authentication requirements between git branches.
+- **Route Hygiene, Shadowing & Security Auditing**: Flags dead/dangling routes (missing handlers), route shadowing collisions (wildcards masking static routes), and unauthenticated data mutations.
+- **OpenAPI 3.1 Synthesis (`--openapi`)**: Automatically generates OpenAPI 3.1 specifications with parameter bindings, operation IDs, and schema references directly from AST structures.
+
+**Example Output:**
+```
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ POST /api/v1/orders                                            [express] │
+│ Auth: Protected       Mutation: Yes      Confidence: 95%    File: routes.ts:15 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+▲ 360° Frontend Ingress Callers:
+  └─ CheckoutButton (src/components/CheckoutButton.tsx:28) [axios]
+       └── POST /api/v1/orders
+
+▼ Vertical Request Execution Flow:
+  Route: POST /api/v1/orders
+  │  [Controller] OrderController::create (src/controllers/order_controller.ts:25)
+  │  │  [Service] OrderService::process (src/services/order_service.ts:10)
+  │  │  │  [Model] Order (src/models/order.ts:5)
+  │  │  │  │  [DatabaseTable] orders (migrations/001_orders.sql:1)
+```
+
+---
+
 ## 🌐 Supported Languages & AST Constructs
 
 Cartograph embeds native Tree-Sitter grammars and declarative `.scm` query definitions:

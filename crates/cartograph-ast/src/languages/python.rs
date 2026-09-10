@@ -436,10 +436,10 @@ impl<'a> PythonExtractor<'a> {
                 decorators.push(self.node_text(child).trim_start_matches('@').trim().to_string());
             } else if child.kind() == "function_definition" {
                 self.visit_function(child, None);
-                self.annotate_last_node_decorators(&decorators);
+                self.annotate_last_node_decorators(&decorators, Some(child));
             } else if child.kind() == "class_definition" {
                 self.visit_class(child);
-                self.annotate_last_node_decorators(&decorators);
+                self.annotate_last_node_decorators(&decorators, None);
             }
         }
     }
@@ -452,15 +452,20 @@ impl<'a> PythonExtractor<'a> {
                 decorators.push(self.node_text(child).trim_start_matches('@').trim().to_string());
             } else if child.kind() == "function_definition" {
                 self.visit_function(child, parent_class_uri);
-                self.annotate_last_node_decorators(&decorators);
+                self.annotate_last_node_decorators(&decorators, Some(child));
             }
         }
     }
 
-    fn annotate_last_node_decorators(&mut self, decorators: &[String]) {
+    fn annotate_last_node_decorators(&mut self, decorators: &[String], func_node: Option<TsNode>) {
+        let (handler_id, handler_name, handler_span) = match self.nodes.last() {
+            Some(n) => (n.id.clone(), n.name.clone(), Span::new(0, 0, n.start_line.unwrap_or(1), n.start_col.unwrap_or(1), n.end_line.unwrap_or(1), n.end_col.unwrap_or(1))),
+            None => return,
+        };
+
+        let is_celery = decorators.iter().any(|d| d.contains("shared_task") || d.contains("task"));
+        let is_pytest_mark = decorators.iter().any(|d| d.starts_with("pytest.mark") || d.starts_with("mark."));
         if let Some(last_node) = self.nodes.last_mut() {
-            let is_celery = decorators.iter().any(|d| d.contains("shared_task") || d.contains("task"));
-            let is_pytest_mark = decorators.iter().any(|d| d.starts_with("pytest.mark") || d.starts_with("mark."));
             if let Some(meta) = &mut last_node.metadata {
                 meta["decorators"] = serde_json::json!(decorators);
                 if is_celery {
@@ -472,6 +477,128 @@ impl<'a> PythonExtractor<'a> {
                 }
             }
         }
+
+        let func_has_depends = func_node.map_or(false, |fn_node| {
+            let text = self.node_text(fn_node);
+            text.contains("Depends(") || text.contains("Security(")
+        });
+
+        // Extract FastAPI, Flask, and DRF route decorators
+        let mut new_routes = Vec::new();
+        for d in decorators {
+            // 1. FastAPI: app.get("/path"), router.post("/path"), etc.
+            let http_verbs = ["get", "post", "put", "delete", "patch", "options", "head"];
+            for verb in &http_verbs {
+                let pattern_prefix = format!(".{verb}(");
+                if let Some(idx) = d.find(&pattern_prefix) {
+                    let obj = &d[..idx];
+                    if obj.contains("app") || obj.contains("router") || obj.contains("api") {
+                        let method_upper = verb.to_uppercase();
+                        let inside = &d[idx + pattern_prefix.len()..];
+                        let path = self.extract_first_string_arg(inside);
+                        if !path.is_empty() {
+                            let has_depends = func_has_depends || d.contains("Depends") || decorators.iter().any(|dec| dec.contains("login_required") || dec.contains("jwt_required") || dec.contains("auth"));
+                            new_routes.push((method_upper, path, "fastapi", has_depends));
+                        }
+                    }
+                }
+            }
+
+            // 2. Flask: app.route("/path", methods=["GET", "POST"]), bp.route(...)
+            if let Some(idx) = d.find(".route(") {
+                let inside = &d[idx + 7..];
+                let path = self.extract_first_string_arg(inside);
+                if !path.is_empty() {
+                    let mut methods = vec!["GET".to_string()];
+                    if let Some(m_idx) = inside.find("methods=") {
+                        let after_m = &inside[m_idx + 8..];
+                        if let Some(end_m) = after_m.find(']') {
+                            let m_list = &after_m[..end_m];
+                            methods = m_list.split(',')
+                                .map(|s| s.trim().trim_matches(['\'', '"', '[', ']']).to_uppercase())
+                                .filter(|s| !s.is_empty())
+                                .collect();
+                        }
+                    }
+                    let has_auth = decorators.iter().any(|dec| dec.contains("login_required") || dec.contains("jwt_required") || dec.contains("auth"));
+                    for m in methods {
+                        new_routes.push((m, path.clone(), "flask", has_auth));
+                    }
+                }
+            }
+
+            // 3. Django REST Framework: action(detail=True, methods=['post', 'delete'], url_path='reset-password')
+            if d.starts_with("action(") {
+                let inside = &d[7..];
+                let mut methods = vec!["POST".to_string()];
+                if let Some(m_idx) = inside.find("methods=") {
+                    let after_m = &inside[m_idx + 8..];
+                    if let Some(end_m) = after_m.find(']') {
+                        let m_list = &after_m[..end_m];
+                        methods = m_list.split(',')
+                            .map(|s| s.trim().trim_matches(['\'', '"', '[', ']']).to_uppercase())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                    }
+                }
+                let mut path = format!("/{handler_name}");
+                if let Some(p_idx) = inside.find("url_path=") {
+                    let after_p = &inside[p_idx + 9..];
+                    let raw_p = self.extract_first_string_arg(after_p);
+                    if !raw_p.is_empty() {
+                        path = if raw_p.starts_with('/') { raw_p } else { format!("/{raw_p}") };
+                    }
+                }
+                let has_auth = decorators.iter().any(|dec| dec.contains("permission_classes") || dec.contains("auth"));
+                for m in methods {
+                    new_routes.push((m, path.clone(), "django", has_auth));
+                }
+            }
+        }
+
+        for (method, path, framework, is_auth) in new_routes {
+            let route_name = format!("{method} {path}");
+            let route_uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
+            self.nodes.push(Node {
+                id: route_uri.clone(),
+                name: route_name.clone(),
+                kind: NodeKind::Route,
+                filepath: self.filepath.to_string(),
+                scope: "routes".to_string(),
+                start_line: Some(handler_span.start_line),
+                start_col: Some(handler_span.start_col),
+                end_line: Some(handler_span.end_line),
+                end_col: Some(handler_span.end_col),
+                signature: Some(format!("{method} {path}")),
+                docstring: None,
+                checksum: None,
+                metadata: Some(serde_json::json!({
+                    "http_method": method,
+                    "raw_pattern": path,
+                    "framework": framework,
+                    "handler": handler_name,
+                    "auth": if is_auth { "protected" } else { "public" },
+                })),
+            });
+            self.edges.push(Edge::new(route_uri, handler_id.clone(), EdgeKind::MapsTo));
+        }
+    }
+
+    fn extract_first_string_arg(&self, s: &str) -> String {
+        let mut in_quote = None;
+        let mut result = String::new();
+        for c in s.chars() {
+            if let Some(q) = in_quote {
+                if c == q {
+                    break;
+                } else {
+                    result.push(c);
+                }
+            } else if c == '\'' || c == '"' {
+                in_quote = Some(c);
+            }
+        }
+        result
     }
 
     fn visit_call(&mut self, node: TsNode) {
@@ -868,6 +995,35 @@ def test_standalone_helper():
             .find(|n| n.name == "test_standalone_helper")
             .expect("Should extract standalone test func");
         assert_eq!(fn_node.metadata.as_ref().unwrap()["is_test"], true);
+    }
+
+    #[test]
+    fn test_python_fastapi_and_flask_routes() {
+        let code = r#"
+@app.get("/users/{user_id}")
+async def get_user(user_id: int, auth: bool = Depends(get_current_user)):
+    return {"id": user_id}
+
+@app.route("/items/<int:item_id>", methods=["GET", "POST"])
+def manage_item(item_id):
+    return "ok"
+"#;
+        let parser = PythonParser::new();
+        let ctx = ParseContext::new("routes.py", code);
+        let parsed = parser.parse(&ctx).expect("Parsing Python routes failed");
+
+        let fastapi_route = parsed.nodes.iter().find(|n| n.name == "GET /users/{user_id}").expect("FastAPI route not found");
+        assert_eq!(fastapi_route.kind, NodeKind::Route);
+        let meta = fastapi_route.metadata.as_ref().unwrap();
+        assert_eq!(meta["framework"], "fastapi");
+        assert_eq!(meta["auth"], "protected");
+
+        let flask_get = parsed.nodes.iter().find(|n| n.name == "GET /items/<int:item_id>").expect("Flask GET route not found");
+        assert_eq!(flask_get.kind, NodeKind::Route);
+        assert_eq!(flask_get.metadata.as_ref().unwrap()["framework"], "flask");
+
+        let flask_post = parsed.nodes.iter().find(|n| n.name == "POST /items/<int:item_id>").expect("Flask POST route not found");
+        assert_eq!(flask_post.kind, NodeKind::Route);
     }
 }
 

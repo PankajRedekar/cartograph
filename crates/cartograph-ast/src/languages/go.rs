@@ -331,6 +331,104 @@ impl<'a> GoExtractor<'a> {
 
         if let Some(fn_node) = node.child_by_field_name("function") {
             let fn_text = self.node_text(fn_node);
+
+            // Check for Gin, Echo, and net/http routes
+            let is_gin_or_echo = fn_text.ends_with(".GET")
+                || fn_text.ends_with(".POST")
+                || fn_text.ends_with(".PUT")
+                || fn_text.ends_with(".DELETE")
+                || fn_text.ends_with(".PATCH")
+                || fn_text.ends_with(".OPTIONS")
+                || fn_text.ends_with(".HEAD");
+            let is_http_handle = fn_text == "http.HandleFunc" || fn_text.ends_with(".HandleFunc");
+
+            if is_gin_or_echo || is_http_handle {
+                if let Some(args) = node.child_by_field_name("arguments") {
+                    let mut cursor = args.walk();
+                    let mut path = None;
+                    let mut middlewares = Vec::new();
+                    let mut handler = None;
+
+                    for child in args.children(&mut cursor) {
+                        if !child.is_named() {
+                            continue;
+                        }
+                        let text = self.node_text(child);
+                        if path.is_none() && (child.kind() == "interpreted_string_literal" || child.kind() == "raw_string_literal") {
+                            path = Some(text.trim_matches(['"', '`']).to_string());
+                        } else if child.kind() == "identifier" || child.kind() == "selector_expression" {
+                            middlewares.push(text.to_string());
+                        }
+                    }
+
+                    if let Some(route_path) = path {
+                        if !middlewares.is_empty() {
+                            handler = middlewares.pop();
+                        }
+
+                        let method = if is_http_handle {
+                            "ALL".to_string()
+                        } else {
+                            fn_text.split('.').last().unwrap_or("GET").to_string()
+                        };
+
+                        let framework = if is_http_handle {
+                            "net/http"
+                        } else if fn_text.starts_with("e.") || fn_text.contains("echo") {
+                            "echo"
+                        } else {
+                            "gin"
+                        };
+
+                        let is_protected = middlewares.iter().any(|m| {
+                            let l = m.to_lowercase();
+                            l.contains("auth") || l.contains("jwt") || l.contains("guard") || l.contains("protect")
+                        });
+
+                        let route_name = format!("{method} {route_path}");
+                        let route_uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
+
+                        self.nodes.push(Node {
+                            id: route_uri.clone(),
+                            name: route_name.clone(),
+                            kind: NodeKind::Route,
+                            filepath: self.filepath.to_string(),
+                            scope: "routes".to_string(),
+                            start_line: Some(span.start_line),
+                            start_col: Some(span.start_col),
+                            end_line: Some(span.end_line),
+                            end_col: Some(span.end_col),
+                            signature: Some(format!("{method} {route_path}")),
+                            docstring: None,
+                            checksum: None,
+                            metadata: Some(serde_json::json!({
+                                "http_method": method,
+                                "raw_pattern": route_path,
+                                "framework": framework,
+                                "middlewares": middlewares,
+                                "handler": handler,
+                                "auth": if is_protected { "protected" } else { "public" },
+                                "span": span,
+                            })),
+                        });
+
+                        if let Some(ref h) = handler {
+                            self.unresolved_references.push(UnresolvedReference {
+                                source_node_id: route_uri,
+                                target_symbol: h.clone(),
+                                import_source: None,
+                                kind: EdgeKind::MapsTo,
+                                span,
+                                call_fidelity: CallFidelity::Definite,
+                                receiver_type_hint: None,
+                                receiver_var: None,
+                                arg_count: None,
+                            });
+                        }
+                    }
+                }
+            }
+
             self.unresolved_references.push(UnresolvedReference {
                 source_node_id: caller_id,
                 target_symbol: fn_text.to_string(),
@@ -490,5 +588,36 @@ func BenchmarkServer(b *testing.B) {
             .expect("Should find BenchmarkServer");
         assert_eq!(bench_fn.metadata.as_ref().unwrap()["is_test"], true);
         assert_eq!(bench_fn.metadata.as_ref().unwrap()["test_type"], "benchmark");
+    }
+
+    #[test]
+    fn test_go_gin_and_echo_routes() {
+        let code = r#"
+package main
+
+func SetupRoutes() {
+    r.GET("/api/v1/users", AuthMiddleware, GetUsers)
+    e.POST("/api/v1/items", CreateItem)
+    http.HandleFunc("/healthz", HealthCheck)
+}
+"#;
+        let parser = GoParser::new();
+        let ctx = ParseContext::new("routes.go", code);
+        let parsed = parser.parse(&ctx).expect("Parsing Go routes failed");
+
+        let gin_route = parsed.nodes.iter().find(|n| n.name == "GET /api/v1/users").expect("Gin GET route not found");
+        assert_eq!(gin_route.kind, NodeKind::Route);
+        let gin_meta = gin_route.metadata.as_ref().unwrap();
+        assert_eq!(gin_meta["framework"], "gin");
+        assert_eq!(gin_meta["auth"], "protected");
+        assert_eq!(gin_meta["handler"], "GetUsers");
+
+        let echo_route = parsed.nodes.iter().find(|n| n.name == "POST /api/v1/items").expect("Echo POST route not found");
+        assert_eq!(echo_route.kind, NodeKind::Route);
+        assert_eq!(echo_route.metadata.as_ref().unwrap()["framework"], "echo");
+
+        let http_route = parsed.nodes.iter().find(|n| n.name == "ALL /healthz").expect("net/http route not found");
+        assert_eq!(http_route.kind, NodeKind::Route);
+        assert_eq!(http_route.metadata.as_ref().unwrap()["framework"], "net/http");
     }
 }
