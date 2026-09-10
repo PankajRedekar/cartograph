@@ -1,7 +1,10 @@
 use rusqlite::Connection;
 
 use cartograph_core::error::{CartographError, Result};
-use cartograph_core::model::{EdgeKind, Node, NodeKind, RawImpactRecord, RawTestRecord};
+use cartograph_core::model::{
+    EdgeKind, Node, NodeKind, RawFrontendCallerRecord, RawImpactRecord, RawRouteModelRecord,
+    RawRouteTraceRecord, RawTestRecord,
+};
 
 pub(crate) fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<Node> {
     let id: String = row.get(0)?;
@@ -478,4 +481,365 @@ pub fn get_tests_for_targets(
 
     Ok(results)
 }
+
+pub fn get_routes(
+    conn: &Connection,
+    method: Option<&str>,
+    path_pattern: Option<&str>,
+) -> Result<Vec<Node>> {
+    let mut sql = String::from(
+        r#"
+        SELECT
+            id, name, kind, filepath, scope,
+            start_line, start_col, end_line, end_col,
+            signature, docstring, checksum, metadata
+        FROM nodes
+        WHERE kind = 'route'
+        "#,
+    );
+
+    let mut conditions = Vec::new();
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+    if let Some(m) = method {
+        let upper = m.to_uppercase();
+        if upper != "ALL" && upper != "*" {
+            conditions.push(
+                "(name LIKE ? || ' %' OR json_extract(metadata, '$.method') = ? OR name = ?)"
+                    .to_string(),
+            );
+            params.push(Box::new(upper.clone()));
+            params.push(Box::new(upper.clone()));
+            params.push(Box::new(upper));
+        }
+    }
+
+    if let Some(p) = path_pattern {
+        conditions.push(
+            "(name LIKE '%' || ? || '%' OR json_extract(metadata, '$.normalized_path') LIKE '%' || ? || '%' OR json_extract(metadata, '$.route_pattern') LIKE '%' || ? || '%')"
+                .to_string(),
+        );
+        params.push(Box::new(p.to_string()));
+        params.push(Box::new(p.to_string()));
+        params.push(Box::new(p.to_string()));
+    }
+
+    if !conditions.is_empty() {
+        sql.push_str(" AND ");
+        sql.push_str(&conditions.join(" AND "));
+    }
+
+    sql.push_str(" ORDER BY filepath ASC, start_line ASC;");
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| CartographError::Database(format!("Failed to prepare get_routes: {e}")))?;
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(param_refs), |row| row_to_node(row))
+        .map_err(|e| CartographError::Database(format!("Failed to execute get_routes: {e}")))?;
+
+    let mut nodes = Vec::new();
+    for row in rows {
+        nodes.push(row.map_err(|e| CartographError::Database(format!("Failed to read route row: {e}")))?);
+    }
+
+    Ok(nodes)
+}
+
+pub fn get_route_downstream_traces(
+    conn: &Connection,
+    route_ids: &[String],
+    max_depth: usize,
+    min_confidence: f64,
+) -> Result<Vec<RawRouteTraceRecord>> {
+    if route_ids.is_empty() || max_depth == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut results = Vec::new();
+
+    for chunk in route_ids.chunks(400) {
+        let placeholders = chunk.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+        let sql = format!(
+            r#"
+            WITH RECURSIVE route_trace_cte(node_id, route_id, depth, hop_kind, path) AS (
+                SELECT id, id, 0, 'root', id
+                FROM nodes
+                WHERE id IN ({placeholders}) AND kind = 'route'
+
+                UNION
+
+                SELECT
+                    e.target_id,
+                    c.route_id,
+                    c.depth + 1,
+                    e.kind,
+                    c.path || ',' || e.target_id
+                FROM route_trace_cte c
+                JOIN edges e ON c.node_id = e.source_id
+                WHERE c.depth < ?
+                  AND coalesce(e.confidence, 1.0) >= ?
+                  AND e.kind IN ('maps_to', 'calls', 'references', 'defines', 'implements', 'extends')
+                  AND instr(',' || c.path || ',', ',' || e.target_id || ',') = 0
+            )
+            SELECT DISTINCT
+                n.id, n.name, n.kind, n.filepath, n.scope,
+                n.start_line, n.start_col, n.end_line, n.end_col,
+                n.signature, n.docstring, n.checksum, n.metadata,
+                c.route_id,
+                c.depth AS hop_distance,
+                c.hop_kind,
+                c.path AS trace_path,
+                coalesce(edge_sample.confidence, 1.0) AS confidence
+            FROM route_trace_cte c
+            JOIN nodes n ON c.node_id = n.id
+            LEFT JOIN edges edge_sample ON edge_sample.target_id = c.node_id
+            WHERE c.depth > 0
+            ORDER BY c.route_id, c.depth ASC;
+            "#
+        );
+
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| CartographError::Database(format!("Failed to prepare get_route_downstream_traces CTE: {e}")))?;
+
+        let depth_i64 = max_depth as i64;
+        let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len() + 2);
+        for id in chunk {
+            params.push(id);
+        }
+        params.push(&depth_i64);
+        params.push(&min_confidence);
+
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params), |row| {
+                let target_node = row_to_node(row)?;
+                let route_id: String = row.get(13)?;
+                let hop_distance: i64 = row.get(14)?;
+                let hop_kind: String = row.get(15)?;
+                let path_str: String = row.get(16)?;
+                let confidence: f64 = row.get(17)?;
+
+                Ok(RawRouteTraceRecord {
+                    target_node,
+                    route_id,
+                    hop_distance: hop_distance as usize,
+                    hop_kind,
+                    path_str,
+                    confidence,
+                })
+            })
+            .map_err(|e| CartographError::Database(format!("Failed to execute get_route_downstream_traces CTE: {e}")))?;
+
+        for row in rows {
+            results.push(row.map_err(|e| CartographError::Database(format!("Failed to map route trace record: {e}")))?);
+        }
+    }
+
+    Ok(results)
+}
+
+pub fn get_routes_for_models(
+    conn: &Connection,
+    model_identifiers: &[String],
+    max_depth: usize,
+    min_confidence: f64,
+) -> Result<Vec<RawRouteModelRecord>> {
+    if model_identifiers.is_empty() || max_depth == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut results = Vec::new();
+
+    for chunk in model_identifiers.chunks(300) {
+        let placeholders = chunk.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+        let sql = format!(
+            r#"
+            WITH RECURSIVE model_to_route_cte(node_id, model_id, depth, path) AS (
+                SELECT id, id, 0, id
+                FROM nodes
+                WHERE (id IN ({placeholders}) OR name IN ({placeholders}))
+                  AND kind IN ('model', 'struct', 'class', 'table')
+
+                UNION
+
+                SELECT
+                    e.source_id,
+                    c.model_id,
+                    c.depth + 1,
+                    c.path || ',' || e.source_id
+                FROM model_to_route_cte c
+                JOIN edges e ON c.node_id = e.target_id
+                WHERE c.depth < ?
+                  AND coalesce(e.confidence, 1.0) >= ?
+                  AND e.kind IN ('calls', 'references', 'maps_to', 'implements', 'defines')
+                  AND instr(',' || c.path || ',', ',' || e.source_id || ',') = 0
+            )
+            SELECT DISTINCT
+                r.id, r.name, r.kind, r.filepath, r.scope,
+                r.start_line, r.start_col, r.end_line, r.end_col,
+                r.signature, r.docstring, r.checksum, r.metadata,
+                c.model_id,
+                c.depth AS hop_distance,
+                c.path AS inverted_path,
+                coalesce(e.confidence, 1.0) AS confidence
+            FROM model_to_route_cte c
+            JOIN nodes r ON c.node_id = r.id
+            LEFT JOIN edges e ON e.source_id = r.id
+            WHERE r.kind = 'route'
+            ORDER BY c.depth ASC;
+            "#
+        );
+
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| CartographError::Database(format!("Failed to prepare get_routes_for_models CTE: {e}")))?;
+
+        let depth_i64 = max_depth as i64;
+        let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len() * 2 + 2);
+        for id in chunk {
+            params.push(id);
+        }
+        for id in chunk {
+            params.push(id);
+        }
+        params.push(&depth_i64);
+        params.push(&min_confidence);
+
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params), |row| {
+                let route_node = row_to_node(row)?;
+                let model_id: String = row.get(13)?;
+                let hop_distance: i64 = row.get(14)?;
+                let path_str: String = row.get(15)?;
+                let confidence: f64 = row.get(16)?;
+
+                Ok(RawRouteModelRecord {
+                    route_node,
+                    model_id,
+                    hop_distance: hop_distance as usize,
+                    path_str,
+                    confidence,
+                })
+            })
+            .map_err(|e| CartographError::Database(format!("Failed to execute get_routes_for_models CTE: {e}")))?;
+
+        for row in rows {
+            results.push(row.map_err(|e| CartographError::Database(format!("Failed to map model-to-route record: {e}")))?);
+        }
+    }
+
+    Ok(results)
+}
+
+pub fn get_frontend_callers_for_routes(
+    conn: &Connection,
+    route_ids: &[String],
+) -> Result<Vec<RawFrontendCallerRecord>> {
+    if route_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut results = Vec::new();
+
+    for chunk in route_ids.chunks(400) {
+        let placeholders = chunk.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+        let sql = format!(
+            r#"
+            SELECT DISTINCT
+                e.target_id AS route_id,
+                caller.id, caller.name, caller.kind, caller.filepath, caller.scope,
+                caller.start_line, caller.start_col, caller.end_line, caller.end_col,
+                caller.signature, caller.docstring, caller.checksum, caller.metadata,
+                coalesce(json_extract(e.metadata, '$.component'), caller.name) AS component_name,
+                coalesce(json_extract(e.metadata, '$.client'), 'fetch') AS client_kind,
+                coalesce(caller.start_line, 1) AS line,
+                coalesce(json_extract(e.metadata, '$.method'), 'GET') AS method,
+                coalesce(json_extract(e.metadata, '$.url'), '') AS url_pattern
+            FROM edges e
+            JOIN nodes caller ON e.source_id = caller.id
+            WHERE e.target_id IN ({placeholders})
+              AND (
+                e.kind = 'calls'
+                OR json_extract(e.metadata, '$.type') = 'api_client_call'
+              );
+            "#
+        );
+
+        let mut stmt = conn
+            .prepare(&sql)
+            .map_err(|e| CartographError::Database(format!("Failed to prepare get_frontend_callers_for_routes: {e}")))?;
+
+        let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len());
+        for id in chunk {
+            params.push(id);
+        }
+
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params), |row| {
+                let route_id: String = row.get(0)?;
+                let id: String = row.get(1)?;
+                let name: String = row.get(2)?;
+                let kind_str: String = row.get(3)?;
+                let filepath: String = row.get(4)?;
+                let scope: String = row.get(5)?;
+                let start_line: Option<u32> = row.get(6)?;
+                let start_col: Option<u32> = row.get(7)?;
+                let end_line: Option<u32> = row.get(8)?;
+                let end_col: Option<u32> = row.get(9)?;
+                let signature: Option<String> = row.get(10)?;
+                let docstring: Option<String> = row.get(11)?;
+                let checksum: Option<String> = row.get(12)?;
+                let metadata_str: Option<String> = row.get(13)?;
+
+                let component_name: Option<String> = row.get(14)?;
+                let client_kind: String = row.get(15)?;
+                let line: u32 = row.get(16)?;
+                let method: String = row.get(17)?;
+                let url_pattern: String = row.get(18)?;
+
+                let kind = kind_str.parse().unwrap_or(NodeKind::Other(kind_str));
+                let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
+
+                let caller_node = Node {
+                    id,
+                    name,
+                    kind,
+                    filepath,
+                    scope,
+                    start_line,
+                    start_col,
+                    end_line,
+                    end_col,
+                    signature,
+                    docstring,
+                    checksum,
+                    metadata,
+                };
+
+                Ok(RawFrontendCallerRecord {
+                    route_id,
+                    caller_node,
+                    component_name,
+                    client_kind,
+                    line,
+                    method,
+                    url_pattern,
+                })
+            })
+            .map_err(|e| CartographError::Database(format!("Failed to execute get_frontend_callers_for_routes: {e}")))?;
+
+        for row in rows {
+            results.push(row.map_err(|e| CartographError::Database(format!("Failed to map frontend caller record: {e}")))?);
+        }
+    }
+
+    Ok(results)
+}
+
 

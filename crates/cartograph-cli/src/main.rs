@@ -3,14 +3,17 @@ use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use std::str::FromStr;
+
 use cartograph_core::config::{GitDiffMode, IndexConfig, StorageConfig};
-use cartograph_core::model::{RiskLevel, SemVerTarget, SimulationMode};
+use cartograph_core::model::{HttpMethod, RiskLevel, RouteFilterOptions, SemVerTarget, SimulationMode};
 use cartograph_db::create_backend;
 use cartograph_engine::discovery::DiscoveryConfig;
 use cartograph_engine::impact::{ImpactAnalyzer, ImpactOutputFormat, ImpactQuery};
 use cartograph_engine::locate::{LocateCliOptions, OutputFormat, QueryParser, SubgraphLocator};
 use cartograph_engine::pipeline::IndexPipeline;
 use cartograph_engine::watcher::{FileWatcher, WatchEvent, WatcherSettings};
+use cartograph_engine::RouteEngine;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -325,6 +328,102 @@ enum Commands {
         /// Output results formatted as JSON (shorthand for --format json)
         #[arg(long)]
         json: bool,
+    },
+
+    /// Map full-stack API routes, frontend caller linkings, and backend dependencies (<15ms)
+    #[command(alias = "route", alias = "endpoints")]
+    Routes {
+        /// Optional route path pattern filter (e.g. "/api/v1/users", "/orders/:id")
+        #[arg(value_name = "PATTERN")]
+        pattern: Option<String>,
+
+        /// Root directory of repository
+        #[arg(short, long, value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Database profile or SQLite file path
+        #[arg(short, long, default_value = "default")]
+        db: String,
+
+        /// Filter by HTTP method (GET, POST, PUT, DELETE, PATCH)
+        #[arg(short, long)]
+        method: Option<String>,
+
+        /// Filter routes invoked by a frontend UI component (e.g. "CheckoutButton")
+        #[arg(long)]
+        component: Option<String>,
+
+        /// Show clientside 360° UI component callers for matched routes
+        #[arg(long)]
+        show_callers: bool,
+
+        /// Inverted lookup: filter routes that read or modify a specific ORM model (e.g. "Order")
+        #[arg(long)]
+        model: Option<String>,
+
+        /// Inverted lookup: filter routes that touch a specific database table (e.g. "orders")
+        #[arg(long)]
+        table: Option<String>,
+
+        /// Filter by handler function or controller name
+        #[arg(long)]
+        handler: Option<String>,
+
+        /// Filter by web framework (e.g. "express", "fastapi", "nextjs", "rails", "axum")
+        #[arg(long)]
+        framework: Option<String>,
+
+        /// Show only authenticated / protected endpoints
+        #[arg(long)]
+        auth_only: bool,
+
+        /// Show only public / unauthenticated endpoints
+        #[arg(long)]
+        public_only: bool,
+
+        /// Show only routes with health/security issues (shadowing, unauthenticated mutations, dangling)
+        #[arg(long)]
+        issues_only: bool,
+
+        /// Show only dead/dangling routes (no controller handler found)
+        #[arg(long)]
+        dead_only: bool,
+
+        /// Show only shadowed routes (masked by an earlier route pattern)
+        #[arg(long)]
+        shadowed_only: bool,
+
+        /// Verify API contract drift and breaking changes across git branches
+        #[arg(long)]
+        verify_contracts: bool,
+
+        /// Git branch diff range for contract verification (default: "main...HEAD")
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// CI/CD Gate: fail with exit code 1 if breaking contract changes are detected
+        #[arg(long)]
+        fail_on_breaking: bool,
+
+        /// Export discovered routes as OpenAPI 3.1.0 specification
+        #[arg(long)]
+        openapi: bool,
+
+        /// Maximum downstream traversal depth (default: 5)
+        #[arg(short = 'D', long, default_value_t = 5)]
+        depth: usize,
+
+        /// Presentation output format: terminal, markdown, json, xml (auto-detected if omitted)
+        #[arg(short, long)]
+        format: Option<String>,
+
+        /// Output results formatted as JSON (shorthand for --format json)
+        #[arg(long)]
+        json: bool,
+
+        /// Interactive terminal mode
+        #[arg(short, long)]
+        interactive: bool,
     },
 }
 
@@ -904,6 +1003,167 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Err(e) => {
                         eprintln!("{}: {}", "Test execution error".bold().red(), e);
                         std::process::exit(1);
+                    }
+                }
+            }
+        }
+
+        Commands::Routes {
+            pattern,
+            path,
+            db,
+            method,
+            component,
+            show_callers,
+            model,
+            table,
+            handler,
+            framework,
+            auth_only,
+            public_only,
+            issues_only,
+            dead_only,
+            shadowed_only,
+            verify_contracts,
+            branch,
+            fail_on_breaking,
+            openapi,
+            depth,
+            format,
+            json,
+            interactive: _,
+        } => {
+            let (storage_config, _db_path) = resolve_storage_config(&path, &db);
+            let backend = match create_backend(&storage_config) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("{}: Failed to open database: {e}", "Error".bold().red());
+                    std::process::exit(1);
+                }
+            };
+
+            let engine = RouteEngine::new(backend.as_ref());
+
+            let http_method = method.and_then(|m| HttpMethod::from_str(&m).ok());
+
+            let filter_options = RouteFilterOptions {
+                method: http_method,
+                path_pattern: pattern.clone(),
+                component_name: component,
+                show_callers,
+                verify_contracts,
+                branch: branch.clone(),
+                fail_on_breaking,
+                model_name: model,
+                sql_table: table,
+                handler_name: handler,
+                framework,
+                auth_only,
+                public_only,
+                issues_only,
+                dead_only,
+                shadowed_only,
+                max_depth: depth,
+                min_confidence: 0.5,
+            };
+
+            // 1. Export OpenAPI 3.1 if requested
+            if openapi {
+                let openapi_doc = match engine
+                    .export_openapi(&filter_options, "Discovered API Routes", "1.0.0")
+                    .await
+                {
+                    Ok(doc) => doc,
+                    Err(e) => {
+                        eprintln!("{}: Failed to generate OpenAPI spec: {e}", "Error".bold().red());
+                        std::process::exit(1);
+                    }
+                };
+                println!("{}", serde_json::to_string_pretty(&openapi_doc).unwrap());
+                return Ok(());
+            }
+
+            // 2. Verify API contracts across git branch diff
+            if verify_contracts {
+                let branch_range = branch.unwrap_or_else(|| "main...HEAD".to_string());
+                let parts: Vec<&str> = branch_range.split("...").collect();
+                let (base_ref, head_ref) = if parts.len() == 2 {
+                    (parts[0], parts[1])
+                } else {
+                    ("main", "HEAD")
+                };
+
+                let diff_report = match engine
+                    .verify_contracts(backend.as_ref(), base_ref, head_ref)
+                    .await
+                {
+                    Ok(report) => report,
+                    Err(e) => {
+                        eprintln!("{}: Failed to verify contracts: {e}", "Error".bold().red());
+                        std::process::exit(1);
+                    }
+                };
+
+                let rendered = if json || format.as_deref() == Some("json") {
+                    serde_json::to_string_pretty(&cartograph_engine::routes::formatters::JsonFormatter::format_contract_diff(&diff_report)).unwrap()
+                } else if format.as_deref() == Some("markdown") {
+                    cartograph_engine::routes::formatters::MarkdownFormatter::format_contract_diff(&diff_report)
+                } else {
+                    cartograph_engine::routes::formatters::TerminalFormatter::format_contract_diff(&diff_report)
+                };
+
+                println!("{}", rendered);
+
+                if fail_on_breaking && !diff_report.passed {
+                    eprintln!(
+                        "{}: Detected {} breaking contract changes!",
+                        "CI Quality Gate Failed".bold().red(),
+                        diff_report.breaking_changes.len()
+                    );
+                    std::process::exit(1);
+                }
+
+                return Ok(());
+            }
+
+            // 3. Query routes
+            let report = match engine.query_routes(&filter_options).await {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("{}: Failed to query routes: {e}", "Error".bold().red());
+                    std::process::exit(1);
+                }
+            };
+
+            // Format output
+            let is_json = json || format.as_deref() == Some("json");
+            let is_markdown = format.as_deref() == Some("markdown");
+            let is_xml = format.as_deref() == Some("xml");
+
+            if is_json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&cartograph_engine::routes::formatters::JsonFormatter::format_report(&report)).unwrap()
+                );
+            } else if is_markdown {
+                if pattern.is_some() && report.routes.len() == 1 {
+                    print!("{}", cartograph_engine::routes::formatters::MarkdownFormatter::format_trace_detail(&report.routes[0]));
+                } else {
+                    print!("{}", cartograph_engine::routes::formatters::MarkdownFormatter::format_report(&report));
+                }
+            } else if is_xml {
+                print!("{}", cartograph_engine::routes::formatters::XmlFormatter::format_report(&report));
+            } else {
+                if pattern.is_some() && report.routes.len() == 1 {
+                    print!("{}", cartograph_engine::routes::formatters::TerminalFormatter::format_route_trace(&report.routes[0]));
+                } else {
+                    print!("{}", cartograph_engine::routes::formatters::TerminalFormatter::format_route_list(&report));
+                    if show_callers {
+                        for trace in &report.routes {
+                            if !trace.frontend_callers.is_empty() {
+                                print!("{}", cartograph_engine::routes::formatters::TerminalFormatter::format_route_trace(trace));
+                            }
+                        }
                     }
                 }
             }

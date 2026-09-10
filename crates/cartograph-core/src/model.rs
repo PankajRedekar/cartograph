@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
@@ -673,4 +674,475 @@ pub struct TestSelectionReport {
     /// Total duration of test selection analysis in milliseconds (<15ms)
     pub analysis_duration_ms: f64,
 }
+
+// =========================================================================
+// Phase 2.3: Full-Stack Route Mapper Data Models
+// =========================================================================
+
+/// HTTP Methods supported by standard web frameworks
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum HttpMethod {
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete,
+    Options,
+    Head,
+    Trace,
+    Connect,
+    /// Wildcard or all methods (e.g. Express app.all, Django view without method guard)
+    All,
+}
+
+impl HttpMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            HttpMethod::Get => "GET",
+            HttpMethod::Post => "POST",
+            HttpMethod::Put => "PUT",
+            HttpMethod::Patch => "PATCH",
+            HttpMethod::Delete => "DELETE",
+            HttpMethod::Options => "OPTIONS",
+            HttpMethod::Head => "HEAD",
+            HttpMethod::Trace => "TRACE",
+            HttpMethod::Connect => "CONNECT",
+            HttpMethod::All => "ALL",
+        }
+    }
+
+    /// Whether this HTTP method typically implies data mutation
+    pub fn is_mutation(&self) -> bool {
+        matches!(
+            self,
+            HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete
+        )
+    }
+}
+
+impl fmt::Display for HttpMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl FromStr for HttpMethod {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "GET" => Ok(HttpMethod::Get),
+            "POST" => Ok(HttpMethod::Post),
+            "PUT" => Ok(HttpMethod::Put),
+            "PATCH" => Ok(HttpMethod::Patch),
+            "DELETE" => Ok(HttpMethod::Delete),
+            "OPTIONS" => Ok(HttpMethod::Options),
+            "HEAD" => Ok(HttpMethod::Head),
+            "TRACE" => Ok(HttpMethod::Trace),
+            "CONNECT" => Ok(HttpMethod::Connect),
+            "ALL" | "*" => Ok(HttpMethod::All),
+            other => Err(format!("Unknown HTTP method: {other}")),
+        }
+    }
+}
+
+/// Authentication and authorization classifications for routes
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RouteAuthKind {
+    /// Explicitly public / unauthenticated endpoint
+    Public,
+    /// Protected by session, JWT, or bearer token guard
+    Protected,
+    /// Protected by API Key header
+    ApiKey,
+    /// OAuth2 / OIDC scope guarded
+    OAuth2(Vec<String>),
+    /// Custom middleware or decorator authentication
+    Custom(String),
+    /// Authentication state cannot be determined with certainty
+    Unknown,
+}
+
+/// Location of a route parameter in the HTTP request
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ParamLocation {
+    Path,
+    Query,
+    Header,
+    Cookie,
+    Body,
+}
+
+/// A parsed parameter associated with an HTTP route
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RouteParameter {
+    pub name: String,
+    pub location: ParamLocation,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub type_hint: Option<String>,
+    pub required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// A middleware or interceptor in the request processing pipeline
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MiddlewareNode {
+    pub name: String,
+    pub filepath: String,
+    pub start_line: u32,
+    pub is_global: bool,
+    pub auth_kind: Option<RouteAuthKind>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// Supported clientside API invocation libraries
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiClientKind {
+    Fetch,
+    Axios,
+    TanStackQuery,
+    NextServerAction,
+    Custom(String),
+}
+
+impl ApiClientKind {
+    pub fn as_str(&self) -> &str {
+        match self {
+            ApiClientKind::Fetch => "fetch",
+            ApiClientKind::Axios => "axios",
+            ApiClientKind::TanStackQuery => "react-query",
+            ApiClientKind::NextServerAction => "server-action",
+            ApiClientKind::Custom(s) => s.as_str(),
+        }
+    }
+}
+
+impl std::fmt::Display for ApiClientKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/// A clientside frontend API invocation site linking a UI component to a backend route
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ApiClientCallSite {
+    pub caller_node_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub component_name: Option<String>,
+    pub filepath: String,
+    pub line: u32,
+    pub method: HttpMethod,
+    pub url_pattern: String,
+    pub client_kind: ApiClientKind,
+}
+
+/// Architectural layer classification of a step in the execution trace
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TraceLayer {
+    /// Frontend UI Component (e.g. React/Vue button, page)
+    FrontendComponent,
+    /// Clientside API fetch/axios invocation
+    ApiClient,
+    /// Ingress router definition
+    Route,
+    /// Middleware or authentication guard
+    Middleware,
+    /// Web controller or request handler view
+    Controller,
+    /// Domain or business application service
+    Service,
+    /// Data access object or repository
+    Repository,
+    /// ORM data model or entity
+    Model,
+    /// Relational database table
+    DatabaseTable,
+    /// Background job or task queue dispatcher
+    Worker,
+    /// Utility or helper function
+    Utility,
+    /// Unclassified call step
+    Unknown,
+}
+
+impl TraceLayer {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TraceLayer::FrontendComponent => "FrontendComponent",
+            TraceLayer::ApiClient => "ApiClient",
+            TraceLayer::Route => "Route",
+            TraceLayer::Middleware => "Middleware",
+            TraceLayer::Controller => "Controller",
+            TraceLayer::Service => "Service",
+            TraceLayer::Repository => "Repository",
+            TraceLayer::Model => "Model",
+            TraceLayer::DatabaseTable => "DatabaseTable",
+            TraceLayer::Worker => "Worker",
+            TraceLayer::Utility => "Utility",
+            TraceLayer::Unknown => "Unknown",
+        }
+    }
+}
+
+impl std::fmt::Display for TraceLayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/// An individual hop in the full-stack request execution trace
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TraceStep {
+    pub node_id: String,
+    pub name: String,
+    pub kind: NodeKind,
+    pub filepath: String,
+    pub line: u32,
+    pub hop: usize,
+    pub layer: TraceLayer,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub docstring: Option<String>,
+    pub is_mutation: bool,
+}
+
+/// Severity classification of an API contract modification
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContractChangeSeverity {
+    /// Incompatible breaking change that breaks existing API clients
+    Breaking,
+    /// Dangerous modification that may cause regressions under certain conditions
+    Dangerous,
+    /// Non-breaking backward-compatible enhancement (e.g. new optional parameter)
+    Informational,
+}
+
+/// Specific type of contract drift or breaking change
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum ContractChangeKind {
+    /// A previously published route endpoint was deleted
+    RouteRemoved,
+    /// A new route endpoint was added
+    RouteAdded,
+    /// An endpoint's HTTP method changed (e.g. GET -> POST)
+    MethodChanged { old_method: HttpMethod, new_method: HttpMethod },
+    /// A newly mandatory path, query, or header parameter was added without a default
+    NewRequiredParam { name: String, location: ParamLocation },
+    /// A parameter was removed from an endpoint
+    RemovedParam { name: String },
+    /// A parameter's data type changed (e.g. integer -> string)
+    ParamTypeChanged { name: String, old_type: String, new_type: String },
+    /// A required field was added to a request body DTO
+    RequiredBodyFieldAdded { field: String },
+    /// A field was deleted from a response payload or DTO model
+    ResponseFieldRemoved { field: String },
+    /// An endpoint previously Public was elevated to Protected
+    AuthElevated { old_auth: RouteAuthKind, new_auth: RouteAuthKind },
+}
+
+/// A concrete breaking change detected between two versions of the API contract
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContractBreakingChange {
+    pub route_id: String,
+    pub path: String,
+    pub method: HttpMethod,
+    pub severity: ContractChangeSeverity,
+    pub change: ContractChangeKind,
+    pub description: String,
+    pub filepath: String,
+    pub line: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remediation_hint: Option<String>,
+}
+
+/// Top-level report emitted by `--verify-contracts`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContractDiffReport {
+    pub base_ref: String,
+    pub head_ref: String,
+    pub total_routes_base: usize,
+    pub total_routes_head: usize,
+    pub breaking_changes: Vec<ContractBreakingChange>,
+    pub non_breaking_changes: Vec<ContractBreakingChange>,
+    pub passed: bool,
+    pub execution_time_ms: f64,
+}
+
+/// Route health and security anomaly issues
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum RouteHealthIssue {
+    /// Route is registered in router/urls but handler symbol cannot be found in codebase
+    DanglingHandler { handler_name: String },
+    /// Route is unreachable because a preceding pattern shadows it
+    ShadowedBy { shadowing_pattern: String, line: u32 },
+    /// Mutating route (POST/PUT/DELETE/PATCH) with no authentication guard
+    UnauthenticatedMutation,
+    /// Handler exceeds recommended complexity or touches too many models (God Controller)
+    HighCoupling { model_count: usize },
+    /// Route handler does not validate request body or input parameters
+    MissingValidation,
+}
+
+/// Complete full-stack trace and metadata for an API endpoint
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FullStackRouteTrace {
+    /// Canonical node ID of the route
+    pub id: String,
+    /// HTTP Method (GET, POST, etc.)
+    pub method: HttpMethod,
+    /// Original raw route pattern (e.g. "/users/:id" or "path('users/<int:id>/')")
+    pub raw_pattern: String,
+    /// Canonical normalized URL pattern (RFC 6570, e.g. "/users/{id}")
+    pub normalized_path: String,
+    /// Web framework detected (e.g. "express", "fastapi", "django", "nextjs", "rails", "axum", "gin")
+    pub framework: String,
+    /// Filepath where route is registered
+    pub filepath: String,
+    pub line: u32,
+    /// Frontend UI components that call this endpoint
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub frontend_callers: Vec<ApiClientCallSite>,
+    /// Extracted path and query parameters
+    pub parameters: Vec<RouteParameter>,
+    /// Ordered chain of middlewares executed before handler
+    pub middlewares: Vec<MiddlewareNode>,
+    /// Target controller / view handler node
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handler: Option<Node>,
+    /// Sequential vertical execution trace through services and repositories
+    pub call_chain: Vec<TraceStep>,
+    /// All ORM data models touched by this route
+    pub models_touched: Vec<Node>,
+    /// All relational SQL database tables touched by this route
+    pub sql_tables: Vec<String>,
+    /// Authentication classification
+    pub auth: RouteAuthKind,
+    /// Whether this endpoint modifies data
+    pub is_mutation: bool,
+    /// Edge resolution confidence score (0.0 to 1.0)
+    pub confidence: f64,
+    /// Health, shadowing, and security issues
+    pub issues: Vec<RouteHealthIssue>,
+}
+
+/// Filtering options for route queries
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RouteFilterOptions {
+    /// Filter by HTTP method (e.g. GET, POST)
+    pub method: Option<HttpMethod>,
+    /// Substring, glob, or regex match on normalized path
+    pub path_pattern: Option<String>,
+    /// Filter routes called by a specific frontend UI component (e.g. "CheckoutButton")
+    pub component_name: Option<String>,
+    /// Show frontend callers for matched routes
+    pub show_callers: bool,
+    /// Verify API contracts across git branch diff
+    pub verify_contracts: bool,
+    /// Git branch diff range for contract verification (e.g. "main...HEAD")
+    pub branch: Option<String>,
+    /// CI Quality Gate: fail with exit code 1 if breaking changes exist
+    pub fail_on_breaking: bool,
+    /// Filter routes that touch a specific ORM model name
+    pub model_name: Option<String>,
+    /// Filter routes that touch a specific SQL table name
+    pub sql_table: Option<String>,
+    /// Filter by handler function name or controller class
+    pub handler_name: Option<String>,
+    /// Filter by web framework (e.g. "fastapi", "express", "nextjs")
+    pub framework: Option<String>,
+    /// Show only authenticated / protected endpoints
+    pub auth_only: bool,
+    /// Show only public / unauthenticated endpoints
+    pub public_only: bool,
+    /// Show only routes with health/security issues
+    pub issues_only: bool,
+    /// Show only dead/dangling routes
+    pub dead_only: bool,
+    /// Show only shadowed routes
+    pub shadowed_only: bool,
+    /// Maximum downstream call chain depth to trace (default: 5)
+    pub max_depth: usize,
+    /// Minimum edge confidence threshold (default: 0.5)
+    pub min_confidence: f64,
+}
+
+/// Statistical summary of the discovered route inventory
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RouteSummary {
+    pub total_routes: usize,
+    pub routes_by_method: HashMap<String, usize>,
+    pub routes_by_framework: HashMap<String, usize>,
+    pub public_routes: usize,
+    pub protected_routes: usize,
+    pub mutating_routes: usize,
+    pub total_models_exposed: usize,
+    pub total_frontend_callers: usize,
+    pub dead_routes_count: usize,
+    pub shadowed_routes_count: usize,
+    pub security_warnings_count: usize,
+    pub breaking_contract_changes: usize,
+}
+
+/// The top-level report emitted by `cartograph routes`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RouteReport {
+    /// List of mapped full-stack route traces matching filters
+    pub routes: Vec<FullStackRouteTrace>,
+    /// Total count of routes discovered before filtering
+    pub total_discovered: usize,
+    /// Statistical breakdown
+    pub summary: RouteSummary,
+    /// Contract diff report if --verify-contracts was run
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contract_diff: Option<ContractDiffReport>,
+    /// Execution time in milliseconds
+    pub execution_time_ms: f64,
+}
+
+/// Raw record from downstream route graph traversal query
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawRouteTraceRecord {
+    pub target_node: Node,
+    pub route_id: String,
+    pub hop_distance: usize,
+    pub hop_kind: String,
+    pub path_str: String,
+    pub confidence: f64,
+}
+
+/// Raw record from inverted model-to-route graph query
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawRouteModelRecord {
+    pub route_node: Node,
+    pub model_id: String,
+    pub hop_distance: usize,
+    pub path_str: String,
+    pub confidence: f64,
+}
+
+/// Raw record from frontend caller graph query
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawFrontendCallerRecord {
+    pub route_id: String,
+    pub caller_node: Node,
+    pub component_name: Option<String>,
+    pub client_kind: String,
+    pub line: u32,
+    pub method: String,
+    pub url_pattern: String,
+}
+
 

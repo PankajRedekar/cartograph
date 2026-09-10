@@ -1,6 +1,6 @@
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::model::{Edge, EdgeKind, Node, NodeKind};
-use cartograph_db::sqlite::SqliteBackend;
+use cartograph_db::{MemoryBackend, SqliteBackend};
 
 fn n(id: &str) -> Node {
     Node {
@@ -239,4 +239,129 @@ async fn test_get_tests_for_targets() {
         assert_eq!(modified_test.hop_distance, 0);
     }
 }
+
+#[tokio::test]
+async fn test_route_traversals() {
+    let sqlite_backend = SqliteBackend::open_memory().unwrap();
+    let memory_backend = MemoryBackend::new();
+
+    fn make_test_node(id: &str, name: &str, kind: NodeKind, filepath: &str) -> Node {
+        Node {
+            id: id.to_string(),
+            name: name.to_string(),
+            kind,
+            filepath: filepath.to_string(),
+            scope: "global".to_string(),
+            start_line: Some(1),
+            start_col: Some(1),
+            end_line: Some(10),
+            end_col: Some(1),
+            signature: None,
+            docstring: None,
+            checksum: None,
+            metadata: None,
+        }
+    }
+
+    let mut route_node = make_test_node(
+        "route:checkout",
+        "POST /api/v1/checkout",
+        NodeKind::Route,
+        "src/routes.rs",
+    );
+    route_node.metadata = Some(serde_json::json!({
+        "method": "POST",
+        "normalized_path": "/api/v1/checkout",
+        "route_pattern": "/api/v1/checkout"
+    }));
+
+    let handler_node = make_test_node(
+        "fn:checkout_handler",
+        "checkout_handler",
+        NodeKind::Function,
+        "src/controllers.rs",
+    );
+
+    let service_node = make_test_node(
+        "fn:payment_service",
+        "process_payment",
+        NodeKind::Function,
+        "src/services.rs",
+    );
+
+    let model_node = make_test_node(
+        "model:invoice",
+        "Invoice",
+        NodeKind::Model,
+        "src/models.rs",
+    );
+
+    let ui_component = make_test_node(
+        "component:checkout_button",
+        "CheckoutButton",
+        NodeKind::Component,
+        "src/components/CheckoutButton.tsx",
+    );
+
+    let nodes = vec![
+        route_node.clone(),
+        handler_node.clone(),
+        service_node.clone(),
+        model_node.clone(),
+        ui_component.clone(),
+    ];
+
+    let mut client_edge = Edge::new("component:checkout_button", "route:checkout", EdgeKind::Calls);
+    client_edge.metadata = Some(serde_json::json!({
+        "type": "api_client_call",
+        "component": "CheckoutButton",
+        "client": "fetch",
+        "method": "POST",
+        "url": "/api/v1/checkout"
+    }));
+
+    let edges = vec![
+        client_edge,
+        Edge::new("route:checkout", "fn:checkout_handler", EdgeKind::MapsTo),
+        Edge::new("fn:checkout_handler", "fn:payment_service", EdgeKind::Calls),
+        Edge::new("fn:payment_service", "model:invoice", EdgeKind::References),
+    ];
+
+    for backend in [
+        &sqlite_backend as &dyn GraphStoreBackend,
+        &memory_backend as &dyn GraphStoreBackend,
+    ] {
+        backend.insert_batch(&nodes, &edges).await.unwrap();
+
+        // 1. Test get_routes
+        let routes = backend.get_routes(Some("POST"), Some("checkout")).await.unwrap();
+        assert_eq!(routes.len(), 1);
+        assert_eq!(routes[0].id, "route:checkout");
+
+        let empty = backend.get_routes(Some("DELETE"), None).await.unwrap();
+        assert_eq!(empty.len(), 0);
+
+        // 2. Test downstream traces
+        let traces = backend.get_route_downstream_traces(&["route:checkout".to_string()], 5, 0.0).await.unwrap();
+        assert_eq!(traces.len(), 3);
+        let trace_ids: Vec<String> = traces.iter().map(|t| t.target_node.id.clone()).collect();
+        assert!(trace_ids.contains(&"fn:checkout_handler".to_string()));
+        assert!(trace_ids.contains(&"fn:payment_service".to_string()));
+        assert!(trace_ids.contains(&"model:invoice".to_string()));
+
+        // 3. Test inverted model-to-route lookup
+        let model_routes = backend.get_routes_for_models(&["model:invoice".to_string()], 5, 0.0).await.unwrap();
+        assert_eq!(model_routes.len(), 1);
+        assert_eq!(model_routes[0].route_node.id, "route:checkout");
+        assert_eq!(model_routes[0].hop_distance, 3);
+
+        // 4. Test frontend caller lookup
+        let callers = backend.get_frontend_callers_for_routes(&["route:checkout".to_string()]).await.unwrap();
+        assert_eq!(callers.len(), 1);
+        assert_eq!(callers[0].caller_node.id, "component:checkout_button");
+        assert_eq!(callers[0].component_name.as_deref(), Some("CheckoutButton"));
+        assert_eq!(callers[0].client_kind, "fetch");
+    }
+}
+
 

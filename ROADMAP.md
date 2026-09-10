@@ -109,9 +109,17 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - **Multi-Engine Formatting**: Colorized terminal badges, GitHub PR Markdown comment tables, JSON schema for pipelines, GitHub Actions Matrix JSON (`--format matrix`), and executable bash scripts (`--format script`).
   - **Performance SLA**: Sub-15ms latency budget for full PR diff test selection and runner synthesis.
 
-- [ ] **2.3 Interactive Full-Stack Route Mapper (`cartograph routes`)**
-  - Full-stack request tracing: `URL Pattern -> Controller/View -> Business Handler -> DB Model`.
-  - Filterable by HTTP method, path pattern, or target model name.
+- [x] **2.3 Interactive Full-Stack Route Mapper (`cartograph routes`)**
+  - **Polyglot AST Route Extraction**: Static tree-sitter AST parsing of route declarations across TypeScript/JavaScript (Express, Next.js App/Pages Router, NestJS, Fastify), Python (FastAPI, Flask, Django, DRF), Go (net/http, Gin, Echo, Chi), Rust (Actix-web, Axum, Rocket), and Ruby (Rails `routes.rb` resources & namespaces) with zero runtime dependencies.
+  - **Universal URL Normalization & Prefix Assembly**: Unifies heterogeneous path syntax (`:id`, `<int:id>`, `[id]`, `{id}`) into canonical RFC 6570 URI templates (`/users/{id}`) and resolves hierarchical router/blueprint/namespace mounting prefix chains.
+  - **End-to-End Vertical Request Flow Tracing**: Traverses downstream execution from HTTP Route $\to$ Ordered Middlewares/Guards $\to$ Controller/View Handler $\to$ Domain Services $\to$ Repositories $\to$ ORM Models $\to$ SQL Tables in **<3ms**.
+  - **Frontend-to-Backend 360° Call Linking (`--component`, `--show-callers`)**: Statically scans clientside TypeScript/React files for `fetch`, `axios`, and React Query invocations, linking UI components directly to backend HTTP routes and database models.
+  - **Inverted Model-to-Route Impact Mapping (`--model`, `--table`)**: Reverse graph traversal from database entities and SQL tables upstream to all public API endpoints that read or mutate them, pinpointing API blast-radius before schema migrations.
+  - **API Contract Drift & Breaking Change Verification (`--verify-contracts`, `--diff`)**: AST-level comparison of route signatures between git branches, detecting removed endpoints, altered HTTP methods, new required parameters, and breaking response DTO schemas with CI gating (`--fail-on-breaking`).
+  - **Route Hygiene, Shadowing & Security Linting**: Detects dead/dangling routes (unresolved handler functions), orphaned controller actions (unmounted endpoints), route shadowing collisions (wildcard/prefix masking), and unauthenticated mutating routes.
+  - **Synthetic OpenAPI 3.1 & Schema Exporter (`--format openapi`)**: Direct AST-to-OpenAPI 3.1 JSON/YAML generation including paths, methods, parameters, docstrings, and response/request model schemas.
+  - **Quad-Engine Presentation & Interactive TUI**: Colorized terminal badges with collapsible ASCII call trees, interactive split-pane TUI explorer (`-i`), GitHub PR Markdown comments with auto-generated Mermaid sequence diagrams (`sequenceDiagram`), machine JSON, and LLM `<api_routes>` XML context blocks.
+  - **Performance SLA**: Sub-3ms point route full-stack trace, sub-15ms complete monorepo API inventory discovery.
 
 - [ ] **2.4 Architectural Linter & Boundary Guard (`cartograph lint-arch`)**
   - Circular dependency detection across modules and packages.

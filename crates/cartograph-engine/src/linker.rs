@@ -183,6 +183,26 @@ impl<'a> ReferenceResolver<'a> {
             }
         }
 
+        // Tier 7: Clientside Frontend API Call to Route Linking
+        if reference.kind == EdgeKind::Calls
+            && (reference.receiver_var.as_deref() == Some("api_call")
+                || reference.receiver_var.as_deref() == Some("fetch")
+                || reference.receiver_var.as_deref() == Some("axios")
+                || reference.target_symbol.starts_with('/'))
+        {
+            for route in &self.symbol_table.routes {
+                if crate::routes::frontend_linker::matches_route_pattern(&reference.target_symbol, &route.name) {
+                    let mut edge = Edge::new(&reference.source_node_id, &route.id, EdgeKind::Calls);
+                    edge.metadata = Some(json!({
+                        "fidelity": "definite",
+                        "resolution": "frontend_360_api_link",
+                        "client_url": reference.target_symbol,
+                    }));
+                    return Some(edge);
+                }
+            }
+        }
+
         None
     }
 

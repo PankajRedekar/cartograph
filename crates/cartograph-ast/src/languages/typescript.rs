@@ -66,9 +66,12 @@ impl TypeScriptParser {
             unresolved_references: Vec::new(),
             diagnostics: Vec::new(),
             type_bindings: HashMap::new(),
+            current_controller_prefix: None,
+            current_controller_has_guard: false,
         };
 
         extractor.visit_node(root);
+        extractor.detect_nextjs_routes();
 
         Ok(ParsedFile {
             filepath: ctx.filepath.to_string(),
@@ -142,6 +145,8 @@ struct TypeScriptExtractor<'a> {
     unresolved_references: Vec<UnresolvedReference>,
     diagnostics: Vec<AstDiagnostic>,
     type_bindings: HashMap<String, String>, // var_name -> type_name
+    current_controller_prefix: Option<String>,
+    current_controller_has_guard: bool,
 }
 
 impl<'a> TypeScriptExtractor<'a> {
@@ -297,6 +302,36 @@ impl<'a> TypeScriptExtractor<'a> {
             })),
         });
 
+        // NestJS Controller decorator detection
+        let decorators = self.extract_decorators(node);
+        let mut controller_prefix = None;
+        let mut has_guard = false;
+        for d in &decorators {
+            if d.starts_with("Controller") {
+                if let Some(start) = d.find('(') {
+                    let inside = d[start + 1..].trim_end_matches(')').trim().trim_matches(['\'', '"']);
+                    controller_prefix = Some(if inside.starts_with('/') {
+                        inside.to_string()
+                    } else if inside.is_empty() {
+                        "/".to_string()
+                    } else {
+                        format!("/{inside}")
+                    });
+                } else {
+                    controller_prefix = Some("/".to_string());
+                }
+            }
+            if d.starts_with("UseGuards") {
+                has_guard = true;
+            }
+        }
+        let old_prefix = self.current_controller_prefix.take();
+        let old_guard = self.current_controller_has_guard;
+        if controller_prefix.is_some() {
+            self.current_controller_prefix = controller_prefix;
+            self.current_controller_has_guard = has_guard;
+        }
+
         // Enter class scope
         self.scope_stack.push(class_name.to_string());
 
@@ -312,6 +347,8 @@ impl<'a> TypeScriptExtractor<'a> {
         }
 
         self.scope_stack.pop();
+        self.current_controller_prefix = old_prefix;
+        self.current_controller_has_guard = old_guard;
     }
 
     fn visit_method(&mut self, node: TsNode, parent_class_uri: &str) {
@@ -354,7 +391,64 @@ impl<'a> TypeScriptExtractor<'a> {
         });
 
         // defines edge
-        self.edges.push(Edge::new(parent_class_uri.to_string(), uri, EdgeKind::Defines));
+        self.edges.push(Edge::new(parent_class_uri.to_string(), uri.clone(), EdgeKind::Defines));
+
+        // NestJS Route decorator extraction
+        let decorators = self.extract_decorators(node);
+        let mut method_guard = false;
+        for d in &decorators {
+            if d.starts_with("UseGuards") {
+                method_guard = true;
+            }
+        }
+
+        if let Some(ref prefix) = self.current_controller_prefix {
+            for d in &decorators {
+                for http_m in &["Get", "Post", "Put", "Delete", "Patch", "Options", "Head", "All"] {
+                    if d.starts_with(http_m) {
+                        let mut subpath = "";
+                        if let Some(start) = d.find('(') {
+                            subpath = d[start + 1..].trim_end_matches(')').trim().trim_matches(['\'', '"']);
+                        }
+                        let full_path = if subpath.is_empty() {
+                            prefix.clone()
+                        } else if subpath.starts_with('/') {
+                            format!("{}{subpath}", prefix.trim_end_matches('/'))
+                        } else {
+                            format!("{}/{}", prefix.trim_end_matches('/'), subpath)
+                        };
+                        let method_upper = http_m.to_uppercase();
+                        let route_name = format!("{method_upper} {full_path}");
+                        let route_uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
+                        let is_protected = self.current_controller_has_guard || method_guard;
+
+                        self.nodes.push(Node {
+                            id: route_uri.clone(),
+                            name: route_name.clone(),
+                            kind: NodeKind::Route,
+                            filepath: self.filepath.to_string(),
+                            scope: "routes".to_string(),
+                            start_line: Some(span.start_line),
+                            start_col: Some(span.start_col),
+                            end_line: Some(span.end_line),
+                            end_col: Some(span.end_col),
+                            signature: Some(format!("{method_upper} {full_path}")),
+                            docstring: None,
+                            checksum: None,
+                            metadata: Some(serde_json::json!({
+                                "http_method": method_upper,
+                                "raw_pattern": full_path,
+                                "framework": "nestjs",
+                                "handler": method_name,
+                                "auth": if is_protected { "protected" } else { "public" },
+                                "span": span,
+                            })),
+                        });
+                        self.edges.push(Edge::new(route_uri, uri.clone(), EdgeKind::MapsTo));
+                    }
+                }
+            }
+        }
 
         // Visit body
         self.scope_stack.push(method_name.to_string());
@@ -675,6 +769,127 @@ impl<'a> TypeScriptExtractor<'a> {
         let span = self.line_index.span_for_node(&node, self.content);
         let caller_id = self.nodes.last().map(|n| n.id.clone()).unwrap_or_default();
 
+        // 1. Clientside fetch calls: fetch('/api/users', { method: 'POST' })
+        if fn_base_name == "fetch" || fn_base_name == "window.fetch" {
+            if let Some(args) = node.child_by_field_name("arguments") {
+                if let Some(first_arg) = args.named_child(0) {
+                    if let Some(url) = self.extract_string_content(first_arg) {
+                        let mut method = "GET".to_string();
+                        if let Some(second_arg) = args.named_child(1) {
+                            let text = self.node_text(second_arg).to_uppercase();
+                            for m in &["POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"] {
+                                if text.contains(&format!("\"{m}\"")) || text.contains(&format!("'{m}'")) || text.contains(&format!("METHOD: {m}")) {
+                                    method = m.to_string();
+                                    break;
+                                }
+                            }
+                        }
+                        self.record_frontend_api_call(node, "fetch", &method, &url);
+                    }
+                }
+            }
+        }
+
+        // 2. Clientside axios / HTTP client calls: axios.get('/api/users'), axios.post('/api/users', body)
+        if fn_node.kind() == "member_expression" {
+            if let (Some(obj), Some(prop)) = (fn_node.child_by_field_name("object"), fn_node.child_by_field_name("property")) {
+                let obj_name = self.node_text(obj);
+                let method_name = self.node_text(prop).to_lowercase();
+                let http_methods = ["get", "post", "put", "patch", "delete", "options", "head"];
+                if (obj_name == "axios" || obj_name.ends_with("Client") || obj_name == "api" || obj_name == "http")
+                    && http_methods.contains(&method_name.as_str())
+                {
+                    if let Some(args) = node.child_by_field_name("arguments") {
+                        if let Some(first_arg) = args.named_child(0) {
+                            if let Some(url) = self.extract_string_content(first_arg) {
+                                self.record_frontend_api_call(node, "axios", &method_name.to_uppercase(), &url);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Express / router route registration: app.get('/users', handler), router.post('/users', auth, handler)
+        if fn_node.kind() == "member_expression" {
+            if let (Some(obj), Some(prop)) = (fn_node.child_by_field_name("object"), fn_node.child_by_field_name("property")) {
+                let obj_name = self.node_text(obj);
+                let method_name = self.node_text(prop).to_lowercase();
+                let http_methods = ["get", "post", "put", "patch", "delete", "options", "head", "all"];
+                if http_methods.contains(&method_name.as_str()) {
+                    if let Some(args) = node.child_by_field_name("arguments") {
+                        if let Some(first_arg) = args.named_child(0) {
+                            if let Some(route_path) = self.extract_string_content(first_arg) {
+                                if route_path.starts_with('/') || route_path.starts_with('*') || obj_name.contains("app") || obj_name.contains("router") || obj_name.contains("server") {
+                                    let http_method = method_name.to_uppercase();
+                                    let span = self.line_index.span_for_node(&node, self.content);
+                                    let route_name = format!("{http_method} {route_path}");
+                                    let uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
+
+                                    let mut middlewares = Vec::new();
+                                    let mut handler_name = None;
+                                    let mut cursor = args.walk();
+                                    for (i, child) in args.children(&mut cursor).filter(|c| c.is_named()).enumerate() {
+                                        if i == 0 { continue; }
+                                        let text = self.node_text(child).trim();
+                                        if child.kind() == "identifier" || child.kind() == "member_expression" {
+                                            middlewares.push(text.to_string());
+                                        }
+                                    }
+                                    if !middlewares.is_empty() {
+                                        handler_name = middlewares.pop();
+                                    }
+
+                                    let is_protected = middlewares.iter().any(|m| {
+                                        let l = m.to_lowercase();
+                                        l.contains("auth") || l.contains("guard") || l.contains("jwt") || l.contains("session") || l.contains("protect")
+                                    });
+
+                                    self.nodes.push(Node {
+                                        id: uri.clone(),
+                                        name: route_name.clone(),
+                                        kind: NodeKind::Route,
+                                        filepath: self.filepath.to_string(),
+                                        scope: "routes".to_string(),
+                                        start_line: Some(span.start_line),
+                                        start_col: Some(span.start_col),
+                                        end_line: Some(span.end_line),
+                                        end_col: Some(span.end_col),
+                                        signature: Some(format!("{http_method} {route_path}")),
+                                        docstring: None,
+                                        checksum: None,
+                                        metadata: Some(serde_json::json!({
+                                            "http_method": http_method,
+                                            "raw_pattern": route_path,
+                                            "framework": "express",
+                                            "middlewares": middlewares,
+                                            "handler": handler_name,
+                                            "auth": if is_protected { "protected" } else { "public" },
+                                            "span": span,
+                                        })),
+                                    });
+
+                                    if let Some(ref handler) = handler_name {
+                                        self.unresolved_references.push(UnresolvedReference {
+                                            source_node_id: uri,
+                                            target_symbol: handler.clone(),
+                                            import_source: None,
+                                            kind: EdgeKind::MapsTo,
+                                            span,
+                                            call_fidelity: CallFidelity::Definite,
+                                            receiver_type_hint: None,
+                                            receiver_var: None,
+                                            arg_count: None,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if fn_node.kind() == "member_expression" {
             if let (Some(obj), Some(prop)) = (fn_node.child_by_field_name("object"), fn_node.child_by_field_name("property")) {
                 let obj_name = self.node_text(obj);
@@ -718,6 +933,14 @@ impl<'a> TypeScriptExtractor<'a> {
                 receiver_var: None,
                 arg_count: self.count_arguments(node),
             });
+        }
+
+        // Recursively visit call expression arguments to discover nested calls/callbacks
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.id() != fn_node.id() {
+                self.visit_node(child);
+            }
         }
     }
 
@@ -830,6 +1053,188 @@ impl<'a> TypeScriptExtractor<'a> {
             count
         })
     }
+
+    fn extract_string_content(&self, node: TsNode) -> Option<String> {
+        match node.kind() {
+            "string" => {
+                let text = self.node_text(node);
+                Some(text.trim_matches(|c| c == '\'' || c == '"').to_string())
+            }
+            "template_string" => {
+                let text = self.node_text(node);
+                Some(text.trim_matches('`').to_string())
+            }
+            "binary_expression" => {
+                let left = node.child_by_field_name("left")?;
+                self.extract_string_content(left)
+            }
+            _ => None,
+        }
+    }
+
+    fn extract_decorators(&self, node: TsNode) -> Vec<String> {
+        let mut decorators = Vec::new();
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "decorator" {
+                decorators.push(self.node_text(child).trim_start_matches('@').trim().to_string());
+            }
+        }
+        let mut prev = node.prev_sibling();
+        while let Some(s) = prev {
+            if s.kind() == "decorator" {
+                decorators.push(self.node_text(s).trim_start_matches('@').trim().to_string());
+                prev = s.prev_sibling();
+            } else {
+                break;
+            }
+        }
+        if let Some(parent) = node.parent() {
+            if parent.kind() == "export_statement" {
+                let mut p_cursor = parent.walk();
+                for child in parent.children(&mut p_cursor) {
+                    if child.kind() == "decorator" {
+                        decorators.push(self.node_text(child).trim_start_matches('@').trim().to_string());
+                    }
+                }
+                let mut p_prev = parent.prev_sibling();
+                while let Some(s) = p_prev {
+                    if s.kind() == "decorator" {
+                        decorators.push(self.node_text(s).trim_start_matches('@').trim().to_string());
+                        p_prev = s.prev_sibling();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+        decorators
+    }
+
+    fn record_frontend_api_call(&mut self, call_node: TsNode, client: &str, method: &str, url: &str) {
+        let span = self.line_index.span_for_node(&call_node, self.content);
+        // Prefer enclosing Component if inside a component tree, otherwise enclosing Function
+        let comp_idx = self.nodes.iter().rposition(|n| n.kind == NodeKind::Component)
+            .or_else(|| self.nodes.iter().rposition(|n| n.kind == NodeKind::Function));
+
+        let target_id = comp_idx.map(|idx| self.nodes[idx].id.clone())
+            .unwrap_or_else(|| format!("cartograph://{}::::*#file", self.filepath));
+
+        if let Some(idx) = comp_idx {
+            if let Some(ref mut meta) = self.nodes[idx].metadata {
+                if let Some(arr) = meta.get_mut("api_call_sites").and_then(|v| v.as_array_mut()) {
+                    arr.push(serde_json::json!({
+                        "client_kind": client,
+                        "method": method,
+                        "url_pattern": url,
+                        "line": span.start_line,
+                    }));
+                } else {
+                    meta["api_call_sites"] = serde_json::json!([{
+                        "client_kind": client,
+                        "method": method,
+                        "url_pattern": url,
+                        "line": span.start_line,
+                    }]);
+                }
+            }
+        }
+
+        self.unresolved_references.push(UnresolvedReference {
+            source_node_id: target_id,
+            target_symbol: url.to_string(),
+            import_source: None,
+            kind: EdgeKind::Calls,
+            span,
+            call_fidelity: CallFidelity::Definite,
+            receiver_type_hint: Some(method.to_string()),
+            receiver_var: Some(client.to_string()),
+            arg_count: None,
+        });
+    }
+
+    fn detect_nextjs_routes(&mut self) {
+        let filepath = self.filepath;
+        if filepath.contains("/app/") || filepath.starts_with("app/") {
+            if filepath.ends_with("/route.ts") || filepath.ends_with("/route.js") || filepath.ends_with("/route.tsx") || filepath.ends_with("/route.jsx") {
+                let idx = filepath.find("app/").unwrap();
+                let route_part = &filepath[idx + 4..];
+                let trimmed = route_part
+                    .trim_end_matches("/route.ts")
+                    .trim_end_matches("/route.js")
+                    .trim_end_matches("/route.tsx")
+                    .trim_end_matches("/route.jsx");
+                let raw_pattern = if trimmed.is_empty() {
+                    "/".to_string()
+                } else if trimmed.starts_with('/') {
+                    trimmed.to_string()
+                } else {
+                    format!("/{trimmed}")
+                };
+
+                let http_methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
+                let matched_funcs: Vec<(String, String)> = self.nodes.iter()
+                    .filter(|n| n.kind == NodeKind::Function && http_methods.contains(&n.name.as_str()))
+                    .map(|n| (n.name.clone(), n.id.clone()))
+                    .collect();
+
+                for (fn_name, fn_id) in matched_funcs {
+                    let route_name = format!("{fn_name} {raw_pattern}");
+                    let uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
+                    self.nodes.push(Node {
+                        id: uri.clone(),
+                        name: route_name.clone(),
+                        kind: NodeKind::Route,
+                        filepath: self.filepath.to_string(),
+                        scope: "routes".to_string(),
+                        start_line: Some(1),
+                        start_col: Some(1),
+                        end_line: Some(1),
+                        end_col: Some(1),
+                        signature: Some(format!("{fn_name} {raw_pattern}")),
+                        docstring: None,
+                        checksum: None,
+                        metadata: Some(serde_json::json!({
+                            "http_method": fn_name,
+                            "raw_pattern": raw_pattern,
+                            "framework": "nextjs",
+                            "handler": fn_name,
+                            "auth": "unknown",
+                        })),
+                    });
+                    self.edges.push(Edge::new(uri, fn_id, EdgeKind::MapsTo));
+                }
+            }
+        } else if filepath.contains("/pages/api/") || filepath.starts_with("pages/api/") {
+            let idx = filepath.find("pages/api/").unwrap();
+            let route_part = &filepath[idx + 9..];
+            let raw_pattern = format!("/api/{}", route_part.trim_end_matches(".ts").trim_end_matches(".js").trim_end_matches(".tsx").trim_end_matches(".jsx"));
+            let uri = build_uri(self.filepath, "routes", &format!("ALL {raw_pattern}"), &NodeKind::Route);
+            self.nodes.push(Node {
+                id: uri.clone(),
+                name: format!("ALL {raw_pattern}"),
+                kind: NodeKind::Route,
+                filepath: self.filepath.to_string(),
+                scope: "routes".to_string(),
+                start_line: Some(1),
+                start_col: Some(1),
+                end_line: Some(1),
+                end_col: Some(1),
+                signature: Some(format!("ALL {raw_pattern}")),
+                docstring: None,
+                checksum: None,
+                metadata: Some(serde_json::json!({
+                    "http_method": "ALL",
+                    "raw_pattern": raw_pattern,
+                    "framework": "nextjs",
+                    "auth": "unknown",
+                })),
+            });
+            if let Some(h) = self.nodes.iter().find(|n| n.kind == NodeKind::Function && (n.name == "default" || n.name == "handler")) {
+                self.edges.push(Edge::new(uri, h.id.clone(), EdgeKind::MapsTo));
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -939,6 +1344,107 @@ describe("AuthModule", () => {
             .expect("Should extract test.skip case");
         assert_eq!(second_test.scope, "AuthModule");
         assert_eq!(second_test.metadata.as_ref().unwrap()["is_test"], true);
+    }
+
+    #[test]
+    fn test_express_routes_and_middlewares() {
+        let code = r#"
+app.get('/api/users/:id', requireAuth, getUserHandler);
+router.post('/api/users', validateBody, createUserHandler);
+"#;
+        let parser = TypeScriptParser::typescript();
+        let ctx = ParseContext::new("src/routes.ts", code);
+        let parsed = parser.parse(&ctx).expect("Parsing Express routes failed");
+
+        let route_get = parsed.nodes.iter().find(|n| n.name == "GET /api/users/:id").expect("GET route not found");
+        assert_eq!(route_get.kind, NodeKind::Route);
+        let meta_get = route_get.metadata.as_ref().unwrap();
+        assert_eq!(meta_get["http_method"], "GET");
+        assert_eq!(meta_get["framework"], "express");
+        assert_eq!(meta_get["auth"], "protected");
+        assert_eq!(meta_get["handler"], "getUserHandler");
+
+        let maps_to_edge = parsed.unresolved_references.iter().find(|r| r.source_node_id == route_get.id && r.target_symbol == "getUserHandler");
+        assert!(maps_to_edge.is_some(), "Should have MapsTo edge to handler");
+    }
+
+    #[test]
+    fn test_nextjs_app_router() {
+        let code = r#"
+export async function GET(request: Request) {
+    return Response.json({ users: [] });
+}
+
+export async function POST(request: Request) {
+    return Response.json({ status: "created" });
+}
+"#;
+        let parser = TypeScriptParser::typescript();
+        let ctx = ParseContext::new("src/app/api/users/[id]/route.ts", code);
+        let parsed = parser.parse(&ctx).expect("Parsing Next.js route failed");
+
+        let get_route = parsed.nodes.iter().find(|n| n.name == "GET /api/users/[id]").expect("GET Next.js route not found");
+        assert_eq!(get_route.kind, NodeKind::Route);
+        assert_eq!(get_route.metadata.as_ref().unwrap()["framework"], "nextjs");
+
+        let post_route = parsed.nodes.iter().find(|n| n.name == "POST /api/users/[id]").expect("POST Next.js route not found");
+        assert_eq!(post_route.kind, NodeKind::Route);
+    }
+
+    #[test]
+    fn test_nestjs_controller_and_guards() {
+        let code = r#"
+@Controller('users')
+@UseGuards(AuthGuard)
+export class UsersController {
+    @Get(':id')
+    public getUser(): User {
+        return new User();
+    }
+
+    @Post()
+    public createUser(): User {
+        return new User();
+    }
+}
+"#;
+        let parser = TypeScriptParser::typescript();
+        let ctx = ParseContext::new("src/users.controller.ts", code);
+        let parsed = parser.parse(&ctx).expect("Parsing NestJS failed");
+
+        let get_route = parsed.nodes.iter().find(|n| n.name == "GET /users/:id").expect("GET NestJS route not found");
+        assert_eq!(get_route.kind, NodeKind::Route);
+        let meta = get_route.metadata.as_ref().unwrap();
+        assert_eq!(meta["auth"], "protected");
+        assert_eq!(meta["framework"], "nestjs");
+
+        let post_route = parsed.nodes.iter().find(|n| n.name == "POST /users").expect("POST NestJS route not found");
+        assert_eq!(post_route.kind, NodeKind::Route);
+    }
+
+    #[test]
+    fn test_frontend_api_call_extraction() {
+        let code = r#"
+export function CheckoutButton() {
+    const handleCheckout = async () => {
+        const res = await fetch('/api/checkout', { method: 'POST' });
+        const data = await axios.get('/api/cart');
+    };
+    return <button onClick={handleCheckout}>Checkout</button>;
+}
+"#;
+        let parser = TypeScriptParser::tsx();
+        let ctx = ParseContext::new("src/components/CheckoutButton.tsx", code);
+        let parsed = parser.parse(&ctx).expect("Parsing TSX component failed");
+
+        let button_comp = parsed.nodes.iter().find(|n| n.name == "CheckoutButton").expect("CheckoutButton component not found");
+        let meta = button_comp.metadata.as_ref().unwrap();
+        let call_sites = meta["api_call_sites"].as_array().expect("api_call_sites missing");
+        assert_eq!(call_sites.len(), 2);
+        assert_eq!(call_sites[0]["url_pattern"], "/api/checkout");
+        assert_eq!(call_sites[0]["method"], "POST");
+        assert_eq!(call_sites[1]["url_pattern"], "/api/cart");
+        assert_eq!(call_sites[1]["method"], "GET");
     }
 }
 

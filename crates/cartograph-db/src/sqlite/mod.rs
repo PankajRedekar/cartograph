@@ -13,7 +13,10 @@ use rusqlite::{params, Connection};
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::SqliteConfig;
 use cartograph_core::error::{CartographError, Result};
-use cartograph_core::model::{Edge, GraphStats, Node, RawImpactRecord, RawTestRecord, SearchResult};
+use cartograph_core::model::{
+    Edge, GraphStats, Node, RawFrontendCallerRecord, RawImpactRecord, RawRouteModelRecord,
+    RawRouteTraceRecord, RawTestRecord, SearchResult,
+};
 
 use traversal::row_to_node;
 
@@ -536,6 +539,43 @@ impl GraphStoreBackend for SqliteBackend {
     ) -> Result<Vec<RawTestRecord>> {
         let conn = self.conn.lock();
         traversal::get_tests_for_targets(&conn, target_ids, max_depth, min_confidence)
+    }
+
+    async fn get_routes(
+        &self,
+        method: Option<&str>,
+        path_pattern: Option<&str>,
+    ) -> Result<Vec<Node>> {
+        let conn = self.conn.lock();
+        traversal::get_routes(&conn, method, path_pattern)
+    }
+
+    async fn get_route_downstream_traces(
+        &self,
+        route_ids: &[String],
+        max_depth: usize,
+        min_confidence: f64,
+    ) -> Result<Vec<RawRouteTraceRecord>> {
+        let conn = self.conn.lock();
+        traversal::get_route_downstream_traces(&conn, route_ids, max_depth, min_confidence)
+    }
+
+    async fn get_routes_for_models(
+        &self,
+        model_identifiers: &[String],
+        max_depth: usize,
+        min_confidence: f64,
+    ) -> Result<Vec<RawRouteModelRecord>> {
+        let conn = self.conn.lock();
+        traversal::get_routes_for_models(&conn, model_identifiers, max_depth, min_confidence)
+    }
+
+    async fn get_frontend_callers_for_routes(
+        &self,
+        route_ids: &[String],
+    ) -> Result<Vec<RawFrontendCallerRecord>> {
+        let conn = self.conn.lock();
+        traversal::get_frontend_callers_for_routes(&conn, route_ids)
     }
 
     async fn stats(&self) -> Result<GraphStats> {
