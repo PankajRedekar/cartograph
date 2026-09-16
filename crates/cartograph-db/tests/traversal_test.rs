@@ -364,4 +364,84 @@ async fn test_route_traversals() {
     }
 }
 
+#[tokio::test]
+async fn test_inter_file_dependencies_and_indexed_files() {
+    let sqlite_backend = SqliteBackend::open_memory().unwrap();
+    let memory_backend = MemoryBackend::new();
+
+    let make_node = |id: &str, file: &str, line: u32| Node {
+        id: id.to_string(),
+        name: id.to_string(),
+        kind: NodeKind::Function,
+        filepath: file.to_string(),
+        scope: "".to_string(),
+        start_line: Some(line),
+        start_col: Some(1),
+        end_line: Some(line + 10),
+        end_col: Some(1),
+        signature: Some(format!("fn {id}()")),
+        docstring: None,
+        checksum: None,
+        metadata: None,
+    };
+
+    let nodes = vec![
+        make_node("fn:a1", "src/a.rs", 10),
+        make_node("fn:a2", "src/a.rs", 30),
+        make_node("fn:b1", "src/b.rs", 20),
+        make_node("fn:c1", "src/c.rs", 15),
+    ];
+
+    let mut low_conf_edge = Edge::new("fn:b1", "fn:c1", EdgeKind::Calls);
+    low_conf_edge.confidence = Some(0.3);
+
+    let mut valid_conf_edge = Edge::new("fn:a1", "fn:b1", EdgeKind::Imports);
+    valid_conf_edge.confidence = Some(0.9);
+
+    let edges = vec![
+        // 1. Inter-file high confidence: src/a.rs -> src/b.rs
+        valid_conf_edge,
+        // 2. Inter-file reverse: src/b.rs -> src/a.rs
+        Edge::new("fn:b1", "fn:a1", EdgeKind::Calls),
+        // 3. Intra-file edge: src/a.rs -> src/a.rs (MUST be filtered out)
+        Edge::new("fn:a1", "fn:a2", EdgeKind::Calls),
+        // 4. Low confidence inter-file edge (MUST be filtered out by min_confidence 0.5)
+        low_conf_edge,
+    ];
+
+    for backend in [
+        &sqlite_backend as &dyn GraphStoreBackend,
+        &memory_backend as &dyn GraphStoreBackend,
+    ] {
+        backend.insert_batch(&nodes, &edges).await.unwrap();
+
+        // 1. Verify get_inter_file_dependencies with min_confidence = 0.5
+        let inter_edges = backend.get_inter_file_dependencies(0.5).await.unwrap();
+        assert_eq!(inter_edges.len(), 2);
+
+        let pairs: Vec<(&str, &str)> = inter_edges
+            .iter()
+            .map(|e| (e.source_file.as_str(), e.target_file.as_str()))
+            .collect();
+        assert!(pairs.contains(&("src/a.rs", "src/b.rs")));
+        assert!(pairs.contains(&("src/b.rs", "src/a.rs")));
+
+        // Verify intra-file edge was filtered
+        assert!(!pairs.contains(&("src/a.rs", "src/a.rs")));
+        // Verify low confidence edge was filtered
+        assert!(!pairs.contains(&("src/b.rs", "src/c.rs")));
+
+        // 2. Verify with lower min_confidence = 0.2 includes low-confidence edge
+        let all_inter = backend.get_inter_file_dependencies(0.2).await.unwrap();
+        assert_eq!(all_inter.len(), 3);
+
+        // 3. Verify get_all_indexed_files returns all unique files
+        let files = backend.get_all_indexed_files().await.unwrap();
+        assert_eq!(files.len(), 3);
+        assert!(files.contains(&"src/a.rs".to_string()));
+        assert!(files.contains(&"src/b.rs".to_string()));
+        assert!(files.contains(&"src/c.rs".to_string()));
+    }
+}
+
 

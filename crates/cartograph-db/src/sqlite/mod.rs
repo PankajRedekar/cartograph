@@ -14,8 +14,8 @@ use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::SqliteConfig;
 use cartograph_core::error::{CartographError, Result};
 use cartograph_core::model::{
-    Edge, GraphStats, Node, RawFrontendCallerRecord, RawImpactRecord, RawRouteModelRecord,
-    RawRouteTraceRecord, RawTestRecord, SearchResult,
+    Edge, GraphStats, Node, RawFrontendCallerRecord, RawImpactRecord, RawInterFileEdgeRecord,
+    RawRouteModelRecord, RawRouteTraceRecord, RawTestRecord, SearchResult,
 };
 
 use traversal::row_to_node;
@@ -576,6 +576,19 @@ impl GraphStoreBackend for SqliteBackend {
     ) -> Result<Vec<RawFrontendCallerRecord>> {
         let conn = self.conn.lock();
         traversal::get_frontend_callers_for_routes(&conn, route_ids)
+    }
+
+    async fn get_inter_file_dependencies(
+        &self,
+        min_confidence: f64,
+    ) -> Result<Vec<RawInterFileEdgeRecord>> {
+        let conn = self.conn.lock();
+        traversal::get_inter_file_dependencies(&conn, min_confidence)
+    }
+
+    async fn get_all_indexed_files(&self) -> Result<Vec<String>> {
+        let conn = self.conn.lock();
+        traversal::get_all_indexed_files(&conn)
     }
 
     async fn stats(&self) -> Result<GraphStats> {

@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/PankajRedekar/cartograph/actions"><img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-2024%20edition-orange?style=flat-square&logo=rust" alt="Rust 2024" /></a>
-  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/roadmap-Phase%202.2%20Complete-blue?style=flat-square" alt="Roadmap" /></a>
+  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/roadmap-Phase%202.4%20Complete-blue?style=flat-square" alt="Roadmap" /></a>
   <a href="openspec/specs/"><img src="https://img.shields.io/badge/specs-OpenSpec%20verified-purple?style=flat-square" alt="OpenSpec" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue?style=flat-square" alt="License" /></a>
 </p>
@@ -473,6 +473,54 @@ cartograph routes /api/v1/orders --format markdown
   │  │  │  [Model] Order (src/models/order.ts:5)
   │  │  │  │  [DatabaseTable] orders (migrations/001_orders.sql:1)
 ```
+
+---
+
+### 8. `cartograph lint-arch` — Architectural Linter & Boundary Guard (<10ms)
+Enforces architectural layer purity, monorepo package encapsulation, and directional boundary rules while detecting circular dependencies with Tarjan's linear SCC and Minimum Feedback Arc Set (FAS) cut recommendations.
+
+```bash
+# Run architectural linting with auto-detected configuration or presets
+cartograph lint-arch
+
+# Apply standard architecture preset (clean-architecture, hexagonal, mvc, monorepo)
+cartograph lint-arch --preset clean-architecture
+
+# Classify cycles by semantic coupling (runtime vs. type-only)
+cartograph lint-arch --coupling runtime
+
+# Cycle detection granularity: file, module, package, symbol
+cartograph lint-arch --granularity package
+
+# Record current technical debt baseline to prevent new regressions
+cartograph lint-arch --record-baseline
+
+# Auto-ratchet baseline: automatically prune resolved debt from baseline
+cartograph lint-arch --ratchet
+
+# Scope architectural checks to git branch diff or staged hunks
+cartograph lint-arch --branch main...HEAD
+cartograph lint-arch --staged
+
+# CI/CD Gate: fail with exit code 1 on errors or strict mode
+cartograph lint-arch --strict --fail-on error
+
+# Export results for GitHub Code Scanning annotations (SARIF 2.1.0)
+cartograph lint-arch --sarif > results.sarif
+
+# Export formats: terminal, markdown (with Mermaid graph LR), sarif, json, xml
+cartograph lint-arch --format markdown
+```
+
+#### Key Capabilities
+- **Tarjan's Linear SCC & Bounded Johnson's Cycle Engine**: Decomposes dependency graphs into Strongly Connected Components in $O(V + E)$ time and boundedly extracts elementary cycle rings with SHA-256 fingerprinting.
+- **Runtime vs. Type-Only Semantic Coupling (`--coupling`)**: Separates critical runtime deadlocks (calls, dynamic imports) from benign compile-time type loops (`type_only`, `runtime`, `all`).
+- **Minimum Feedback Arc Set (FAS) Cut Advisor**: Graph centrality algorithm identifying the optimal cut edge(s) that break multiple cycles simultaneously with concrete dependency inversion guidance.
+- **Hierarchical Layer Purity Classifier**: Enforces strict unidirectional or relaxed layer rules with glob matching and in-code AST tags (`/// @arch layer=...`, `#[cartograph(layer="...")]`).
+- **Monorepo Package Encapsulation Guard**: Forbids deep-imports into private package internals (`**/internal/**`, `**/private/**`), restricting cross-package access to designated public entrypoints (`lib.rs`, `index.ts`).
+- **Technical Debt Baselines & Auto-Ratcheting (`--record-baseline`, `--ratchet`)**: Snapshots pre-existing debt in `.cartograph/arch-baseline.json` so existing legacy violations don't fail CI, while automatically locking in architectural improvements as debt is eliminated.
+- **Real-Time Watcher Integration (`cartograph watch --lint-arch`)**: Automatically triggers incremental architectural verification on file save in `<500µs`.
+- **Quad-Engine Presentation Layer**: ANSI terminal with ASCII cycle ring traces, GitHub PR Markdown with Mermaid diagrams (`graph LR`), standard SARIF 2.1.0 for GitHub Code Scanning, JSON, and AI agent XML (`<architectural_lint_report>`).
 
 ---
 

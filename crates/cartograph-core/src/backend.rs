@@ -3,8 +3,8 @@ use async_trait::async_trait;
 
 use crate::error::Result;
 use crate::model::{
-    Edge, GraphStats, Node, RawFrontendCallerRecord, RawImpactRecord, RawRouteModelRecord,
-    RawRouteTraceRecord, RawTestRecord, SearchResult,
+    Edge, GraphStats, Node, RawFrontendCallerRecord, RawImpactRecord, RawInterFileEdgeRecord,
+    RawRouteModelRecord, RawRouteTraceRecord, RawTestRecord, SearchResult,
 };
 
 #[async_trait]
@@ -108,6 +108,16 @@ pub trait GraphStoreBackend: Send + Sync {
         &self,
         route_ids: &[String],
     ) -> Result<Vec<RawFrontendCallerRecord>>;
+
+    /// Retrieve all inter-file dependency edges (where source and target files differ),
+    /// joining with source and target node details, filtered by min_confidence.
+    async fn get_inter_file_dependencies(
+        &self,
+        min_confidence: f64,
+    ) -> Result<Vec<RawInterFileEdgeRecord>>;
+
+    /// Retrieve all distinct file paths tracked in the graph database.
+    async fn get_all_indexed_files(&self) -> Result<Vec<String>>;
 
     /// Return aggregate statistics of the graph store.
     async fn stats(&self) -> Result<GraphStats>;

@@ -323,3 +323,381 @@ pub struct TestRunnerConfig {
     pub args: Option<Vec<String>>,
 }
 
+use crate::model::EdgeKind;
+
+/// Granularity level for circular dependency detection
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CycleGranularity {
+    /// File-level dependencies (e.g. src/auth/login.rs -> src/user/profile.rs)
+    #[default]
+    File,
+    /// Module/directory-level dependencies (e.g. src/auth -> src/billing)
+    Module,
+    /// Package/crate-level dependencies (e.g. crates/core -> crates/engine)
+    Package,
+    /// Symbol-level dependencies (e.g. fn authenticate -> fn fetch_user)
+    Symbol,
+}
+
+impl CycleGranularity {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CycleGranularity::File => "file",
+            CycleGranularity::Module => "module",
+            CycleGranularity::Package => "package",
+            CycleGranularity::Symbol => "symbol",
+        }
+    }
+}
+
+impl std::fmt::Display for CycleGranularity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl std::str::FromStr for CycleGranularity {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "file" => Ok(CycleGranularity::File),
+            "module" => Ok(CycleGranularity::Module),
+            "package" | "crate" => Ok(CycleGranularity::Package),
+            "symbol" | "fn" => Ok(CycleGranularity::Symbol),
+            other => Err(format!(
+                "Unknown cycle granularity: {other}. Expected file, module, package, or symbol"
+            )),
+        }
+    }
+}
+
+/// Filter for dependency coupling nature: runtime execution vs type-only
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CouplingFilter {
+    /// Only evaluate runtime execution dependencies (Calls, value Imports, object instantiations).
+    /// Benign type-only imports (e.g. `import type`, `if TYPE_CHECKING:`) are excluded.
+    #[default]
+    Runtime,
+    /// Only evaluate type-only contract dependencies (interface implementations, type hints).
+    TypeOnly,
+    /// Evaluate all dependency edges without distinction.
+    All,
+}
+
+impl CouplingFilter {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CouplingFilter::Runtime => "runtime",
+            CouplingFilter::TypeOnly => "type_only",
+            CouplingFilter::All => "all",
+        }
+    }
+}
+
+impl std::fmt::Display for CouplingFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl std::str::FromStr for CouplingFilter {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "runtime" => Ok(CouplingFilter::Runtime),
+            "type" | "type_only" | "types" => Ok(CouplingFilter::TypeOnly),
+            "all" => Ok(CouplingFilter::All),
+            other => Err(format!(
+                "Unknown coupling filter: {other}. Expected runtime, type_only, or all"
+            )),
+        }
+    }
+}
+
+/// Severity classification of an architectural violation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ArchSeverity {
+    /// Informational advisory; does not fail CI
+    Info,
+    /// Warning; logged visibly, fails CI only under --strict or --fail-on warning
+    Warning,
+    /// Error; fails CI under default policies
+    #[default]
+    Error,
+}
+
+impl ArchSeverity {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ArchSeverity::Info => "info",
+            ArchSeverity::Warning => "warning",
+            ArchSeverity::Error => "error",
+        }
+    }
+}
+
+impl std::fmt::Display for ArchSeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl std::str::FromStr for ArchSeverity {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "info" => Ok(ArchSeverity::Info),
+            "warn" | "warning" => Ok(ArchSeverity::Warning),
+            "error" | "err" => Ok(ArchSeverity::Error),
+            other => Err(format!(
+                "Unknown severity: {other}. Expected info, warning, or error"
+            )),
+        }
+    }
+}
+
+/// Action to take when a rule matches an edge
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RuleAction {
+    /// Deny this dependency (violation if matched)
+    #[default]
+    Deny,
+    /// Allow this dependency (whitelisted)
+    Allow,
+}
+
+/// Configuration for an architectural layer
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArchLayerConfig {
+    /// Unique identifier for this layer (e.g. "domain", "application", "infrastructure", "presentation")
+    pub name: String,
+    /// Human-readable explanation of this layer's responsibilities
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Filepath glob patterns identifying components belonging to this layer
+    #[serde(default)]
+    pub patterns: Vec<String>,
+    /// Explicit list of layer names that this layer is forbidden from depending on
+    #[serde(default)]
+    pub forbidden: Vec<String>,
+    /// Explicit list of layer names that this layer is exclusively permitted to depend on
+    #[serde(default)]
+    pub allowed: Option<Vec<String>>,
+    /// Severity if a boundary violation occurs in this layer
+    #[serde(default = "default_severity_error")]
+    pub severity: ArchSeverity,
+}
+
+fn default_severity_error() -> ArchSeverity {
+    ArchSeverity::Error
+}
+
+/// Monorepo package boundary and encapsulation configuration
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PackageEncapsulationConfig {
+    /// Whether package boundary encapsulation is enforced
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Glob patterns defining package root directories (e.g. ["crates/*", "packages/*", "apps/*"])
+    #[serde(default = "default_package_roots")]
+    pub package_roots: Vec<String>,
+    /// Forbidden internal patterns for external consumers (e.g. ["**/internal/**", "**/private/**"])
+    #[serde(default = "default_internal_patterns")]
+    pub internal_patterns: Vec<String>,
+    /// Permitted public entry point file names
+    #[serde(default = "default_entrypoints")]
+    pub entrypoints: Vec<String>,
+    /// Severity when an external package deep-imports an internal module
+    #[serde(default = "default_severity_error")]
+    pub severity: ArchSeverity,
+}
+
+fn default_package_roots() -> Vec<String> {
+    vec![
+        "crates/*".to_string(),
+        "packages/*".to_string(),
+        "apps/*".to_string(),
+    ]
+}
+
+fn default_internal_patterns() -> Vec<String> {
+    vec!["**/internal/**".to_string(), "**/private/**".to_string()]
+}
+
+fn default_entrypoints() -> Vec<String> {
+    vec![
+        "index.ts".to_string(),
+        "index.js".to_string(),
+        "lib.rs".to_string(),
+        "mod.rs".to_string(),
+        "__init__.py".to_string(),
+    ]
+}
+
+impl Default for PackageEncapsulationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            package_roots: default_package_roots(),
+            internal_patterns: default_internal_patterns(),
+            entrypoints: default_entrypoints(),
+            severity: ArchSeverity::Error,
+        }
+    }
+}
+
+/// Fine-grained architectural boundary rule (bounded contexts, package isolation)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArchRuleConfig {
+    /// Name or ID of the rule (e.g. "auth-isolation", "no-direct-db")
+    pub name: String,
+    /// Human-readable description
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Source glob pattern (originating module/file)
+    pub source: String,
+    /// Target glob pattern (imported or called module/file)
+    pub target: String,
+    /// Action: deny or allow
+    #[serde(default = "default_rule_action_deny")]
+    pub action: RuleAction,
+    /// Specific edge kinds to match (e.g. ["imports", "calls"]). If None, matches all dependency edges.
+    #[serde(default)]
+    pub edge_kinds: Option<Vec<EdgeKind>>,
+    /// Severity level
+    #[serde(default = "default_severity_error")]
+    pub severity: ArchSeverity,
+    /// Custom error message to display when violated
+    #[serde(default)]
+    pub message: Option<String>,
+    /// Concrete remediation hint for fixing the violation
+    #[serde(default)]
+    pub hint: Option<String>,
+}
+
+fn default_rule_action_deny() -> RuleAction {
+    RuleAction::Deny
+}
+
+/// Architectural exemption rule (suppression / debt waiver)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArchExemptionRule {
+    /// Source filepath or glob pattern
+    pub source: String,
+    /// Target filepath or glob pattern
+    pub target: String,
+    /// Justification or tech-debt tracking ticket
+    #[serde(default)]
+    pub reason: Option<String>,
+    /// Expiration date (YYYY-MM-DD); if current date > expires, exemption is revoked
+    #[serde(default)]
+    pub expires: Option<String>,
+}
+
+/// Exemptions container
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ArchExemptionsConfig {
+    /// Glob patterns of paths completely excluded from all architectural linting (e.g. tests/**, fixtures/**)
+    #[serde(default)]
+    pub ignore_paths: Vec<String>,
+    /// Explicit allowed cross-layer edge exemptions
+    #[serde(default)]
+    pub allow: Vec<ArchExemptionRule>,
+}
+
+/// Complete architectural linting configuration in cartograph.toml
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LintArchConfig {
+    /// Whether architectural linting is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Preset architecture template (e.g. "clean-architecture", "hexagonal", "mvc", "monorepo")
+    #[serde(default)]
+    pub preset: Option<String>,
+    /// Enable circular dependency detection
+    #[serde(default = "default_true")]
+    pub detect_cycles: bool,
+    /// Granularity for cycle detection
+    #[serde(default)]
+    pub cycle_granularity: CycleGranularity,
+    /// Coupling filter: runtime, type_only, or all
+    #[serde(default)]
+    pub coupling: CouplingFilter,
+    /// Whether in-code AST @arch tags in docstrings/attributes are honored
+    #[serde(default = "default_true")]
+    pub honor_arch_tags: bool,
+    /// Monorepo package boundary encapsulation guard
+    #[serde(default)]
+    pub package_encapsulation: PackageEncapsulationConfig,
+    /// Maximum search depth / length of cycle paths to explore
+    #[serde(default = "default_max_cycle_depth")]
+    pub max_cycle_depth: usize,
+    /// Maximum number of cycles to extract before truncation
+    #[serde(default = "default_max_cycles")]
+    pub max_cycles: usize,
+    /// CI failure threshold: "error", "warning", or "never"
+    #[serde(default = "default_fail_on")]
+    pub fail_on: String,
+    /// Strict mode: treat all warnings as errors
+    #[serde(default)]
+    pub strict: bool,
+    /// Maximum permitted violations before failing CI
+    #[serde(default)]
+    pub max_violations: usize,
+    /// Path to technical debt baseline file
+    #[serde(default)]
+    pub baseline: Option<String>,
+    /// Automatically update baseline when violations are resolved
+    #[serde(default)]
+    pub ratchet: bool,
+    /// Ordered list of architectural layers
+    #[serde(default)]
+    pub layers: Vec<ArchLayerConfig>,
+    /// Fine-grained boundary rules
+    #[serde(default)]
+    pub rules: Vec<ArchRuleConfig>,
+    /// Exemptions and waivers
+    #[serde(default)]
+    pub exemptions: ArchExemptionsConfig,
+}
+
+fn default_max_cycle_depth() -> usize {
+    10
+}
+
+fn default_max_cycles() -> usize {
+    50
+}
+
+fn default_fail_on() -> String {
+    "error".to_string()
+}
+
+impl Default for LintArchConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            preset: None,
+            detect_cycles: true,
+            cycle_granularity: CycleGranularity::File,
+            coupling: CouplingFilter::Runtime,
+            honor_arch_tags: true,
+            package_encapsulation: PackageEncapsulationConfig::default(),
+            max_cycle_depth: default_max_cycle_depth(),
+            max_cycles: default_max_cycles(),
+            fail_on: default_fail_on(),
+            strict: false,
+            max_violations: 0,
+            baseline: None,
+            ratchet: false,
+            layers: Vec::new(),
+            rules: Vec::new(),
+            exemptions: ArchExemptionsConfig::default(),
+        }
+    }
+}
+

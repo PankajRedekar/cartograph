@@ -2,6 +2,7 @@ pub mod discovery;
 pub mod error;
 pub mod hasher;
 pub mod impact;
+pub mod lint_arch;
 pub mod linker;
 pub mod locate;
 pub mod pipeline;
@@ -17,6 +18,9 @@ pub use error::{EngineError, Result};
 pub use hasher::{DiscoveredFile, FileStatus, IncrementalChangeSet, IncrementalDetector};
 pub use impact::{
     ImpactAnalyzer, ImpactOutputFormat, ImpactQuery, SemVerGuard,
+};
+pub use lint_arch::{
+    baseline::ArchBaselineManager, diff::GitDiffScope, formatters::ArchOutputFormat, ArchLinter,
 };
 pub use linker::ReferenceResolver;
 pub use locate::{

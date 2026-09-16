@@ -24,6 +24,7 @@ pub struct WatcherSettings {
     pub debounce_duration: Duration,
     pub cst_cache_capacity: usize,
     pub track_blast_radius: bool,
+    pub lint_arch: Option<cartograph_core::config::LintArchConfig>,
 }
 
 impl Default for WatcherSettings {
@@ -34,6 +35,7 @@ impl Default for WatcherSettings {
             debounce_duration: Duration::from_millis(cfg.debounce_ms),
             cst_cache_capacity: cfg.cst_cache_capacity,
             track_blast_radius: cfg.track_blast_radius,
+            lint_arch: None,
         }
     }
 }
@@ -51,6 +53,13 @@ pub enum WatchEvent {
         filepath: String,
         duration_ms: u64,
         affected_dependents: Vec<String>,
+    },
+    ArchLintCompleted {
+        violations_count: usize,
+        cycles_count: usize,
+        duration_us: u64,
+        violations: Vec<cartograph_core::model::BoundaryViolation>,
+        cycles: Vec<cartograph_core::model::DependencyCycle>,
     },
     Error {
         message: String,
@@ -261,6 +270,7 @@ impl FileWatcher {
                         }
                     });
 
+                    let mut files_changed = false;
                     for (path, is_delete) in ready_paths {
                         let res = if is_delete || !path.exists() {
                             self.handle_file_delete(&path).await
@@ -270,12 +280,28 @@ impl FileWatcher {
 
                         match res {
                             Ok(Some(ev)) => {
+                                files_changed = true;
                                 let _ = event_tx.send(ev);
                             }
                             Ok(None) => {}
                             Err(e) => {
                                 let _ = event_tx.send(WatchEvent::Error {
                                     message: format!("Error processing {}: {e}", path.display()),
+                                });
+                            }
+                        }
+                    }
+
+                    if files_changed {
+                        if let Some(ref arch_cfg) = self.settings.lint_arch {
+                            let linter = crate::lint_arch::ArchLinter::new(self.backend.clone(), arch_cfg.clone());
+                            if let Ok(report) = linter.lint().await {
+                                let _ = event_tx.send(WatchEvent::ArchLintCompleted {
+                                    violations_count: report.violations.len(),
+                                    cycles_count: report.cycles.len(),
+                                    duration_us: report.summary.duration_micros,
+                                    violations: report.violations,
+                                    cycles: report.cycles,
                                 });
                             }
                         }

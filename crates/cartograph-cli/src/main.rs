@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use std::str::FromStr;
 
-use cartograph_core::config::{GitDiffMode, IndexConfig, StorageConfig};
+use cartograph_core::config::{
+    GitDiffMode, IndexConfig, LintArchConfig, StorageConfig,
+};
 use cartograph_core::model::{HttpMethod, RiskLevel, RouteFilterOptions, SemVerTarget, SimulationMode};
 use cartograph_db::create_backend;
 use cartograph_engine::discovery::DiscoveryConfig;
@@ -13,7 +15,9 @@ use cartograph_engine::impact::{ImpactAnalyzer, ImpactOutputFormat, ImpactQuery}
 use cartograph_engine::locate::{LocateCliOptions, OutputFormat, QueryParser, SubgraphLocator};
 use cartograph_engine::pipeline::IndexPipeline;
 use cartograph_engine::watcher::{FileWatcher, WatchEvent, WatcherSettings};
-use cartograph_engine::RouteEngine;
+use cartograph_engine::{
+    ArchBaselineManager, ArchLinter, ArchOutputFormat, GitDiffScope, RouteEngine,
+};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -83,6 +87,10 @@ enum Commands {
         /// Print verbose logs
         #[arg(short, long)]
         verbose: bool,
+
+        /// Enable real-time architectural boundary and cycle linting on file save (<500µs)
+        #[arg(long)]
+        lint_arch: bool,
     },
 
     /// Display code graph statistics and database health
@@ -425,6 +433,69 @@ enum Commands {
         #[arg(short, long)]
         interactive: bool,
     },
+
+    /// Lint architectural layer boundaries and circular dependencies (<10ms)
+    LintArch {
+        /// Root directory of repository
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Database profile or SQLite file path
+        #[arg(short, long, default_value = "default")]
+        db: String,
+
+        /// Architecture preset template (clean-architecture, hexagonal, mvc, monorepo)
+        #[arg(long)]
+        preset: Option<String>,
+
+        /// Cycle detection granularity: file, module, package, symbol (default: file)
+        #[arg(long)]
+        granularity: Option<String>,
+
+        /// Semantic coupling classification filter: runtime, type_only, all (default: all)
+        #[arg(long)]
+        coupling: Option<String>,
+
+        /// Strict mode: treat warnings as errors
+        #[arg(long)]
+        strict: bool,
+
+        /// Fail CI if errors or cycles are detected
+        #[arg(long)]
+        fail_on: Option<String>,
+
+        /// Record current technical debt violations to baseline file
+        #[arg(long)]
+        record_baseline: bool,
+
+        /// Path to custom technical debt baseline file
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+
+        /// Automatically prune resolved items from baseline (ratchet improvements)
+        #[arg(long)]
+        ratchet: bool,
+
+        /// Scope linting to changed files against git branch (e.g. main...HEAD)
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Scope linting to git staged files
+        #[arg(long)]
+        staged: bool,
+
+        /// Presentation output format: terminal, markdown, sarif, json, xml (auto-detected if omitted)
+        #[arg(short, long)]
+        format: Option<String>,
+
+        /// Output results formatted as JSON (shorthand for --format json)
+        #[arg(long)]
+        json: bool,
+
+        /// Output results formatted as SARIF 2.1.0 for GitHub Code Scanning
+        #[arg(long)]
+        sarif: bool,
+    },
 }
 
 /// Resolve storage config and ensure database parent directories exist
@@ -546,16 +617,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             db,
             debounce,
             verbose,
+            lint_arch,
         } => {
             let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
             let (storage_cfg, db_path) = resolve_storage_config(&canonical_root, &db);
-            let backend = create_backend(&storage_cfg)?;
+            let backend = std::sync::Arc::from(create_backend(&storage_cfg)?);
+
+            let arch_cfg = if lint_arch {
+                Some(LintArchConfig::default())
+            } else {
+                None
+            };
 
             let settings = WatcherSettings {
                 root_path: canonical_root.clone(),
                 debounce_duration: Duration::from_millis(debounce),
                 cst_cache_capacity: 500,
                 track_blast_radius: true,
+                lint_arch: arch_cfg,
             };
 
             let watcher = FileWatcher::new(backend, settings);
@@ -628,6 +707,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     "           └── ⚠️  {} affected dependents: {:?}",
                                     affected_dependents.len(),
                                     affected_dependents
+                                );
+                            }
+                        }
+                        WatchEvent::ArchLintCompleted {
+                            violations_count,
+                            cycles_count,
+                            duration_us,
+                            ..
+                        } => {
+                            let duration_ms = duration_us as f64 / 1000.0;
+                            if violations_count == 0 && cycles_count == 0 {
+                                println!(
+                                    "[{}] {} Clean (0 violations, 0 cycles in {:.2}ms)",
+                                    now.dimmed(),
+                                    "ARCH-LINT".bold().green(),
+                                    duration_ms
+                                );
+                            } else {
+                                println!(
+                                    "[{}] {} {} violations, {} cycles detected in {:.2}ms",
+                                    now.dimmed(),
+                                    "ARCH-LINT".bold().red(),
+                                    violations_count.to_string().red().bold(),
+                                    cycles_count.to_string().yellow().bold(),
+                                    duration_ms
                                 );
                             }
                         }
@@ -1166,6 +1270,125 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 }
+            }
+        }
+
+        Commands::LintArch {
+            path,
+            db,
+            preset,
+            granularity,
+            coupling,
+            strict,
+            fail_on,
+            record_baseline,
+            baseline,
+            ratchet,
+            branch,
+            staged,
+            format,
+            json,
+            sarif,
+        } => {
+            let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
+            let (storage_cfg, _db_path) = resolve_storage_config(&canonical_root, &db);
+            let backend = std::sync::Arc::from(create_backend(&storage_cfg)?);
+
+            let mut config = LintArchConfig::default();
+            if let Some(p) = preset {
+                config.preset = Some(p);
+            }
+            if let Some(g) = granularity {
+                if let Ok(gr) = g.parse() {
+                    config.cycle_granularity = gr;
+                }
+            }
+            if let Some(c) = coupling {
+                if let Ok(cp) = c.parse() {
+                    config.coupling = cp;
+                }
+            }
+            if strict {
+                config.strict = true;
+            }
+            if let Some(fo) = fail_on {
+                config.fail_on = fo;
+            }
+
+            // Git diff scope
+            let (scope, filter_diff) = if staged || branch.is_some() {
+                match GitDiffScope::from_git(&canonical_root, branch.as_deref(), staged) {
+                    Ok(s) => (Some(s), true),
+                    Err(e) => {
+                        eprintln!("Warning: Failed to inspect git diff: {e}");
+                        (None, false)
+                    }
+                }
+            } else {
+                (None, false)
+            };
+
+            // Baseline management
+            let baseline_file = baseline.unwrap_or_else(|| canonical_root.join(".cartograph/arch-baseline.json"));
+            let loaded_baseline = if baseline_file.exists() && !record_baseline {
+                match ArchBaselineManager::load_from_path(&baseline_file) {
+                    Ok(b) => Some(b),
+                    Err(e) => {
+                        eprintln!("Warning: Failed to load baseline from {}: {e}", baseline_file.display());
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            let linter = ArchLinter::new(backend, config)
+                .with_git_scope(scope, filter_diff)
+                .with_baseline(loaded_baseline, Some(baseline_file.clone()))
+                .with_ratchet(ratchet);
+
+            let report = linter.lint().await?;
+
+            if record_baseline {
+                let new_baseline = ArchBaselineManager::record_baseline(
+                    &report.violations,
+                    &report.cycles,
+                    None,
+                );
+                ArchBaselineManager::save_to_path(&baseline_file, &new_baseline)?;
+                println!(
+                    "{} Recorded {} violations and {} cycles to baseline: {}",
+                    "✔".green().bold(),
+                    new_baseline.violations.len().to_string().bold(),
+                    new_baseline.cycles.len().to_string().bold(),
+                    baseline_file.display().to_string().cyan()
+                );
+                return Ok(());
+            }
+
+            let chosen_format = if json {
+                ArchOutputFormat::Json
+            } else if sarif {
+                ArchOutputFormat::Sarif
+            } else if let Some(ref f) = format {
+                match f.to_lowercase().as_str() {
+                    "json" => ArchOutputFormat::Json,
+                    "sarif" => ArchOutputFormat::Sarif,
+                    "markdown" | "md" => ArchOutputFormat::Markdown,
+                    "xml" | "agent-xml" => ArchOutputFormat::AgentXml,
+                    _ => ArchOutputFormat::Terminal,
+                }
+            } else if !io::stdout().is_terminal() {
+                ArchOutputFormat::Json
+            } else {
+                ArchOutputFormat::Terminal
+            };
+
+            let formatted = chosen_format.format_report(&report);
+            print!("{formatted}");
+
+            if !report.summary.passed {
+                std::process::exit(1);
             }
         }
     }

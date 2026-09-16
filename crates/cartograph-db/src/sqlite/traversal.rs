@@ -2,8 +2,8 @@ use rusqlite::Connection;
 
 use cartograph_core::error::{CartographError, Result};
 use cartograph_core::model::{
-    EdgeKind, Node, NodeKind, RawFrontendCallerRecord, RawImpactRecord, RawRouteModelRecord,
-    RawRouteTraceRecord, RawTestRecord,
+    EdgeKind, Node, NodeKind, RawFrontendCallerRecord, RawImpactRecord, RawInterFileEdgeRecord,
+    RawRouteModelRecord, RawRouteTraceRecord, RawTestRecord,
 };
 
 pub(crate) fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<Node> {
@@ -837,6 +837,109 @@ pub fn get_frontend_callers_for_routes(
         for row in rows {
             results.push(row.map_err(|e| CartographError::Database(format!("Failed to map frontend caller record: {e}")))?);
         }
+    }
+
+    Ok(results)
+}
+
+pub fn get_inter_file_dependencies(
+    conn: &Connection,
+    min_confidence: f64,
+) -> Result<Vec<RawInterFileEdgeRecord>> {
+    let sql = r#"
+        SELECT 
+            sn.id AS source_id,
+            sn.name AS source_name,
+            sn.kind AS source_kind,
+            sn.filepath AS source_file,
+            sn.start_line AS source_line,
+            sn.start_col AS source_col,
+            tn.id AS target_id,
+            tn.name AS target_name,
+            tn.kind AS target_kind,
+            tn.filepath AS target_file,
+            e.kind AS edge_kind,
+            e.confidence AS confidence,
+            e.metadata AS metadata
+        FROM edges e
+        JOIN nodes sn ON e.source_id = sn.id
+        JOIN nodes tn ON e.target_id = tn.id
+        WHERE sn.filepath != tn.filepath
+          AND e.kind IN ('imports', 'calls', 'extends', 'implements', 'references')
+          AND (e.confidence IS NULL OR e.confidence >= ?1)
+        ORDER BY sn.filepath, sn.start_line
+    "#;
+
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| CartographError::Database(format!("Failed to prepare get_inter_file_dependencies: {e}")))?;
+
+    let rows = stmt
+        .query_map([min_confidence], |row| {
+            let source_id: String = row.get(0)?;
+            let source_name: String = row.get(1)?;
+            let source_kind: String = row.get(2)?;
+            let source_file: String = row.get(3)?;
+            let source_line: Option<u32> = row.get(4)?;
+            let source_col: Option<u32> = row.get(5)?;
+            let target_id: String = row.get(6)?;
+            let target_name: String = row.get(7)?;
+            let target_kind: String = row.get(8)?;
+            let target_file: String = row.get(9)?;
+            let edge_kind: String = row.get(10)?;
+            let confidence: Option<f64> = row.get(11)?;
+            let metadata_str: Option<String> = row.get(12)?;
+
+            let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
+
+            Ok(RawInterFileEdgeRecord {
+                source_id,
+                source_name,
+                source_kind,
+                source_file,
+                source_line: source_line.map(|l| l as usize),
+                source_col: source_col.map(|c| c as usize),
+                target_id,
+                target_name,
+                target_kind,
+                target_file,
+                edge_kind,
+                confidence,
+                metadata,
+            })
+        })
+        .map_err(|e| CartographError::Database(format!("Failed to execute get_inter_file_dependencies: {e}")))?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(row.map_err(|e| CartographError::Database(format!("Failed to map inter-file edge record: {e}")))?);
+    }
+
+    Ok(results)
+}
+
+pub fn get_all_indexed_files(conn: &Connection) -> Result<Vec<String>> {
+    let sql = r#"
+        SELECT DISTINCT filepath FROM (
+            SELECT filepath FROM file_hashes
+            UNION
+            SELECT filepath FROM nodes
+        ) ORDER BY filepath
+    "#;
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| CartographError::Database(format!("Failed to prepare get_all_indexed_files: {e}")))?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            let filepath: String = row.get(0)?;
+            Ok(filepath)
+        })
+        .map_err(|e| CartographError::Database(format!("Failed to execute get_all_indexed_files: {e}")))?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(row.map_err(|e| CartographError::Database(format!("Failed to map indexed file: {e}")))?);
     }
 
     Ok(results)
