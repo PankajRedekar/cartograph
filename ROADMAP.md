@@ -121,10 +121,19 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - **Quad-Engine Presentation & Interactive TUI**: Colorized terminal badges with collapsible ASCII call trees, interactive split-pane TUI explorer (`-i`), GitHub PR Markdown comments with auto-generated Mermaid sequence diagrams (`sequenceDiagram`), machine JSON, and LLM `<api_routes>` XML context blocks.
   - **Performance SLA**: Sub-3ms point route full-stack trace, sub-15ms complete monorepo API inventory discovery.
 
-- [ ] **2.4 Architectural Linter & Boundary Guard (`cartograph lint-arch`)**
-  - Circular dependency detection across modules and packages.
-  - Layer violation enforcement (e.g., preventing DB models from importing frontend views or controllers).
-  - Configurable architecture rules in `cartograph.toml`.
+- [x] **2.4 Architectural Linter & Boundary Guard (`cartograph lint-arch`)**
+  - **Tarjan's Linear SCC & Bounded Johnson's Cycle Engine**: Linear $O(V + E)$ Strongly Connected Components decomposition with Johnson's elementary cycle extraction, canonical lexicographical ring normalization, and SHA-256 fingerprinting.
+  - **Runtime vs. Type-Only Semantic Coupling Filter (`--coupling`)**: Distinguishes dangerous runtime execution cycles (deadlocks, recursive loops) from benign compile-time type cycles (`type_only`, `runtime`, `all`).
+  - **Minimum Feedback Arc Set (FAS) Cut-Edge Advisor**: Graph centrality algorithm identifying optimal cut edge(s) that break multiple cycles simultaneously with concrete dependency inversion guidance.
+  - **Hierarchical Layer Purity Classifier**: Enforces strict unidirectional and relaxed multi-layer rules with glob matching and in-code AST tags (`/// @arch layer=...`, `#[cartograph(layer="...")]`).
+  - **Monorepo Package Encapsulation Guard (`--enforce-packages`)**: Prevents external deep-imports into private package internals (`**/internal/**`, `**/private/**`), restricting cross-package access to designated public entrypoints (`lib.rs`, `index.ts`).
+  - **Fine-Grained Directional Boundary Rules & Date-Expiring Exemptions**: Declarative allow/deny rule constraints in `cartograph.toml` with time-bombed debt waivers (`expires = "YYYY-MM-DD"`).
+  - **Zero-Config Built-in Architecture Presets (`--preset`)**: Ready-to-use Clean Architecture, Hexagonal (Ports & Adapters), MVC, and Monorepo templates.
+  - **Technical Debt Baselines & Auto-Ratcheting (`--record-baseline`, `--ratchet`)**: Snapshots existing architectural debt into `.cartograph/arch-baseline.json` to prevent PR regressions while automatically pruning resolved debt.
+  - **Git Diff Scoping (`--branch`, `--staged`)**: Filters boundary violations and cycles to only code modified in the current branch or staged hunks.
+  - **Real-Time Watcher Integration (`cartograph watch --lint-arch`)**: Incremental re-lint hook executing on file save in `<500µs`.
+  - **Quad-Engine Presentation & CI Gating**: ANSI terminal with ASCII cycle ring traces, GitHub PR Markdown with Mermaid diagrams (`graph LR`), standard SARIF 2.1.0 for GitHub Code Scanning, JSON, and AI agent XML (`<architectural_lint_report>`).
+  - **Performance SLA**: Evaluates 50+ files and 150+ dependency edges in **<2ms** (SLA target: <10ms).
 
 - [ ] **2.5 God-Class & Complexity Heatmap (`cartograph complexity`)**
   - Calculates in-degree / out-degree coupling metrics, Cyclomatic complexity, and lines of code (LOC).

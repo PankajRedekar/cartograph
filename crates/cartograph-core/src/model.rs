@@ -1145,4 +1145,216 @@ pub struct RawFrontendCallerRecord {
     pub url_pattern: String,
 }
 
+use chrono::{DateTime, Utc};
+use crate::config::{ArchSeverity, CycleGranularity};
+
+/// A single node hop within a circular dependency ring
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CycleHop {
+    /// Node canonical URI
+    pub node_id: String,
+    /// Symbol or file name
+    pub name: String,
+    /// Filepath of this component
+    pub filepath: String,
+    /// Line number where this component is declared or where the outgoing call is made
+    pub line: Option<usize>,
+    /// Column number
+    pub column: Option<usize>,
+    /// Node kind (File, Module, Function, Struct, etc.)
+    pub kind: NodeKind,
+    /// Outgoing edge kind leading to the next node in the cycle
+    pub outgoing_edge_kind: EdgeKind,
+    /// Whether this hop represents a runtime execution edge (calls, value import) or type-only
+    pub is_runtime: bool,
+}
+
+/// Recommended cut edge to break a circular dependency
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FeedbackArcCut {
+    /// Source node in the cycle
+    pub source_id: String,
+    /// Target node in the cycle
+    pub target_id: String,
+    /// Edge kind
+    pub edge_kind: EdgeKind,
+    /// Source filepath
+    pub source_file: String,
+    /// Target filepath
+    pub target_file: String,
+    /// Number of distinct cycles broken if this edge is severed
+    pub cycles_broken_count: usize,
+    /// Concrete refactoring suggestion (e.g. "Extract interface or invert dependency")
+    pub remediation_advice: String,
+}
+
+/// A detected circular dependency loop
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DependencyCycle {
+    /// Unique SHA-256 fingerprint of this cycle ring (normalized by lexicographically lowest node)
+    pub fingerprint: String,
+    /// Granularity of this cycle (File, Module, Package, Symbol)
+    pub granularity: CycleGranularity,
+    /// Number of hops in the cycle
+    pub length: usize,
+    /// Whether this cycle contains at least one active runtime execution call (deadlock risk)
+    pub is_runtime_cycle: bool,
+    /// Ordered sequence of hops forming the ring (A -> B -> C -> A)
+    pub hops: Vec<CycleHop>,
+    /// Recommended cut edge to break this cycle
+    pub recommended_cut: Option<FeedbackArcCut>,
+    /// Severity (Runtime cycles = Error, Type-only cycles = Warning/Info)
+    pub severity: ArchSeverity,
+}
+
+/// Specific architectural boundary violation
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BoundaryViolation {
+    /// Unique SHA-256 fingerprint for baseline tracking
+    pub fingerprint: String,
+    /// Name of the broken rule or layer constraint
+    pub rule_name: String,
+    /// Category of violation: "layer_violation", "boundary_rule", "package_encapsulation", "cycle"
+    pub category: String,
+    /// Severity level
+    pub severity: ArchSeverity,
+    /// Source node URI
+    pub source_id: String,
+    /// Source symbol name
+    pub source_name: String,
+    /// Source relative filepath
+    pub source_file: String,
+    /// Source layer name (if layer violation)
+    pub source_layer: Option<String>,
+    /// Target node URI
+    pub target_id: String,
+    /// Target symbol name
+    pub target_name: String,
+    /// Target relative filepath
+    pub target_file: String,
+    /// Target layer name (if layer violation)
+    pub target_layer: Option<String>,
+    /// Kind of edge causing the breach (Imports, Calls, etc.)
+    pub edge_kind: EdgeKind,
+    /// Exact line number in source file
+    pub line: Option<usize>,
+    /// Exact column number in source file
+    pub column: Option<usize>,
+    /// Source code snippet of the offending statement (e.g. "use crate::controllers::*")
+    pub snippet: Option<String>,
+    /// Diagnostic explanation message
+    pub message: String,
+    /// Actionable refactoring guidance
+    pub remediation_hint: Option<String>,
+    /// Whether this violation is suppressed because it matches the baseline
+    pub is_baseline_suppressed: bool,
+    /// Whether this violation was introduced by the current git branch diff
+    pub is_new_in_diff: bool,
+}
+
+/// Summary scorecard of architectural linting
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct LintArchSummary {
+    /// Total number of files evaluated
+    pub files_analyzed: usize,
+    /// Total number of dependency edges inspected
+    pub edges_inspected: usize,
+    /// Total number of layers configured
+    pub layers_count: usize,
+    /// Total number of custom boundary rules evaluated
+    pub rules_count: usize,
+    /// Total number of circular dependency loops found
+    pub cycles_count: usize,
+    /// Number of runtime cycles (deadlock risk)
+    pub runtime_cycles_count: usize,
+    /// Number of type-only cycles (benign)
+    pub type_cycles_count: usize,
+    /// Total active violations (excluding baseline suppressed)
+    pub active_violations_count: usize,
+    /// Number of active errors
+    pub active_errors_count: usize,
+    /// Number of active warnings
+    pub active_warnings_count: usize,
+    /// Number of pre-existing violations suppressed by baseline
+    pub baseline_suppressed_count: usize,
+    /// Number of newly introduced violations in git diff
+    pub new_in_diff_count: usize,
+    /// Overall CI pass/fail status
+    pub passed: bool,
+    /// Total execution duration in microseconds
+    pub duration_micros: u64,
+}
+
+/// Complete architectural linting report
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LintArchReport {
+    /// High-level scorecard
+    pub summary: LintArchSummary,
+    /// Detected circular dependencies
+    pub cycles: Vec<DependencyCycle>,
+    /// Detected boundary & layer violations
+    pub violations: Vec<BoundaryViolation>,
+    /// List of suppressed baseline violations (for inspection)
+    pub suppressed_violations: Vec<BoundaryViolation>,
+    /// Timestamp of execution
+    pub timestamp: DateTime<Utc>,
+}
+
+/// Serialized baseline file storing accepted technical debt
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArchBaseline {
+    /// Baseline schema version (e.g. "1.0")
+    pub version: String,
+    /// ISO 8601 timestamp when baseline was recorded
+    pub recorded_at: String,
+    /// Git commit SHA at time of recording
+    pub git_commit: Option<String>,
+    /// Recorded violation entries
+    pub violations: Vec<BaselineViolationEntry>,
+    /// Recorded cycle entries
+    pub cycles: Vec<BaselineCycleEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct BaselineViolationEntry {
+    /// SHA-256 fingerprint
+    pub fingerprint: String,
+    /// Rule name
+    pub rule_name: String,
+    /// Source filepath
+    pub source_file: String,
+    /// Target filepath
+    pub target_file: String,
+    /// Edge kind
+    pub edge_kind: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct BaselineCycleEntry {
+    /// SHA-256 fingerprint of normalized cycle
+    pub fingerprint: String,
+    /// Cycle length
+    pub length: usize,
+    /// Ordered filepaths in the cycle
+    pub path: Vec<String>,
+}
+
+/// Raw record returned by database for inter-file dependency analysis
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawInterFileEdgeRecord {
+    pub source_id: String,
+    pub source_name: String,
+    pub source_kind: String,
+    pub source_file: String,
+    pub source_line: Option<usize>,
+    pub source_col: Option<usize>,
+    pub target_id: String,
+    pub target_name: String,
+    pub target_kind: String,
+    pub target_file: String,
+    pub edge_kind: String,
+    pub confidence: Option<f64>,
+    pub metadata: Option<serde_json::Value>,
+}
+
 

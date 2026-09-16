@@ -9,7 +9,7 @@ use cartograph_core::config::MemoryConfig;
 use cartograph_core::error::Result;
 use cartograph_core::model::{
     Edge, EdgeKind, GraphStats, Node, NodeKind, RawFrontendCallerRecord, RawImpactRecord,
-    RawRouteModelRecord, RawRouteTraceRecord, RawTestRecord, SearchResult,
+    RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord, RawTestRecord, SearchResult,
 };
 
 #[derive(Default)]
@@ -906,6 +906,72 @@ impl GraphStoreBackend for MemoryBackend {
 
         results.sort_by(|a, b| a.route_id.cmp(&b.route_id).then_with(|| a.caller_node.id.cmp(&b.caller_node.id)));
         Ok(results)
+    }
+
+    async fn get_inter_file_dependencies(
+        &self,
+        min_confidence: f64,
+    ) -> Result<Vec<RawInterFileEdgeRecord>> {
+        let state = self.state.read();
+        let mut results = Vec::new();
+
+        for edges in state.forward_edges.values() {
+            for edge in edges {
+                let conf = edge.confidence.unwrap_or(1.0);
+                if conf < min_confidence {
+                    continue;
+                }
+
+                let kind_str = edge.kind.as_str();
+                if !matches!(
+                    kind_str,
+                    "imports" | "calls" | "extends" | "implements" | "references"
+                ) {
+                    continue;
+                }
+
+                if let (Some(source_node), Some(target_node)) = (
+                    state.nodes.get(&edge.source_id),
+                    state.nodes.get(&edge.target_id),
+                ) {
+                    if source_node.filepath != target_node.filepath {
+                        results.push(RawInterFileEdgeRecord {
+                            source_id: source_node.id.clone(),
+                            source_name: source_node.name.clone(),
+                            source_kind: source_node.kind.as_str().to_string(),
+                            source_file: source_node.filepath.clone(),
+                            source_line: source_node.start_line.map(|l| l as usize),
+                            source_col: source_node.start_col.map(|c| c as usize),
+                            target_id: target_node.id.clone(),
+                            target_name: target_node.name.clone(),
+                            target_kind: target_node.kind.as_str().to_string(),
+                            target_file: target_node.filepath.clone(),
+                            edge_kind: kind_str.to_string(),
+                            confidence: edge.confidence,
+                            metadata: edge.metadata.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        results.sort_by(|a, b| {
+            a.source_file
+                .cmp(&b.source_file)
+                .then_with(|| a.source_line.cmp(&b.source_line))
+        });
+        Ok(results)
+    }
+
+    async fn get_all_indexed_files(&self) -> Result<Vec<String>> {
+        let state = self.state.read();
+        let mut files: HashSet<String> = state.file_hashes.keys().cloned().collect();
+        for file in state.nodes_by_file.keys() {
+            files.insert(file.clone());
+        }
+        let mut result: Vec<String> = files.into_iter().collect();
+        result.sort();
+        Ok(result)
     }
 
     async fn stats(&self) -> Result<GraphStats> {

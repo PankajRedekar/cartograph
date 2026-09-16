@@ -6,10 +6,18 @@ pub mod uri;
 
 pub use backend::GraphStoreBackend;
 pub use config::{
-    GitDiffMode, IndexConfig, MemoryConfig, ProfileConfig, SqliteConfig, StorageConfig, WatchConfig,
+    ArchExemptionRule, ArchExemptionsConfig, ArchLayerConfig, ArchRuleConfig, ArchSeverity,
+    CouplingFilter, CycleGranularity, GitDiffMode, IndexConfig, LintArchConfig, MemoryConfig,
+    PackageEncapsulationConfig, ProfileConfig, RuleAction, SqliteConfig, StorageConfig,
+    WatchConfig,
 };
 pub use error::{CartographError, Result};
-pub use model::{Edge, EdgeKind, GraphStats, Node, NodeKind, SearchResult};
+pub use model::{
+    ArchBaseline, BaselineCycleEntry, BaselineViolationEntry, BoundaryViolation, CycleHop,
+    DependencyCycle, Edge, EdgeKind, FeedbackArcCut, GraphStats, LintArchReport, LintArchSummary,
+    Node, NodeKind, RawFrontendCallerRecord, RawImpactRecord, RawInterFileEdgeRecord,
+    RawRouteModelRecord, RawRouteTraceRecord, RawTestRecord, SearchResult,
+};
 pub use uri::{build_uri, parse_uri, CanonicalUri, URI_SCHEME};
 
 #[cfg(test)]

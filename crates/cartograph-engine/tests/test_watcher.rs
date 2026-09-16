@@ -28,6 +28,7 @@ async fn test_watcher_handle_file_save_and_noop() {
         debounce_duration: Duration::from_millis(25),
         cst_cache_capacity: 100,
         track_blast_radius: true,
+        lint_arch: None,
     };
 
     let watcher = FileWatcher::new(backend.clone(), settings);
@@ -96,6 +97,7 @@ fn handle() {
         debounce_duration: Duration::from_millis(25),
         cst_cache_capacity: 100,
         track_blast_radius: true,
+        lint_arch: None,
     };
     let watcher = FileWatcher::new(backend.clone(), settings);
 
@@ -147,6 +149,7 @@ async fn test_watcher_background_loop_and_channel_dispatch() {
         debounce_duration: Duration::from_millis(30),
         cst_cache_capacity: 50,
         track_blast_radius: false,
+        lint_arch: None,
     };
     let watcher = Arc::new(FileWatcher::new(backend.clone(), settings));
 
