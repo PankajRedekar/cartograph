@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::DeadCodeConfig;
 use cartograph_core::error::Result;
 use cartograph_core::model::RawDeadSymbolRecord;
+use std::sync::Arc;
 
 /// Executes forward reachability from living roots and retrieves candidate dead symbols,
 /// applying physical line count filters and path ignore patterns.

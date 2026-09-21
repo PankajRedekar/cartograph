@@ -1,9 +1,9 @@
-use std::collections::{HashMap, HashSet, VecDeque};
 use cartograph_ast::ClassComplexity;
 use cartograph_core::config::ComplexityConfig;
 use cartograph_core::model::{
     ClassCohesionMetric, DecompositionCluster, GodClassEvaluation, GodClassSeverity,
 };
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Method execution profile within a class
 #[derive(Debug, Clone)]
@@ -157,7 +157,8 @@ impl GodClassAnalyzer {
         let method_factor = (method_count as f64 / config.max_class_methods as f64).min(2.0) * 20.0;
         let lcom4_factor = ((lcom4 as f64 - 1.0) / 3.0).clamp(0.0, 1.0) * 25.0;
 
-        let god_class_index = (wmc_factor + loc_factor + method_factor + lcom4_factor).clamp(0.0, 100.0);
+        let god_class_index =
+            (wmc_factor + loc_factor + method_factor + lcom4_factor).clamp(0.0, 100.0);
 
         let is_god_class = triggers.len() >= 2 || god_class_index >= config.max_god_class_index;
 
@@ -175,7 +176,8 @@ impl GodClassAnalyzer {
         let mut candidate_extractions = Vec::new();
         if lcom4 > 1 {
             for (idx, comp) in components.iter().enumerate() {
-                let comp_methods: Vec<String> = comp.iter().map(|&i| methods[i].name.clone()).collect();
+                let comp_methods: Vec<String> =
+                    comp.iter().map(|&i| methods[i].name.clone()).collect();
                 let mut comp_fields = HashSet::new();
                 for &i in comp {
                     for f in &methods[i].fields_accessed {
@@ -238,7 +240,7 @@ impl GodClassAnalyzer {
         for trigger in &eval.triggers {
             prompt.push_str(&format!("- {}\n", trigger));
         }
-        prompt.push_str("\n");
+        prompt.push('\n');
 
         prompt.push_str("## Decomposition Plan (LCOM4 Connected Components)\n");
         for cluster in &eval.candidate_extractions {
@@ -247,11 +249,17 @@ impl GodClassAnalyzer {
                 cluster.candidate_name, cluster.method_percentage
             ));
             prompt.push_str(&format!("- **Rationale**: {}\n", cluster.rationale));
-            prompt.push_str(&format!("- **Methods to Move**: `{}`\n", cluster.methods.join("`, `")));
+            prompt.push_str(&format!(
+                "- **Methods to Move**: `{}`\n",
+                cluster.methods.join("`, `")
+            ));
             if !cluster.fields.is_empty() {
-                prompt.push_str(&format!("- **Fields to Encapsulate**: `{}`\n", cluster.fields.join("`, `")));
+                prompt.push_str(&format!(
+                    "- **Fields to Encapsulate**: `{}`\n",
+                    cluster.fields.join("`, `")
+                ));
             }
-            prompt.push_str("\n");
+            prompt.push('\n');
         }
 
         prompt.push_str("## Refactoring Instructions for Autonomous AI Agent\n");
@@ -269,10 +277,13 @@ impl GodClassAnalyzer {
 
 fn synthesize_cluster_name(class_name: &str, methods: &[String], cluster_id: usize) -> String {
     // Find common prefixes or keywords among methods
-    let keywords = ["auth", "token", "session", "user", "order", "payment", "cache", "event", "log", "metric", "render", "config", "http", "db"];
+    let keywords = [
+        "auth", "token", "session", "user", "order", "payment", "cache", "event", "log", "metric",
+        "render", "config", "http", "db",
+    ];
     for kw in keywords {
         if methods.iter().any(|m| m.to_lowercase().contains(kw)) {
-            let capitalized = format!("{}{}", &kw[..1].to_uppercase(), &kw[1..]);
+            let capitalized = format!("{}{}", kw[..1].to_uppercase(), &kw[1..]);
             return format!("{class_name}{capitalized}Handler");
         }
     }
@@ -280,7 +291,7 @@ fn synthesize_cluster_name(class_name: &str, methods: &[String], cluster_id: usi
     if let Some(first_method) = methods.first() {
         let parts: Vec<&str> = first_method.split('_').collect();
         if let Some(lead) = parts.first() {
-            let capitalized = format!("{}{}", &lead[..1].to_uppercase(), &lead[1..]);
+            let capitalized = format!("{}{}", lead[..1].to_uppercase(), &lead[1..]);
             return format!("{class_name}{capitalized}Subsystem");
         }
     }

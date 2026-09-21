@@ -1,5 +1,5 @@
-use cartograph_ast::{ParseContext, PythonParser};
 use cartograph_ast::traits::LanguageParser;
+use cartograph_ast::{ParseContext, PythonParser};
 
 #[test]
 fn test_differential_hashing_preserves_sibling_checksums() {
@@ -41,8 +41,16 @@ class AccountService:
     let orig_deposit = parsed1.nodes.iter().find(|n| n.name == "deposit").unwrap();
     let mod_deposit = parsed2.nodes.iter().find(|n| n.name == "deposit").unwrap();
 
-    let orig_balance = parsed1.nodes.iter().find(|n| n.name == "check_balance").unwrap();
-    let mod_balance = parsed2.nodes.iter().find(|n| n.name == "check_balance").unwrap();
+    let orig_balance = parsed1
+        .nodes
+        .iter()
+        .find(|n| n.name == "check_balance")
+        .unwrap();
+    let mod_balance = parsed2
+        .nodes
+        .iter()
+        .find(|n| n.name == "check_balance")
+        .unwrap();
 
     let orig_withdraw = parsed1.nodes.iter().find(|n| n.name == "withdraw").unwrap();
     let mod_withdraw = parsed2.nodes.iter().find(|n| n.name == "withdraw").unwrap();

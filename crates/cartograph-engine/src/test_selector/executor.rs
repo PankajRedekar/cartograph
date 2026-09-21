@@ -1,8 +1,8 @@
-use std::process::Command;
-use std::time::Instant;
 use cartograph_core::error::{CartographError, Result};
 use cartograph_core::model::TestRunnerInvocation;
 use colored::*;
+use std::process::Command;
+use std::time::Instant;
 
 #[derive(Debug, Clone)]
 pub struct ExecutionSummary {
@@ -17,10 +17,7 @@ pub struct TestExecutor;
 
 impl TestExecutor {
     /// Execute synthesized runner commands sequentially with live streaming and bail support
-    pub fn execute(
-        invocations: &[TestRunnerInvocation],
-        bail: bool,
-    ) -> Result<ExecutionSummary> {
+    pub fn execute(invocations: &[TestRunnerInvocation], bail: bool) -> Result<ExecutionSummary> {
         if invocations.is_empty() {
             println!("{}", "No tests selected to execute.".dimmed());
             return Ok(ExecutionSummary {
@@ -92,7 +89,9 @@ impl TestExecutor {
                 if bail {
                     println!(
                         "{}",
-                        "🛑 --bail enabled: aborting remaining test runs immediately.".bold().yellow()
+                        "🛑 --bail enabled: aborting remaining test runs immediately."
+                            .bold()
+                            .yellow()
                     );
                     break;
                 }

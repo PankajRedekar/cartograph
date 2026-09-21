@@ -65,8 +65,12 @@ impl AstRegistry {
         registry.register(Arc::new(crate::languages::python::PythonParser::new()));
         #[cfg(feature = "typescript")]
         {
-            registry.register(Arc::new(crate::languages::typescript::TypeScriptParser::typescript()));
-            registry.register(Arc::new(crate::languages::typescript::TypeScriptParser::tsx()));
+            registry.register(Arc::new(
+                crate::languages::typescript::TypeScriptParser::typescript(),
+            ));
+            registry.register(Arc::new(
+                crate::languages::typescript::TypeScriptParser::tsx(),
+            ));
         }
         #[cfg(feature = "ruby")]
         registry.register(Arc::new(crate::languages::ruby::RubyParser::new()));
@@ -84,15 +88,14 @@ impl AstRegistry {
     /// Check if a file's content or filename indicates generated code
     pub fn is_generated_content(filepath: &str, content: &str) -> bool {
         let path = Path::new(filepath);
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name.ends_with(".min.js")
+        if let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && (name.ends_with(".min.js")
                 || name.ends_with(".min.css")
                 || name.ends_with(".pb.go")
                 || name.ends_with("_pb2.py")
-                || name.ends_with(".d.ts.map")
-            {
-                return true;
-            }
+                || name.ends_with(".d.ts.map"))
+        {
+            return true;
         }
 
         for line in content.lines().take(15) {
@@ -109,15 +112,15 @@ impl AstRegistry {
 
     /// Check if a path has a supported extension or special filename without reading content
     pub fn is_supported_path(&self, path: &Path) -> bool {
-        if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-            if self.parsers_by_name.contains_key(filename) {
-                return true;
-            }
+        if let Some(filename) = path.file_name().and_then(|f| f.to_str())
+            && self.parsers_by_name.contains_key(filename)
+        {
+            return true;
         }
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            if self.parsers_by_ext.contains_key(&ext.to_lowercase()) {
-                return true;
-            }
+        if let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && self.parsers_by_ext.contains_key(&ext.to_lowercase())
+        {
+            return true;
         }
         false
     }
@@ -125,37 +128,38 @@ impl AstRegistry {
     /// Resolve parser for a given file path and content
     pub fn resolve_parser(&self, path: &Path, content: &str) -> Result<Arc<dyn LanguageParser>> {
         // 1. Exact special filename check (e.g. routes.rb, Gemfile)
-        if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-            if let Some(p) = self.parsers_by_name.get(filename) {
-                return Ok(Arc::clone(p));
-            }
+        if let Some(filename) = path.file_name().and_then(|f| f.to_str())
+            && let Some(p) = self.parsers_by_name.get(filename)
+        {
+            return Ok(Arc::clone(p));
         }
 
         // 2. Extension check (.py, .ts, .tsx, .rb, etc.)
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            if let Some(p) = self.parsers_by_ext.get(&ext.to_lowercase()) {
-                return Ok(Arc::clone(p));
-            }
+        if let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && let Some(p) = self.parsers_by_ext.get(&ext.to_lowercase())
+        {
+            return Ok(Arc::clone(p));
         }
 
         // 3. Shebang check (#!/usr/bin/env python3)
-        if content.starts_with("#!") {
-            if let Some(first_line) = content.lines().next() {
-                if first_line.contains("python") {
-                    if let Some(p) = self.parsers_by_id.get("python") {
-                        return Ok(Arc::clone(p));
-                    }
-                } else if first_line.contains("ruby") {
-                    if let Some(p) = self.parsers_by_id.get("ruby") {
-                        return Ok(Arc::clone(p));
-                    }
-                } else if first_line.contains("node") || first_line.contains("deno") {
-                    if let Some(p) = self.parsers_by_id.get("javascript")
-                        .or_else(|| self.parsers_by_id.get("typescript"))
-                    {
-                        return Ok(Arc::clone(p));
-                    }
+        if content.starts_with("#!")
+            && let Some(first_line) = content.lines().next()
+        {
+            if first_line.contains("python") {
+                if let Some(p) = self.parsers_by_id.get("python") {
+                    return Ok(Arc::clone(p));
                 }
+            } else if first_line.contains("ruby") {
+                if let Some(p) = self.parsers_by_id.get("ruby") {
+                    return Ok(Arc::clone(p));
+                }
+            } else if (first_line.contains("node") || first_line.contains("deno"))
+                && let Some(p) = self
+                    .parsers_by_id
+                    .get("javascript")
+                    .or_else(|| self.parsers_by_id.get("typescript"))
+            {
+                return Ok(Arc::clone(p));
             }
         }
 

@@ -8,7 +8,10 @@ impl AgentXmlFormatter {
 
         xml.push_str("<architectural_lint_report");
         xml.push_str(&format!(" passed=\"{}\"", report.summary.passed));
-        xml.push_str(&format!(" duration_ms=\"{:.2}\"", report.summary.duration_micros as f64 / 1000.0));
+        xml.push_str(&format!(
+            " duration_ms=\"{:.2}\"",
+            report.summary.duration_micros as f64 / 1000.0
+        ));
         xml.push_str(">\n");
 
         // Scorecard
@@ -31,7 +34,10 @@ impl AgentXmlFormatter {
             for (idx, cycle) in report.cycles.iter().enumerate() {
                 xml.push_str(&format!(
                     "    <cycle index=\"{}\" length=\"{}\" is_runtime=\"{}\" fingerprint=\"{}\">\n",
-                    idx + 1, cycle.length, cycle.is_runtime_cycle, cycle.fingerprint
+                    idx + 1,
+                    cycle.length,
+                    cycle.is_runtime_cycle,
+                    cycle.fingerprint
                 ));
 
                 xml.push_str("      <trace>\n");
@@ -53,7 +59,10 @@ impl AgentXmlFormatter {
                         Self::xml_escape(&cut.target_file),
                         cut.cycles_broken_count
                     ));
-                    xml.push_str(&format!("        <advice>{}</advice>\n", Self::xml_escape(&cut.remediation_advice)));
+                    xml.push_str(&format!(
+                        "        <advice>{}</advice>\n",
+                        Self::xml_escape(&cut.remediation_advice)
+                    ));
                     xml.push_str("      </recommended_cut>\n");
                 }
 
@@ -77,9 +86,15 @@ impl AgentXmlFormatter {
                     line_str,
                     v.fingerprint
                 ));
-                xml.push_str(&format!("      <message>{}</message>\n", Self::xml_escape(&v.message)));
+                xml.push_str(&format!(
+                    "      <message>{}</message>\n",
+                    Self::xml_escape(&v.message)
+                ));
                 if let Some(ref hint) = v.remediation_hint {
-                    xml.push_str(&format!("      <remediation>{}</remediation>\n", Self::xml_escape(hint)));
+                    xml.push_str(&format!(
+                        "      <remediation>{}</remediation>\n",
+                        Self::xml_escape(hint)
+                    ));
                 }
                 xml.push_str("    </violation>\n");
             }

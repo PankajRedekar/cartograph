@@ -88,27 +88,45 @@ mod tests {
     #[test]
     fn test_normalize_express_routes() {
         assert_eq!(normalize_route_path("/users/:id"), "/users/{id}");
-        assert_eq!(normalize_route_path("users/:userId/books/:bookId/"), "/users/{userId}/books/{bookId}");
+        assert_eq!(
+            normalize_route_path("users/:userId/books/:bookId/"),
+            "/users/{userId}/books/{bookId}"
+        );
         assert_eq!(normalize_route_path("//api///v1//:id"), "/api/v1/{id}");
     }
 
     #[test]
     fn test_normalize_flask_and_django_routes() {
-        assert_eq!(normalize_route_path("/users/<int:user_id>"), "/users/{user_id}");
-        assert_eq!(normalize_route_path("/posts/<slug:post_slug>/comments"), "/posts/{post_slug}/comments");
+        assert_eq!(
+            normalize_route_path("/users/<int:user_id>"),
+            "/users/{user_id}"
+        );
+        assert_eq!(
+            normalize_route_path("/posts/<slug:post_slug>/comments"),
+            "/posts/{post_slug}/comments"
+        );
         assert_eq!(normalize_route_path("/items/<item_id>"), "/items/{item_id}");
     }
 
     #[test]
     fn test_normalize_nextjs_routes() {
         assert_eq!(normalize_route_path("/api/users/[id]"), "/api/users/{id}");
-        assert_eq!(normalize_route_path("/api/docs/[...slug]"), "/api/docs/{slug}");
-        assert_eq!(normalize_route_path("/api/optional/[[...param]]"), "/api/optional/{param}");
+        assert_eq!(
+            normalize_route_path("/api/docs/[...slug]"),
+            "/api/docs/{slug}"
+        );
+        assert_eq!(
+            normalize_route_path("/api/optional/[[...param]]"),
+            "/api/optional/{param}"
+        );
     }
 
     #[test]
     fn test_normalize_rails_routes() {
-        assert_eq!(normalize_route_path("/invoices/:id(.:format)"), "/invoices/{id}");
+        assert_eq!(
+            normalize_route_path("/invoices/:id(.:format)"),
+            "/invoices/{id}"
+        );
         assert_eq!(normalize_route_path("/invoices"), "/invoices");
         assert_eq!(normalize_route_path(""), "/");
         assert_eq!(normalize_route_path("/"), "/");
@@ -120,7 +138,7 @@ mod tests {
         assert_eq!(params.len(), 2);
         assert_eq!(params[0].name, "org_id");
         assert_eq!(params[0].location, ParamLocation::Path);
-        assert_eq!(params[0].required, true);
+        assert!(params[0].required);
         assert_eq!(params[1].name, "team_id");
     }
 }

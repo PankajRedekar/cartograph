@@ -9,7 +9,8 @@ pub use config::{
     ArchExemptionRule, ArchExemptionsConfig, ArchLayerConfig, ArchRuleConfig, ArchSeverity,
     ComplexityConfig, CouplingFilter, CycleGranularity, DeadCodeCategoryFilter, DeadCodeConfig,
     GitDiffMode, IndexConfig, LintArchConfig, MemoryConfig, PackageEncapsulationConfig,
-    ProfileConfig, ProjectProfile, RuleAction, SqliteConfig, StorageConfig, WatchConfig,
+    ProfileConfig, ProjectConfig, ProjectInfoConfig, ProjectProfile, RuleAction, SqliteConfig,
+    StorageConfig, WatchConfig,
 };
 pub use error::{CartographError, Result};
 pub use model::{
@@ -26,7 +27,7 @@ pub use model::{
     RawRouteModelRecord, RawRouteTraceRecord, RawSymbolCouplingRecord, RawTestRecord, SearchResult,
     TestDeficitMetric, TrendDirection, ZombieFileReport,
 };
-pub use uri::{build_uri, parse_uri, CanonicalUri, URI_SCHEME};
+pub use uri::{CanonicalUri, URI_SCHEME, build_uri, parse_uri};
 
 #[cfg(test)]
 mod tests {

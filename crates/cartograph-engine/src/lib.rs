@@ -4,8 +4,8 @@ pub mod discovery;
 pub mod error;
 pub mod hasher;
 pub mod impact;
-pub mod lint_arch;
 pub mod linker;
+pub mod lint_arch;
 pub mod locate;
 pub mod pipeline;
 pub mod routes;
@@ -15,22 +15,20 @@ pub mod test_selector;
 pub mod watcher;
 
 // Re-export core abstractions
-pub use complexity::{
-    ComplexityAnalysisOptions, ComplexityEngine,
-};
+pub use complexity::{ComplexityAnalysisOptions, ComplexityEngine};
 pub use deadcode::{
-    export_ai_ignore_mask, BaselineManager, DeadCodeEngine, DeadCodeRunOptions, PruneAdvisor,
+    BaselineManager, DeadCodeEngine, DeadCodeRunOptions, PruneAdvisor, export_ai_ignore_mask,
 };
-pub use discovery::{DiscoveryConfig, FileWalker, ZeroCopyBuffer};
+pub use discovery::{
+    DiscoveredGitRepo, DiscoveryConfig, FileWalker, GitWorkspaceResolver, ZeroCopyBuffer,
+};
 pub use error::{EngineError, Result};
 pub use hasher::{DiscoveredFile, FileStatus, IncrementalChangeSet, IncrementalDetector};
-pub use impact::{
-    ImpactAnalyzer, ImpactOutputFormat, ImpactQuery, SemVerGuard,
-};
-pub use lint_arch::{
-    baseline::ArchBaselineManager, diff::GitDiffScope, formatters::ArchOutputFormat, ArchLinter,
-};
+pub use impact::{ImpactAnalyzer, ImpactOutputFormat, ImpactQuery, SemVerGuard};
 pub use linker::ReferenceResolver;
+pub use lint_arch::{
+    ArchLinter, baseline::ArchBaselineManager, diff::GitDiffScope, formatters::ArchOutputFormat,
+};
 pub use locate::{
     LocateCliOptions, LocateQuery, LocateResult, OutputFormat, QueryParser, SubgraphLocator,
 };

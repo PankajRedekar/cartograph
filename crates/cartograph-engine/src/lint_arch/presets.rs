@@ -72,10 +72,7 @@ impl ArchPresets {
                     "**/gateways/**".to_string(),
                     "**/repositories/**".to_string(),
                 ],
-                forbidden: vec![
-                    "infrastructure".to_string(),
-                    "presentation".to_string(),
-                ],
+                forbidden: vec!["infrastructure".to_string(), "presentation".to_string()],
                 allowed: None,
                 severity: ArchSeverity::Error,
             },

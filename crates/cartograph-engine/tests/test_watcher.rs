@@ -21,7 +21,7 @@ async fn test_watcher_handle_file_save_and_noop() {
     fs::write(&file_path, "pub fn run() {}").unwrap();
 
     let storage_config = StorageConfig::sqlite(db_path.to_str().unwrap());
-    let backend: Arc<dyn GraphStoreBackend> = Arc::from(create_backend(&storage_config).unwrap());
+    let backend: Arc<dyn GraphStoreBackend> = create_backend(&storage_config).unwrap();
 
     let settings = WatcherSettings {
         root_path: root.to_path_buf(),
@@ -37,7 +37,10 @@ async fn test_watcher_handle_file_save_and_noop() {
     // Initial save
     let event1 = watcher.handle_file_save(&file_path).await.unwrap();
     assert!(event1.is_some());
-    if let Some(WatchEvent::FileIndexed { filepath, nodes, .. }) = event1 {
+    if let Some(WatchEvent::FileIndexed {
+        filepath, nodes, ..
+    }) = event1
+    {
         assert_eq!(filepath, "service.rs");
         assert_eq!(nodes, 1);
     } else {
@@ -52,7 +55,10 @@ async fn test_watcher_handle_file_save_and_noop() {
     fs::write(&file_path, "pub fn run() {}\npub fn stop() {}").unwrap();
     let event3 = watcher.handle_file_save(&file_path).await.unwrap();
     assert!(event3.is_some());
-    if let Some(WatchEvent::FileIndexed { filepath, nodes, .. }) = event3 {
+    if let Some(WatchEvent::FileIndexed {
+        filepath, nodes, ..
+    }) = event3
+    {
         assert_eq!(filepath, "service.rs");
         assert_eq!(nodes, 2);
     } else {
@@ -81,7 +87,7 @@ fn handle() {
     .unwrap();
 
     let storage_config = StorageConfig::sqlite(db_path.to_str().unwrap());
-    let backend: Arc<dyn GraphStoreBackend> = Arc::from(create_backend(&storage_config).unwrap());
+    let backend: Arc<dyn GraphStoreBackend> = create_backend(&storage_config).unwrap();
 
     // 1. Run pipeline index to link api.rs -> core.rs
     let discovery_config = DiscoveryConfig {
@@ -108,7 +114,12 @@ fn handle() {
 
     let event = watcher.handle_file_save(&core_rs).await.unwrap();
     assert!(event.is_some());
-    if let Some(WatchEvent::FileIndexed { filepath, affected_dependents, .. }) = event {
+    if let Some(WatchEvent::FileIndexed {
+        filepath,
+        affected_dependents,
+        ..
+    }) = event
+    {
         assert_eq!(filepath, "core.rs");
         assert!(
             affected_dependents.contains(&"api.rs".to_string()),
@@ -122,7 +133,12 @@ fn handle() {
     // 3. Delete core.rs and verify blast radius before deletion
     let del_event = watcher.handle_file_delete(&core_rs).await.unwrap();
     assert!(del_event.is_some());
-    if let Some(WatchEvent::FileDeleted { filepath, affected_dependents, .. }) = del_event {
+    if let Some(WatchEvent::FileDeleted {
+        filepath,
+        affected_dependents,
+        ..
+    }) = del_event
+    {
         assert_eq!(filepath, "core.rs");
         assert!(
             affected_dependents.contains(&"api.rs".to_string()),
@@ -144,7 +160,7 @@ async fn test_watcher_background_loop_and_channel_dispatch() {
     fs::write(&test_file, "fn work() {}").unwrap();
 
     let storage_config = StorageConfig::sqlite(db_path.to_str().unwrap());
-    let backend: Arc<dyn GraphStoreBackend> = Arc::from(create_backend(&storage_config).unwrap());
+    let backend: Arc<dyn GraphStoreBackend> = create_backend(&storage_config).unwrap();
 
     let settings = WatcherSettings {
         root_path: root.to_path_buf(),
@@ -160,9 +176,7 @@ async fn test_watcher_background_loop_and_channel_dispatch() {
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
     let watcher_clone = watcher.clone();
-    let handle = tokio::spawn(async move {
-        watcher_clone.start(event_tx, shutdown_rx).await
-    });
+    let handle = tokio::spawn(async move { watcher_clone.start(event_tx, shutdown_rx).await });
 
     // Give watcher time to initialize in background
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -190,5 +204,8 @@ async fn test_watcher_background_loop_and_channel_dispatch() {
     assert!(join_res.is_ok());
 
     assert!(received.is_ok(), "Timed out waiting for file watch event");
-    assert!(received.unwrap(), "Expected FileIndexed event for worker.rs");
+    assert!(
+        received.unwrap(),
+        "Expected FileIndexed event for worker.rs"
+    );
 }

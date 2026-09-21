@@ -133,7 +133,10 @@ diff --git a/src/auth.rs b/src/auth.rs
         ..Default::default()
     };
 
-    let report = selector.select_tests(&options).await.expect("Test selection failed");
+    let report = selector
+        .select_tests(&options)
+        .await
+        .expect("Test selection failed");
 
     assert_eq!(report.total_tests_selected, 1);
     let selected = &report.selected_tests[0];
@@ -148,7 +151,10 @@ diff --git a/src/auth.rs b/src/auth.rs
     assert_eq!(report.runner_invocations.len(), 1);
     let inv = &report.runner_invocations[0];
     assert_eq!(inv.program, "cargo");
-    assert_eq!(inv.display_command, "cargo test --test auth_test -- test_auth_flow");
+    assert_eq!(
+        inv.display_command,
+        "cargo test --test auth_test -- test_auth_flow"
+    );
 }
 
 #[tokio::test]
@@ -172,7 +178,10 @@ diff --git a/README.md b/README.md
         ..Default::default()
     };
 
-    let report = selector.select_tests(&options).await.expect("Should succeed");
+    let report = selector
+        .select_tests(&options)
+        .await
+        .expect("Should succeed");
     assert!(report.is_zero_risk_bypass);
     assert_eq!(report.total_tests_selected, 0);
     assert_eq!(report.test_reduction_percentage, 100.0);
@@ -201,7 +210,10 @@ diff --git a/src/auth.rs b/src/auth.rs
         ..Default::default()
     };
 
-    let report = selector.select_tests(&options).await.expect("Should succeed");
+    let report = selector
+        .select_tests(&options)
+        .await
+        .expect("Should succeed");
     assert!(report.is_zero_risk_bypass);
     assert_eq!(report.docstring_only_symbols_count, 1);
     assert_eq!(report.total_tests_selected, 0);
@@ -228,7 +240,10 @@ diff --git a/tests/auth_test.rs b/tests/auth_test.rs
         ..Default::default()
     };
 
-    let report = selector.select_tests(&options).await.expect("Should succeed");
+    let report = selector
+        .select_tests(&options)
+        .await
+        .expect("Should succeed");
     assert_eq!(report.total_tests_selected, 1);
     let selected = &report.selected_tests[0];
     assert_eq!(selected.test_node.name, "test_auth_flow");
@@ -260,7 +275,10 @@ diff --git a/src/untested.rs b/src/untested.rs
         ..Default::default()
     };
 
-    let report = selector.select_tests(&options).await.expect("Should succeed");
+    let report = selector
+        .select_tests(&options)
+        .await
+        .expect("Should succeed");
     assert_eq!(report.untested_deficits.len(), 1);
     assert_eq!(report.untested_deficits[0].node.name, "danger_action");
     assert_eq!(report.test_coverage_ratio, 0.0);
@@ -297,7 +315,10 @@ diff --git a/src/auth.rs b/src/auth.rs
         ..Default::default()
     };
 
-    let report = selector.select_tests(&options).await.expect("Should succeed");
+    let report = selector
+        .select_tests(&options)
+        .await
+        .expect("Should succeed");
 
     // Markdown
     let md = TestSelectorOutputFormat::Markdown
@@ -317,7 +338,8 @@ diff --git a/src/auth.rs b/src/auth.rs
     let matrix_str = TestSelectorOutputFormat::GithubMatrix
         .format(&report, false, false)
         .expect("Format matrix failed");
-    let matrix_json: serde_json::Value = serde_json::from_str(&matrix_str).expect("Valid matrix JSON");
+    let matrix_json: serde_json::Value =
+        serde_json::from_str(&matrix_str).expect("Valid matrix JSON");
     assert_eq!(matrix_json["include"][0]["runner"], "cargo");
 
     // Script

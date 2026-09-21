@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
 use cartograph_core::config::ArchLayerConfig;
 use cartograph_core::model::{BoundaryViolation, EdgeKind, RawInterFileEdgeRecord};
@@ -45,7 +45,11 @@ impl LayerClassifier {
         let normalized = filepath.replace('\\', "/");
 
         // 1. In-code @arch tag takes precedence
-        if let Some(tag_layer) = self.in_code_tags.get(filepath).or_else(|| self.in_code_tags.get(&normalized)) {
+        if let Some(tag_layer) = self
+            .in_code_tags
+            .get(filepath)
+            .or_else(|| self.in_code_tags.get(&normalized))
+        {
             let tag_lower = tag_layer.to_lowercase();
             if let Some(&idx) = self.layer_indices.get(&tag_lower) {
                 return Some((self.layers[idx].name.clone(), idx));
@@ -79,7 +83,11 @@ impl LayerClassifier {
         let mut violation_reason = String::new();
 
         // 1. Explicit forbidden list
-        if source_cfg.forbidden.iter().any(|f| f.to_lowercase() == target_lower) {
+        if source_cfg
+            .forbidden
+            .iter()
+            .any(|f| f.to_lowercase() == target_lower)
+        {
             is_violation = true;
             violation_reason = format!(
                 "Layer '{}' is explicitly forbidden from depending on layer '{}'",

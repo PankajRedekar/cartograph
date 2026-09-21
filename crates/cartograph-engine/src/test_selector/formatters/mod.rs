@@ -34,7 +34,9 @@ impl FromStr for TestSelectorOutputFormat {
             "terminal" | "console" | "text" => Ok(TestSelectorOutputFormat::Terminal),
             "markdown" | "md" => Ok(TestSelectorOutputFormat::Markdown),
             "json" => Ok(TestSelectorOutputFormat::Json),
-            "matrix" | "github-matrix" | "github_matrix" => Ok(TestSelectorOutputFormat::GithubMatrix),
+            "matrix" | "github-matrix" | "github_matrix" => {
+                Ok(TestSelectorOutputFormat::GithubMatrix)
+            }
             "script" | "bash" | "sh" => Ok(TestSelectorOutputFormat::Script),
             other => Err(format!(
                 "Unknown format: '{other}'. Expected terminal, markdown, json, matrix, or script."

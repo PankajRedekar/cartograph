@@ -30,20 +30,23 @@ impl TerminalFormatter {
             "\n{}\n",
             "🎯 Predictive Test Selection Report".bold().cyan()
         ));
-        out.push_str(&format!(
-            "{}\n\n",
-            "═".repeat(60).dimmed()
-        ));
+        out.push_str(&format!("{}\n\n", "═".repeat(60).dimmed()));
 
         // Zero-Risk Docstring / Markdown Bypass Banner
         if report.is_zero_risk_bypass {
             out.push_str(&format!(
                 "{}\n",
-                "⚡ ZERO TESTS NEEDED: Non-functional changes only (docstring / comment / docs).".bold().green()
+                "⚡ ZERO TESTS NEEDED: Non-functional changes only (docstring / comment / docs)."
+                    .bold()
+                    .green()
             ));
             out.push_str(&format!(
                 "{}\n\n",
-                format!("Analysis completed in {:.2}ms. Test suite execution bypassed completely.", report.analysis_duration_ms).dimmed()
+                format!(
+                    "Analysis completed in {:.2}ms. Test suite execution bypassed completely.",
+                    report.analysis_duration_ms
+                )
+                .dimmed()
             ));
             return out;
         }
@@ -101,7 +104,10 @@ impl TerminalFormatter {
 
         // Selected Tests List
         if !report.selected_tests.is_empty() {
-            out.push_str(&format!("{}\n", "Selected Tests (Ranked by Fail-Fast Priority):".bold()));
+            out.push_str(&format!(
+                "{}\n",
+                "Selected Tests (Ranked by Fail-Fast Priority):".bold()
+            ));
             out.push_str(&format!("{}\n", "─".repeat(60).dimmed()));
 
             for (idx, test) in report.selected_tests.iter().enumerate() {
@@ -110,7 +116,9 @@ impl TerminalFormatter {
                 } else if test.hop_distance == 1 {
                     "[DIRECT TEST]  ".bold().green()
                 } else {
-                    format!("[TRANSITIVE d={}]", test.hop_distance).bold().blue()
+                    format!("[TRANSITIVE d={}]", test.hop_distance)
+                        .bold()
+                        .blue()
                 };
 
                 let cat_str = match test.category {
@@ -157,7 +165,10 @@ impl TerminalFormatter {
 
         // Runner Invocations (Ready to Copy-Paste)
         if !report.runner_invocations.is_empty() {
-            out.push_str(&format!("{}\n", "Synthesized Runner Commands:".bold().green()));
+            out.push_str(&format!(
+                "{}\n",
+                "Synthesized Runner Commands:".bold().green()
+            ));
             out.push_str(&format!("{}\n", "─".repeat(60).dimmed()));
             for inv in &report.runner_invocations {
                 out.push_str(&format!("  $ {}\n", inv.display_command.bold()));
@@ -169,9 +180,12 @@ impl TerminalFormatter {
         if !report.untested_deficits.is_empty() {
             out.push_str(&format!(
                 "{}\n",
-                format!("⚠️  Coverage Gap: {} Modified Symbol(s) Have No Tests", report.untested_deficits.len())
-                    .bold()
-                    .yellow()
+                format!(
+                    "⚠️  Coverage Gap: {} Modified Symbol(s) Have No Tests",
+                    report.untested_deficits.len()
+                )
+                .bold()
+                .yellow()
             ));
             out.push_str(&format!("{}\n", "─".repeat(60).dimmed()));
             for d in &report.untested_deficits {

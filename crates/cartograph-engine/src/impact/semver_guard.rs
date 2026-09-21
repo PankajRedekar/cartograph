@@ -1,6 +1,5 @@
 use cartograph_core::model::{
-    BreakingChangeDetail, ImpactRoot, Node, SemVerClassification, SemVerTarget,
-    SemanticChangeType,
+    BreakingChangeDetail, ImpactRoot, Node, SemVerClassification, SemVerTarget, SemanticChangeType,
 };
 
 pub struct SemVerGuard;
@@ -23,15 +22,19 @@ impl SemVerGuard {
         }
 
         // 2. TypeScript / JavaScript rules
-        if filepath.ends_with(".ts") || filepath.ends_with(".js") || filepath.ends_with(".tsx") || filepath.ends_with(".jsx") {
+        if filepath.ends_with(".ts")
+            || filepath.ends_with(".js")
+            || filepath.ends_with(".tsx")
+            || filepath.ends_with(".jsx")
+        {
             return sig.starts_with("export ") || sig.starts_with("export default ");
         }
 
         // 3. Go rules: Capitalized identifier
-        if filepath.ends_with(".go") {
-            if let Some(first_char) = node.name.chars().next() {
-                return first_char.is_uppercase();
-            }
+        if filepath.ends_with(".go")
+            && let Some(first_char) = node.name.chars().next()
+        {
+            return first_char.is_uppercase();
         }
 
         // 4. Python rules: Not starting with underscore
@@ -64,7 +67,8 @@ impl SemVerGuard {
                         symbol_name: root.node.name.clone(),
                         filepath: root.node.filepath.clone(),
                         line: root.node.start_line.unwrap_or(0),
-                        reason: "Public symbol signature modified (parameter/return type change)".to_string(),
+                        reason: "Public symbol signature modified (parameter/return type change)"
+                            .to_string(),
                         old_signature: root.old_signature.clone(),
                         new_signature: root.new_signature.clone(),
                     });
@@ -168,8 +172,18 @@ mod tests {
     #[test]
     fn test_semver_minor_pass() {
         let roots = vec![
-            make_root("calculate", "src/lib.rs", "pub fn calculate()", SemanticChangeType::BodyOnly),
-            make_root("new_helper", "src/lib.rs", "pub fn new_helper()", SemanticChangeType::Added),
+            make_root(
+                "calculate",
+                "src/lib.rs",
+                "pub fn calculate()",
+                SemanticChangeType::BodyOnly,
+            ),
+            make_root(
+                "new_helper",
+                "src/lib.rs",
+                "pub fn new_helper()",
+                SemanticChangeType::Added,
+            ),
         ];
 
         let result = SemVerGuard::audit_release_policy(&roots, SemVerTarget::Minor);
@@ -179,9 +193,12 @@ mod tests {
 
     #[test]
     fn test_semver_minor_fails_on_major_break() {
-        let roots = vec![
-            make_root("calculate", "src/lib.rs", "pub fn calculate()", SemanticChangeType::SignatureBreak),
-        ];
+        let roots = vec![make_root(
+            "calculate",
+            "src/lib.rs",
+            "pub fn calculate()",
+            SemanticChangeType::SignatureBreak,
+        )];
 
         let result = SemVerGuard::audit_release_policy(&roots, SemVerTarget::Minor);
         assert!(!result.is_compliant);

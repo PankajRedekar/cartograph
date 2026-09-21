@@ -26,14 +26,54 @@ fn make_node(id: &str, name: &str, kind: NodeKind, filepath: &str) -> Node {
 }
 
 async fn run_deadcode_traversal_test_suite(backend: Arc<dyn GraphStoreBackend>) {
-    let n_main = make_node("cartograph://src/main.rs::::main#function", "main", NodeKind::Function, "src/main.rs");
-    let n_alive = make_node("cartograph://src/helper.rs::::alive_helper#function", "alive_helper", NodeKind::Function, "src/helper.rs");
-    let n_leaf = make_node("cartograph://src/leaf.rs::::alive_leaf#function", "alive_leaf", NodeKind::Function, "src/leaf.rs");
-    let n_island_a = make_node("cartograph://src/dead.rs::::dead_a#function", "dead_a", NodeKind::Function, "src/dead.rs");
-    let n_island_b = make_node("cartograph://src/dead.rs::::dead_b#function", "dead_b", NodeKind::Function, "src/dead.rs");
-    let n_orphan = make_node("cartograph://src/orphan.rs::::orphan_fn#function", "orphan_fn", NodeKind::Function, "src/orphan.rs");
-    let n_service = make_node("cartograph://src/service.rs::::secret_service#function", "secret_service", NodeKind::Function, "src/service.rs");
-    let n_test = make_node("cartograph://tests/test.rs::::test_secret#function", "test_secret", NodeKind::Other("test".to_string()), "tests/test.rs");
+    let n_main = make_node(
+        "cartograph://src/main.rs::::main#function",
+        "main",
+        NodeKind::Function,
+        "src/main.rs",
+    );
+    let n_alive = make_node(
+        "cartograph://src/helper.rs::::alive_helper#function",
+        "alive_helper",
+        NodeKind::Function,
+        "src/helper.rs",
+    );
+    let n_leaf = make_node(
+        "cartograph://src/leaf.rs::::alive_leaf#function",
+        "alive_leaf",
+        NodeKind::Function,
+        "src/leaf.rs",
+    );
+    let n_island_a = make_node(
+        "cartograph://src/dead.rs::::dead_a#function",
+        "dead_a",
+        NodeKind::Function,
+        "src/dead.rs",
+    );
+    let n_island_b = make_node(
+        "cartograph://src/dead.rs::::dead_b#function",
+        "dead_b",
+        NodeKind::Function,
+        "src/dead.rs",
+    );
+    let n_orphan = make_node(
+        "cartograph://src/orphan.rs::::orphan_fn#function",
+        "orphan_fn",
+        NodeKind::Function,
+        "src/orphan.rs",
+    );
+    let n_service = make_node(
+        "cartograph://src/service.rs::::secret_service#function",
+        "secret_service",
+        NodeKind::Function,
+        "src/service.rs",
+    );
+    let n_test = make_node(
+        "cartograph://tests/test.rs::::test_secret#function",
+        "test_secret",
+        NodeKind::Other("test".to_string()),
+        "tests/test.rs",
+    );
 
     let nodes = vec![
         n_main.clone(),
@@ -63,7 +103,10 @@ async fn run_deadcode_traversal_test_suite(backend: Arc<dyn GraphStoreBackend>) 
 
     // 1. Unreachable Subgraph from roots = [n_main.id]
     let roots = vec![n_main.id.clone()];
-    let unreachable = backend.get_unreachable_subgraph(&roots, 0.75).await.unwrap();
+    let unreachable = backend
+        .get_unreachable_subgraph(&roots, 0.75)
+        .await
+        .unwrap();
     let unreach_ids: Vec<String> = unreachable.iter().map(|r| r.id.clone()).collect();
 
     // Alive nodes must NOT be in unreachable list
@@ -87,7 +130,10 @@ async fn run_deadcode_traversal_test_suite(backend: Arc<dyn GraphStoreBackend>) 
     assert!(ghost_deps.contains(&"pkg:serde".to_string()));
 
     // 3. Test-Only Reachable Symbols
-    let test_only = backend.get_test_only_reachable_symbols(&roots).await.unwrap();
+    let test_only = backend
+        .get_test_only_reachable_symbols(&roots)
+        .await
+        .unwrap();
     assert!(test_only.contains(&n_service.id));
     assert!(!test_only.contains(&n_main.id));
     assert!(!test_only.contains(&n_alive.id));

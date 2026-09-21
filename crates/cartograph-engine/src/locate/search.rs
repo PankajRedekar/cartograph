@@ -71,43 +71,68 @@ impl HybridSearchEngine {
     /// Primary search execution combining multi-channel candidate retrieval with centrality reranking
     pub async fn search_roots(&self, query: &LocateQuery) -> Result<Vec<ScoredNode>> {
         // 1. Direct Canonical URI lookup
-        if let QueryIntent::CanonicalUri(ref uri) = query.intent {
-            if let Some(node) = self.backend.get_node(uri).await? {
-                let edges = self.backend.get_edges_for_nodes(&[node.id.clone()], 0.0).await.unwrap_or_default();
-                let in_degree = edges.iter().filter(|e| e.target_id == node.id).count();
-                let out_degree = edges.iter().filter(|e| e.source_id == node.id).count();
-                let domain = extract_domain(&node.filepath);
+        if let QueryIntent::CanonicalUri(ref uri) = query.intent
+            && let Some(node) = self.backend.get_node(uri).await?
+        {
+            let edges = self
+                .backend
+                .get_edges_for_nodes(std::slice::from_ref(&node.id), 0.0)
+                .await
+                .unwrap_or_default();
+            let in_degree = edges.iter().filter(|e| e.target_id == node.id).count();
+            let out_degree = edges.iter().filter(|e| e.source_id == node.id).count();
+            let domain = extract_domain(&node.filepath);
 
-                return Ok(vec![ScoredNode {
-                    node,
-                    score: 100.0,
-                    text_score: 100.0,
-                    centrality_score: 1.0,
-                    churn_score: 0.0,
-                    in_degree,
-                    out_degree,
-                    matched_channel: SearchChannel::CanonicalUri,
-                    matched_field: Some("id".to_string()),
-                    cluster_domain: domain,
-                }]);
-            }
+            return Ok(vec![ScoredNode {
+                node,
+                score: 100.0,
+                text_score: 100.0,
+                centrality_score: 1.0,
+                churn_score: 0.0,
+                in_degree,
+                out_degree,
+                matched_channel: SearchChannel::CanonicalUri,
+                matched_field: Some("id".to_string()),
+                cluster_domain: domain,
+            }]);
         }
 
         // 2. Multi-channel candidate gathering
-        let mut candidates_map: HashMap<String, (Node, f64, SearchChannel, Option<String>)> = HashMap::new();
+        let mut candidates_map: HashMap<String, (Node, f64, SearchChannel, Option<String>)> =
+            HashMap::new();
 
         // Channel 1: Exact symbol name match
         let exact_nodes = self.backend.get_nodes_by_name(&query.clean_query).await?;
         for n in exact_nodes {
-            candidates_map.insert(n.id.clone(), (n, 100.0, SearchChannel::ExactSymbol, Some("name".to_string())));
+            candidates_map.insert(
+                n.id.clone(),
+                (
+                    n,
+                    100.0,
+                    SearchChannel::ExactSymbol,
+                    Some("name".to_string()),
+                ),
+            );
         }
 
         // Channel 2: Qualified symbol (scope + name)
-        if let QueryIntent::QualifiedSymbol { ref scope, ref name } = query.intent {
+        if let QueryIntent::QualifiedSymbol {
+            ref scope,
+            ref name,
+        } = query.intent
+        {
             let scoped_candidates = self.backend.get_nodes_by_name(name).await?;
             for n in scoped_candidates {
                 if n.scope.to_lowercase().contains(&scope.to_lowercase()) {
-                    candidates_map.insert(n.id.clone(), (n, 90.0, SearchChannel::QualifiedSymbol, Some("scope".to_string())));
+                    candidates_map.insert(
+                        n.id.clone(),
+                        (
+                            n,
+                            90.0,
+                            SearchChannel::QualifiedSymbol,
+                            Some("scope".to_string()),
+                        ),
+                    );
                 }
             }
         }
@@ -146,10 +171,10 @@ impl HybridSearchEngine {
             .into_values()
             .filter(|(node, _, _, _)| {
                 // Kind filter
-                if let Some(ref allowed_kinds) = query.kind_filter {
-                    if !allowed_kinds.contains(&node.kind) {
-                        return false;
-                    }
+                if let Some(ref allowed_kinds) = query.kind_filter
+                    && !allowed_kinds.contains(&node.kind)
+                {
+                    return false;
                 }
                 // Path filter
                 if let Some(ref path_prefix) = query.path_filter {
@@ -161,7 +186,10 @@ impl HybridSearchEngine {
                 // Language filter
                 if let Some(ref lang) = query.language_filter {
                     let lang_lower = lang.to_lowercase();
-                    let ext = Path::new(&node.filepath).extension().and_then(|e| e.to_str()).unwrap_or("");
+                    let ext = Path::new(&node.filepath)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("");
                     let matches_lang = match lang_lower.as_str() {
                         "rust" | "rs" => ext == "rs",
                         "python" | "py" => ext == "py",
@@ -185,8 +213,15 @@ impl HybridSearchEngine {
         }
 
         // 4. Batch fetch connected edges to compute degree centrality in <0.2ms
-        let node_ids: Vec<String> = filtered_candidates.iter().map(|(n, _, _, _)| n.id.clone()).collect();
-        let all_edges = self.backend.get_edges_for_nodes(&node_ids, 0.0).await.unwrap_or_default();
+        let node_ids: Vec<String> = filtered_candidates
+            .iter()
+            .map(|(n, _, _, _)| n.id.clone())
+            .collect();
+        let all_edges = self
+            .backend
+            .get_edges_for_nodes(&node_ids, 0.0)
+            .await
+            .unwrap_or_default();
 
         let mut in_degrees: HashMap<String, usize> = HashMap::new();
         let mut out_degrees: HashMap<String, usize> = HashMap::new();
@@ -219,7 +254,10 @@ impl HybridSearchEngine {
                 let norm_text = (text_score / max_text_score).min(1.0);
 
                 // Combined Final Score: alpha * text + beta * centrality + gamma * churn
-                let final_score = (self.alpha * norm_text + self.beta * norm_centrality + self.gamma * churn_score) * 100.0;
+                let final_score = (self.alpha * norm_text
+                    + self.beta * norm_centrality
+                    + self.gamma * churn_score)
+                    * 100.0;
                 let domain = extract_domain(&node.filepath);
 
                 ScoredNode {
@@ -238,7 +276,11 @@ impl HybridSearchEngine {
             .collect();
 
         // 7. Sort descending by score
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(query.limit);
 
         Ok(scored)
@@ -254,7 +296,10 @@ impl HybridSearchEngine {
     pub fn cluster_candidates(&self, candidates: Vec<ScoredNode>) -> Vec<CandidateCluster> {
         let mut clusters: HashMap<String, Vec<ScoredNode>> = HashMap::new();
         for candidate in candidates {
-            clusters.entry(candidate.cluster_domain.clone()).or_default().push(candidate);
+            clusters
+                .entry(candidate.cluster_domain.clone())
+                .or_default()
+                .push(candidate);
         }
 
         let mut result: Vec<CandidateCluster> = clusters
@@ -262,7 +307,7 @@ impl HybridSearchEngine {
             .map(|(domain, nodes)| CandidateCluster { domain, nodes })
             .collect();
 
-        result.sort_by(|a, b| b.nodes.len().cmp(&a.nodes.len()));
+        result.sort_by_key(|b| std::cmp::Reverse(b.nodes.len()));
         result
     }
 }
@@ -308,9 +353,19 @@ mod tests {
         let backend = Arc::new(MemoryBackend::new());
 
         // Landmark hub node: OrderService::process_payment with 5 incoming calls
-        let hub = make_test_node("hub:1", "process_payment", "OrderService", "src/billing/service.rs");
+        let hub = make_test_node(
+            "hub:1",
+            "process_payment",
+            "OrderService",
+            "src/billing/service.rs",
+        );
         // Leaf helper: parse_payment with 0 incoming calls
-        let leaf = make_test_node("leaf:2", "process_payment", "Helper", "src/billing/utils.rs");
+        let leaf = make_test_node(
+            "leaf:2",
+            "process_payment",
+            "Helper",
+            "src/billing/utils.rs",
+        );
 
         let n1 = make_test_node("c:1", "caller1", "", "src/api/routes.rs");
         let n2 = make_test_node("c:2", "caller2", "", "src/api/views.rs");
@@ -318,7 +373,10 @@ mod tests {
         let e1 = Edge::new("c:1", "hub:1", EdgeKind::Calls);
         let e2 = Edge::new("c:2", "hub:1", EdgeKind::Calls);
 
-        backend.insert_batch(&[hub.clone(), leaf.clone(), n1, n2], &[e1, e2]).await.unwrap();
+        backend
+            .insert_batch(&[hub.clone(), leaf.clone(), n1, n2], &[e1, e2])
+            .await
+            .unwrap();
 
         let engine = HybridSearchEngine::new(backend);
         let query = LocateQuery {

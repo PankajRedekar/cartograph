@@ -1,16 +1,16 @@
 use std::sync::LazyLock;
 use tree_sitter::{Node as TsNode, Parser, Query, Tree};
 
-use cartograph_core::{build_uri, Edge, EdgeKind, Node, NodeKind};
 use crate::error::{AstError, Result};
 use crate::hash::compute_node_checksum;
 use crate::line_index::LineIndex;
 use crate::model::{
-    AstDiagnostic, CallFidelity, DiagnosticSeverity, ParseContext, ParsedFile,
-    UnresolvedReference, Visibility,
+    AstDiagnostic, CallFidelity, DiagnosticSeverity, ParseContext, ParsedFile, UnresolvedReference,
+    Visibility,
 };
 use crate::traits::LanguageParser;
 use crate::trivia::{SignatureNormalizer, TriviaBinder};
+use cartograph_core::{Edge, EdgeKind, Node, NodeKind, build_uri};
 
 pub static GO_TAGS_QUERY: LazyLock<Query> = LazyLock::new(|| {
     let language = tree_sitter_go::LANGUAGE.into();
@@ -225,7 +225,10 @@ impl<'a> GoExtractor<'a> {
             None
         };
 
-        let is_test = fn_name.starts_with("Test") || fn_name.starts_with("Benchmark") || fn_name.starts_with("Fuzz") || fn_name.starts_with("Example");
+        let is_test = fn_name.starts_with("Test")
+            || fn_name.starts_with("Benchmark")
+            || fn_name.starts_with("Fuzz")
+            || fn_name.starts_with("Example");
         let is_test_file = self.filepath.ends_with("_test.go") || self.filepath.contains("/test/");
 
         let mut metadata = serde_json::json!({
@@ -236,7 +239,11 @@ impl<'a> GoExtractor<'a> {
         if is_test && (is_test_file || fn_name.starts_with("Test")) {
             metadata["is_test"] = serde_json::json!(true);
             metadata["framework"] = serde_json::json!("gotest");
-            metadata["test_type"] = serde_json::json!(if fn_name.starts_with("Benchmark") { "benchmark" } else { "unit" });
+            metadata["test_type"] = serde_json::json!(if fn_name.starts_with("Benchmark") {
+                "benchmark"
+            } else {
+                "unit"
+            });
         }
 
         self.nodes.push(Node {
@@ -273,7 +280,12 @@ impl<'a> GoExtractor<'a> {
         // Extract receiver type: func (s *Server) Start()
         let receiver_type = self.extract_receiver_type(node).unwrap_or_default();
         let span = self.line_index.span_for_node(&node, self.content);
-        let uri = build_uri(self.filepath, &receiver_type, method_name, &NodeKind::Method);
+        let uri = build_uri(
+            self.filepath,
+            &receiver_type,
+            method_name,
+            &NodeKind::Method,
+        );
 
         let visibility = self.extract_go_visibility(method_name);
         let docstring = self.find_leading_comments(node);
@@ -306,7 +318,9 @@ impl<'a> GoExtractor<'a> {
             start_col: Some(span.start_col),
             end_line: Some(span.end_line),
             end_col: Some(span.end_col),
-            signature: Some(SignatureNormalizer::normalize(&format!("func ({receiver_type}) {method_name}()"))),
+            signature: Some(SignatureNormalizer::normalize(&format!(
+                "func ({receiver_type}) {method_name}()"
+            ))),
             docstring,
             checksum,
             metadata: Some(metadata),
@@ -314,7 +328,8 @@ impl<'a> GoExtractor<'a> {
 
         if !receiver_type.is_empty() {
             let parent_uri = build_uri(self.filepath, "", &receiver_type, &NodeKind::Struct);
-            self.edges.push(Edge::new(parent_uri, uri, EdgeKind::Defines));
+            self.edges
+                .push(Edge::new(parent_uri, uri, EdgeKind::Defines));
         }
 
         if let Some(body) = node.child_by_field_name("body") {
@@ -342,89 +357,97 @@ impl<'a> GoExtractor<'a> {
                 || fn_text.ends_with(".HEAD");
             let is_http_handle = fn_text == "http.HandleFunc" || fn_text.ends_with(".HandleFunc");
 
-            if is_gin_or_echo || is_http_handle {
-                if let Some(args) = node.child_by_field_name("arguments") {
-                    let mut cursor = args.walk();
-                    let mut path = None;
-                    let mut middlewares = Vec::new();
-                    let mut handler = None;
+            if (is_gin_or_echo || is_http_handle)
+                && let Some(args) = node.child_by_field_name("arguments")
+            {
+                let mut cursor = args.walk();
+                let mut path = None;
+                let mut middlewares = Vec::new();
+                let mut handler = None;
 
-                    for child in args.children(&mut cursor) {
-                        if !child.is_named() {
-                            continue;
-                        }
-                        let text = self.node_text(child);
-                        if path.is_none() && (child.kind() == "interpreted_string_literal" || child.kind() == "raw_string_literal") {
-                            path = Some(text.trim_matches(['"', '`']).to_string());
-                        } else if child.kind() == "identifier" || child.kind() == "selector_expression" {
-                            middlewares.push(text.to_string());
-                        }
+                for child in args.children(&mut cursor) {
+                    if !child.is_named() {
+                        continue;
+                    }
+                    let text = self.node_text(child);
+                    if path.is_none()
+                        && (child.kind() == "interpreted_string_literal"
+                            || child.kind() == "raw_string_literal")
+                    {
+                        path = Some(text.trim_matches(['"', '`']).to_string());
+                    } else if child.kind() == "identifier" || child.kind() == "selector_expression"
+                    {
+                        middlewares.push(text.to_string());
+                    }
+                }
+
+                if let Some(route_path) = path {
+                    if !middlewares.is_empty() {
+                        handler = middlewares.pop();
                     }
 
-                    if let Some(route_path) = path {
-                        if !middlewares.is_empty() {
-                            handler = middlewares.pop();
-                        }
+                    let method = if is_http_handle {
+                        "ALL".to_string()
+                    } else {
+                        fn_text.split('.').next_back().unwrap_or("GET").to_string()
+                    };
 
-                        let method = if is_http_handle {
-                            "ALL".to_string()
-                        } else {
-                            fn_text.split('.').last().unwrap_or("GET").to_string()
-                        };
+                    let framework = if is_http_handle {
+                        "net/http"
+                    } else if fn_text.starts_with("e.") || fn_text.contains("echo") {
+                        "echo"
+                    } else {
+                        "gin"
+                    };
 
-                        let framework = if is_http_handle {
-                            "net/http"
-                        } else if fn_text.starts_with("e.") || fn_text.contains("echo") {
-                            "echo"
-                        } else {
-                            "gin"
-                        };
+                    let is_protected = middlewares.iter().any(|m| {
+                        let l = m.to_lowercase();
+                        l.contains("auth")
+                            || l.contains("jwt")
+                            || l.contains("guard")
+                            || l.contains("protect")
+                    });
 
-                        let is_protected = middlewares.iter().any(|m| {
-                            let l = m.to_lowercase();
-                            l.contains("auth") || l.contains("jwt") || l.contains("guard") || l.contains("protect")
+                    let route_name = format!("{method} {route_path}");
+                    let route_uri =
+                        build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
+
+                    self.nodes.push(Node {
+                        id: route_uri.clone(),
+                        name: route_name.clone(),
+                        kind: NodeKind::Route,
+                        filepath: self.filepath.to_string(),
+                        scope: "routes".to_string(),
+                        start_line: Some(span.start_line),
+                        start_col: Some(span.start_col),
+                        end_line: Some(span.end_line),
+                        end_col: Some(span.end_col),
+                        signature: Some(format!("{method} {route_path}")),
+                        docstring: None,
+                        checksum: None,
+                        metadata: Some(serde_json::json!({
+                            "http_method": method,
+                            "raw_pattern": route_path,
+                            "framework": framework,
+                            "middlewares": middlewares,
+                            "handler": handler,
+                            "auth": if is_protected { "protected" } else { "public" },
+                            "span": span,
+                        })),
+                    });
+
+                    if let Some(ref h) = handler {
+                        self.unresolved_references.push(UnresolvedReference {
+                            source_node_id: route_uri,
+                            target_symbol: h.clone(),
+                            import_source: None,
+                            kind: EdgeKind::MapsTo,
+                            span,
+                            call_fidelity: CallFidelity::Definite,
+                            receiver_type_hint: None,
+                            receiver_var: None,
+                            arg_count: None,
                         });
-
-                        let route_name = format!("{method} {route_path}");
-                        let route_uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
-
-                        self.nodes.push(Node {
-                            id: route_uri.clone(),
-                            name: route_name.clone(),
-                            kind: NodeKind::Route,
-                            filepath: self.filepath.to_string(),
-                            scope: "routes".to_string(),
-                            start_line: Some(span.start_line),
-                            start_col: Some(span.start_col),
-                            end_line: Some(span.end_line),
-                            end_col: Some(span.end_col),
-                            signature: Some(format!("{method} {route_path}")),
-                            docstring: None,
-                            checksum: None,
-                            metadata: Some(serde_json::json!({
-                                "http_method": method,
-                                "raw_pattern": route_path,
-                                "framework": framework,
-                                "middlewares": middlewares,
-                                "handler": handler,
-                                "auth": if is_protected { "protected" } else { "public" },
-                                "span": span,
-                            })),
-                        });
-
-                        if let Some(ref h) = handler {
-                            self.unresolved_references.push(UnresolvedReference {
-                                source_node_id: route_uri,
-                                target_symbol: h.clone(),
-                                import_source: None,
-                                kind: EdgeKind::MapsTo,
-                                span,
-                                call_fidelity: CallFidelity::Definite,
-                                receiver_type_hint: None,
-                                receiver_var: None,
-                                arg_count: None,
-                            });
-                        }
                     }
                 }
             }
@@ -452,18 +475,18 @@ impl<'a> GoExtractor<'a> {
         let receiver_list = method_node.child_by_field_name("receiver")?;
         let mut cursor = receiver_list.walk();
         for child in receiver_list.children(&mut cursor) {
-            if child.kind() == "parameter_declaration" {
-                if let Some(type_node) = child.child_by_field_name("type") {
-                    let text = self.node_text(type_node);
-                    return Some(text.trim_start_matches('*').to_string());
-                }
+            if child.kind() == "parameter_declaration"
+                && let Some(type_node) = child.child_by_field_name("type")
+            {
+                let text = self.node_text(type_node);
+                return Some(text.trim_start_matches('*').to_string());
             }
         }
         None
     }
 
     fn extract_go_visibility(&self, name: &str) -> Visibility {
-        if name.chars().next().map_or(false, |c| c.is_uppercase()) {
+        if name.chars().next().is_some_and(|c| c.is_uppercase()) {
             Visibility::Public
         } else {
             Visibility::PackagePrivate
@@ -537,7 +560,10 @@ func NewServer() *Server {
         let struct_node = &parsed.nodes[0];
         assert_eq!(struct_node.name, "Server");
         assert_eq!(struct_node.kind, NodeKind::Struct);
-        assert_eq!(struct_node.docstring.as_deref(), Some("Server manages connections"));
+        assert_eq!(
+            struct_node.docstring.as_deref(),
+            Some("Server manages connections")
+        );
 
         let iface_node = &parsed.nodes[1];
         assert_eq!(iface_node.name, "Runner");
@@ -587,7 +613,10 @@ func BenchmarkServer(b *testing.B) {
             .find(|n| n.name == "BenchmarkServer")
             .expect("Should find BenchmarkServer");
         assert_eq!(bench_fn.metadata.as_ref().unwrap()["is_test"], true);
-        assert_eq!(bench_fn.metadata.as_ref().unwrap()["test_type"], "benchmark");
+        assert_eq!(
+            bench_fn.metadata.as_ref().unwrap()["test_type"],
+            "benchmark"
+        );
     }
 
     #[test]
@@ -605,19 +634,34 @@ func SetupRoutes() {
         let ctx = ParseContext::new("routes.go", code);
         let parsed = parser.parse(&ctx).expect("Parsing Go routes failed");
 
-        let gin_route = parsed.nodes.iter().find(|n| n.name == "GET /api/v1/users").expect("Gin GET route not found");
+        let gin_route = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "GET /api/v1/users")
+            .expect("Gin GET route not found");
         assert_eq!(gin_route.kind, NodeKind::Route);
         let gin_meta = gin_route.metadata.as_ref().unwrap();
         assert_eq!(gin_meta["framework"], "gin");
         assert_eq!(gin_meta["auth"], "protected");
         assert_eq!(gin_meta["handler"], "GetUsers");
 
-        let echo_route = parsed.nodes.iter().find(|n| n.name == "POST /api/v1/items").expect("Echo POST route not found");
+        let echo_route = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "POST /api/v1/items")
+            .expect("Echo POST route not found");
         assert_eq!(echo_route.kind, NodeKind::Route);
         assert_eq!(echo_route.metadata.as_ref().unwrap()["framework"], "echo");
 
-        let http_route = parsed.nodes.iter().find(|n| n.name == "ALL /healthz").expect("net/http route not found");
+        let http_route = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "ALL /healthz")
+            .expect("net/http route not found");
         assert_eq!(http_route.kind, NodeKind::Route);
-        assert_eq!(http_route.metadata.as_ref().unwrap()["framework"], "net/http");
+        assert_eq!(
+            http_route.metadata.as_ref().unwrap()["framework"],
+            "net/http"
+        );
     }
 }

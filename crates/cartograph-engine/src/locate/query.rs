@@ -1,6 +1,6 @@
-use std::str::FromStr;
 use cartograph_core::{EdgeKind, NodeKind};
 use regex::Regex;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryIntent {
@@ -182,7 +182,11 @@ impl QueryParser {
         let kind_str = inline.kind.or(cli_options.kind);
         let kind_filter = kind_str.map(|k| {
             k.split(',')
-                .map(|s| s.trim().parse::<NodeKind>().unwrap_or(NodeKind::Other(s.to_string())))
+                .map(|s| {
+                    s.trim()
+                        .parse::<NodeKind>()
+                        .unwrap_or(NodeKind::Other(s.to_string()))
+                })
                 .collect()
         });
 
@@ -212,7 +216,11 @@ impl QueryParser {
         // Edge kinds
         let edge_kinds = cli_options.edges.map(|e| {
             e.split(',')
-                .map(|s| s.trim().parse::<EdgeKind>().unwrap_or(EdgeKind::Other(s.to_string())))
+                .map(|s| {
+                    s.trim()
+                        .parse::<EdgeKind>()
+                        .unwrap_or(EdgeKind::Other(s.to_string()))
+                })
                 .collect()
         });
 
@@ -226,7 +234,8 @@ impl QueryParser {
         let detail = if cli_options.code {
             ContextDetail::Full
         } else if let Some(ref d) = cli_options.detail {
-            d.parse::<ContextDetail>().unwrap_or(ContextDetail::Signatures)
+            d.parse::<ContextDetail>()
+                .unwrap_or(ContextDetail::Signatures)
         } else {
             ContextDetail::Signatures
         };
@@ -297,7 +306,16 @@ impl QueryParser {
             return QueryIntent::CanonicalUri(trimmed.to_string());
         }
 
-        if trimmed.contains("::") || trimmed.contains('#') || (trimmed.contains('.') && !trimmed.contains(' ') && !trimmed.ends_with(".rs") && !trimmed.ends_with(".py") && !trimmed.ends_with(".ts") && !trimmed.ends_with(".js") && !trimmed.ends_with(".go")) {
+        if trimmed.contains("::")
+            || trimmed.contains('#')
+            || (trimmed.contains('.')
+                && !trimmed.contains(' ')
+                && !trimmed.ends_with(".rs")
+                && !trimmed.ends_with(".py")
+                && !trimmed.ends_with(".ts")
+                && !trimmed.ends_with(".js")
+                && !trimmed.ends_with(".go"))
+        {
             // Qualified symbol: split scope and name
             let parts: Vec<&str> = if trimmed.contains("::") {
                 trimmed.split("::").collect()
@@ -340,11 +358,9 @@ impl QueryParser {
                 let mut prev_is_lower = false;
 
                 for ch in part.chars() {
-                    if ch.is_uppercase() && prev_is_lower {
-                        if !current.is_empty() {
-                            tokens.push(current.to_lowercase());
-                            current = String::new();
-                        }
+                    if ch.is_uppercase() && prev_is_lower && !current.is_empty() {
+                        tokens.push(current.to_lowercase());
+                        current = String::new();
                     }
                     prev_is_lower = ch.is_lowercase();
                     current.push(ch);

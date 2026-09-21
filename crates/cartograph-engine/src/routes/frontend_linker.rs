@@ -1,7 +1,7 @@
+use super::normalizer::normalize_route_path;
 use cartograph_core::model::{Edge, EdgeKind, HttpMethod, Node, NodeKind};
 use serde_json::json;
 use std::str::FromStr;
-use super::normalizer::normalize_route_path;
 
 /// Normalizes a frontend template URL (e.g. `/api/users/${id}`) into a comparable pattern
 pub fn normalize_frontend_template_url(raw_url: &str) -> String {
@@ -87,7 +87,10 @@ impl FrontendRouteLinker {
                 None => continue,
             };
 
-            let server_method_str = meta.get("http_method").and_then(|v| v.as_str()).unwrap_or("ALL");
+            let server_method_str = meta
+                .get("http_method")
+                .and_then(|v| v.as_str())
+                .unwrap_or("ALL");
             let server_method = HttpMethod::from_str(server_method_str).unwrap_or(HttpMethod::All);
 
             // Verify method compatibility
@@ -99,13 +102,20 @@ impl FrontendRouteLinker {
                 continue;
             }
 
-            let raw_pattern = meta.get("raw_pattern").and_then(|v| v.as_str()).unwrap_or(&route_node.name);
+            let raw_pattern = meta
+                .get("raw_pattern")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&route_node.name);
 
             if matches_route_pattern(client_url_pattern, raw_pattern) {
-                let is_exact = normalize_frontend_template_url(client_url_pattern) == normalize_route_path(raw_pattern);
+                let is_exact = normalize_frontend_template_url(client_url_pattern)
+                    == normalize_route_path(raw_pattern);
                 let confidence = if is_exact { 1.0 } else { 0.9 };
 
-                if best_match.as_ref().map_or(true, |(_, current_conf)| confidence > *current_conf) {
+                if best_match
+                    .as_ref()
+                    .is_none_or(|(_, current_conf)| confidence > *current_conf)
+                {
                     best_match = Some((route_node, confidence));
                 }
             }
@@ -149,7 +159,10 @@ mod tests {
         assert!(matches_route_pattern("/api/users/123", "/api/users/{id}"));
         assert!(matches_route_pattern("/api/v1/orders", "/api/v1/orders"));
         assert!(!matches_route_pattern("/api/v1/orders", "/api/v1/users"));
-        assert!(!matches_route_pattern("/api/users/123/edit", "/api/users/{id}"));
+        assert!(!matches_route_pattern(
+            "/api/users/123/edit",
+            "/api/users/{id}"
+        ));
     }
 
     #[test]
@@ -183,8 +196,14 @@ mod tests {
 
         assert!(edge.is_some());
         let e = edge.unwrap();
-        assert_eq!(e.source_id, "cartograph://UserCard.tsx::::UserCard#component");
-        assert_eq!(e.target_id, "cartograph://routes.ts::::GET%20%2Fapi%2Fusers%2F%7Bid%7D#route");
+        assert_eq!(
+            e.source_id,
+            "cartograph://UserCard.tsx::::UserCard#component"
+        );
+        assert_eq!(
+            e.target_id,
+            "cartograph://routes.ts::::GET%20%2Fapi%2Fusers%2F%7Bid%7D#route"
+        );
         assert_eq!(e.kind, EdgeKind::Calls);
     }
 }

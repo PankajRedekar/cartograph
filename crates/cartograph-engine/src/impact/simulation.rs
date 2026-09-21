@@ -27,7 +27,8 @@ impl SimulationEngine {
                         new_signature: None,
                         status: ChangeStatus::Deleted,
                         semantic_change: SemanticChangeType::Deleted,
-                        is_public_export: crate::impact::semver_guard::SemVerGuard::is_public_export(&n),
+                        is_public_export:
+                            crate::impact::semver_guard::SemVerGuard::is_public_export(&n),
                         modified_lines: n.start_line.map(|s| vec![s]),
                         in_degree: 0,
                         out_degree: 0,
@@ -52,7 +53,8 @@ impl SimulationEngine {
                         new_signature: Some(new_name.clone()),
                         status: ChangeStatus::Modified,
                         semantic_change: SemanticChangeType::SignatureBreak,
-                        is_public_export: crate::impact::semver_guard::SemVerGuard::is_public_export(&n),
+                        is_public_export:
+                            crate::impact::semver_guard::SemVerGuard::is_public_export(&n),
                         modified_lines: n.start_line.map(|s| vec![s]),
                         in_degree: 0,
                         out_degree: 0,

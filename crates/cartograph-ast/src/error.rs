@@ -12,10 +12,7 @@ pub enum AstError {
     QueryCompilation(String),
 
     #[error("Parsing error in file '{filepath}': {message}")]
-    ParseFailure {
-        filepath: String,
-        message: String,
-    },
+    ParseFailure { filepath: String, message: String },
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),

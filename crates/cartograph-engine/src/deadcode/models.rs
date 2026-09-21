@@ -1,8 +1,10 @@
-use std::sync::Arc;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::error::Result;
-use cartograph_core::model::{ConfidenceTier, DeadCodeCategory, DeadSymbolItem, NodeKind, RawDeadSymbolRecord};
+use cartograph_core::model::{
+    ConfidenceTier, DeadCodeCategory, DeadSymbolItem, NodeKind, RawDeadSymbolRecord,
+};
 use sha2::{Digest, Sha256};
+use std::sync::Arc;
 
 /// Classifies Abandoned Database Models, ORM entities, and SQL tables.
 pub async fn classify_abandoned_models(
@@ -14,7 +16,8 @@ pub async fn classify_abandoned_models(
     for node in unreachable_nodes {
         let kind_lower = node.kind.to_lowercase();
         let filepath_lower = node.filepath.to_lowercase();
-        let is_model_kind = kind_lower == "model" || kind_lower == "schema" || kind_lower == "table";
+        let is_model_kind =
+            kind_lower == "model" || kind_lower == "schema" || kind_lower == "table";
 
         let is_model_file = filepath_lower.contains("/models/")
             || filepath_lower.contains("/model/")
@@ -25,21 +28,31 @@ pub async fn classify_abandoned_models(
             || filepath_lower.ends_with(".entity.ts")
             || filepath_lower.ends_with(".model.ts");
 
-        let has_model_signature = node.signature.as_ref().map(|sig| {
-            let s = sig.to_lowercase();
-            s.contains("models.model")
-                || s.contains("basemodel")
-                || s.contains("@entity")
-                || s.contains("activerecord::base")
-                || s.contains("#[table(")
-                || s.contains("extends model")
-                || s.contains("extends entity")
-        }).unwrap_or(false);
+        let has_model_signature = node
+            .signature
+            .as_ref()
+            .map(|sig| {
+                let s = sig.to_lowercase();
+                s.contains("models.model")
+                    || s.contains("basemodel")
+                    || s.contains("@entity")
+                    || s.contains("activerecord::base")
+                    || s.contains("#[table(")
+                    || s.contains("extends model")
+                    || s.contains("extends entity")
+            })
+            .unwrap_or(false);
 
-        if (is_model_kind || (is_model_file && (kind_lower == "class" || kind_lower == "struct")) || has_model_signature)
+        if (is_model_kind
+            || (is_model_file && (kind_lower == "class" || kind_lower == "struct"))
+            || has_model_signature)
             && node.in_degree == 0
         {
-            let loc = node.end_line.unwrap_or(1).saturating_sub(node.start_line.unwrap_or(1)) as usize + 1;
+            let loc = node
+                .end_line
+                .unwrap_or(1)
+                .saturating_sub(node.start_line.unwrap_or(1)) as usize
+                + 1;
             let fingerprint = compute_fingerprint(&node.id, &node.name, &node.filepath);
 
             models.push(DeadSymbolItem {
@@ -57,7 +70,9 @@ pub async fn classify_abandoned_models(
                 confidence: 0.88,
                 tier: ConfidenceTier::Medium,
                 confidence_factors: vec![cartograph_core::model::ConfidenceFactor {
-                    description: "Database model has zero queries, migrations, or references across codebase".to_string(),
+                    description:
+                        "Database model has zero queries, migrations, or references across codebase"
+                            .to_string(),
                     delta: 0.08,
                 }],
                 island_id: None,

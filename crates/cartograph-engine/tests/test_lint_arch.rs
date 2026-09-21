@@ -9,18 +9,18 @@ use cartograph_core::config::{
 };
 use cartograph_core::model::{Edge, EdgeKind, Node, NodeKind};
 use cartograph_db::create_backend;
+use cartograph_engine::lint_arch::ArchLinter;
 use cartograph_engine::lint_arch::baseline::ArchBaselineManager;
 use cartograph_engine::lint_arch::formatters::{
     AgentXmlFormatter, JsonFormatter, MarkdownFormatter, SarifFormatter, TerminalFormatter,
 };
-use cartograph_engine::lint_arch::ArchLinter;
 
 #[tokio::test]
 async fn test_layer_boundary_violation_and_clean_arch() {
     let dir = tempdir().unwrap();
     let db_path = dir.path().join("arch_layers.db");
     let storage_cfg = StorageConfig::sqlite(db_path.to_str().unwrap());
-    let backend: Arc<dyn GraphStoreBackend> = Arc::from(create_backend(&storage_cfg).unwrap());
+    let backend: Arc<dyn GraphStoreBackend> = create_backend(&storage_cfg).unwrap();
 
     // Domain node
     let domain_node = Node {
@@ -77,8 +77,10 @@ async fn test_layer_boundary_violation_and_clean_arch() {
         .unwrap();
 
     // Configure Clean Architecture preset
-    let mut config = LintArchConfig::default();
-    config.preset = Some("clean-architecture".to_string());
+    let config = LintArchConfig {
+        preset: Some("clean-architecture".to_string()),
+        ..Default::default()
+    };
 
     let linter = ArchLinter::new(backend, config);
     let report = linter.lint().await.unwrap();
@@ -98,7 +100,7 @@ async fn test_circular_dependency_detection_and_fas_cut() {
     let dir = tempdir().unwrap();
     let db_path = dir.path().join("arch_cycles.db");
     let storage_cfg = StorageConfig::sqlite(db_path.to_str().unwrap());
-    let backend: Arc<dyn GraphStoreBackend> = Arc::from(create_backend(&storage_cfg).unwrap());
+    let backend: Arc<dyn GraphStoreBackend> = create_backend(&storage_cfg).unwrap();
 
     // 3 Nodes forming a circular loop: A -> B -> C -> A
     let node_a = Node {
@@ -185,9 +187,11 @@ async fn test_circular_dependency_detection_and_fas_cut() {
         .await
         .unwrap();
 
-    let mut config = LintArchConfig::default();
-    config.detect_cycles = true;
-    config.cycle_granularity = CycleGranularity::File;
+    let config = LintArchConfig {
+        detect_cycles: true,
+        cycle_granularity: CycleGranularity::File,
+        ..Default::default()
+    };
 
     let linter = ArchLinter::new(backend, config);
     let report = linter.lint().await.unwrap();
@@ -209,7 +213,7 @@ async fn test_package_encapsulation_deep_import_forbidden() {
     let dir = tempdir().unwrap();
     let db_path = dir.path().join("arch_package.db");
     let storage_cfg = StorageConfig::sqlite(db_path.to_str().unwrap());
-    let backend: Arc<dyn GraphStoreBackend> = Arc::from(create_backend(&storage_cfg).unwrap());
+    let backend: Arc<dyn GraphStoreBackend> = create_backend(&storage_cfg).unwrap();
 
     // External caller
     let app_node = Node {
@@ -260,13 +264,20 @@ async fn test_package_encapsulation_deep_import_forbidden() {
         .await
         .unwrap();
     backend
-        .update_file_graph("packages/core/src/internal/crypto.ts", "h2", &[secret_node], &[])
+        .update_file_graph(
+            "packages/core/src/internal/crypto.ts",
+            "h2",
+            &[secret_node],
+            &[],
+        )
         .await
         .unwrap();
 
-    let mut config = LintArchConfig::default();
-    config.package_encapsulation = PackageEncapsulationConfig {
-        enabled: true,
+    let config = LintArchConfig {
+        package_encapsulation: PackageEncapsulationConfig {
+            enabled: true,
+            ..Default::default()
+        },
         ..Default::default()
     };
 
@@ -286,7 +297,7 @@ async fn test_baseline_suppression_and_ratcheting() {
     let baseline_path = dir.path().join("baseline.json");
 
     let storage_cfg = StorageConfig::sqlite(db_path.to_str().unwrap());
-    let backend: Arc<dyn GraphStoreBackend> = Arc::from(create_backend(&storage_cfg).unwrap());
+    let backend: Arc<dyn GraphStoreBackend> = create_backend(&storage_cfg).unwrap();
 
     // Node A imports Node B (violates custom rule)
     let node_a = Node {
@@ -330,11 +341,16 @@ async fn test_baseline_suppression_and_ratcheting() {
     };
 
     backend
-        .update_file_graph("src/foo.rs", "h1", &[node_a.clone()], &[edge.clone()])
+        .update_file_graph(
+            "src/foo.rs",
+            "h1",
+            std::slice::from_ref(&node_a),
+            std::slice::from_ref(&edge),
+        )
         .await
         .unwrap();
     backend
-        .update_file_graph("src/bar.rs", "h2", &[node_b.clone()], &[])
+        .update_file_graph("src/bar.rs", "h2", std::slice::from_ref(&node_b), &[])
         .await
         .unwrap();
 
@@ -391,7 +407,7 @@ async fn test_quad_engine_formatters_and_mermaid() {
     let dir = tempdir().unwrap();
     let db_path = dir.path().join("arch_format.db");
     let storage_cfg = StorageConfig::sqlite(db_path.to_str().unwrap());
-    let backend: Arc<dyn GraphStoreBackend> = Arc::from(create_backend(&storage_cfg).unwrap());
+    let backend: Arc<dyn GraphStoreBackend> = create_backend(&storage_cfg).unwrap();
 
     let node1 = Node {
         id: "src/alpha.rs::Alpha".to_string(),
@@ -450,8 +466,10 @@ async fn test_quad_engine_formatters_and_mermaid() {
         .await
         .unwrap();
 
-    let mut config = LintArchConfig::default();
-    config.detect_cycles = true;
+    let config = LintArchConfig {
+        detect_cycles: true,
+        ..Default::default()
+    };
 
     let linter = ArchLinter::new(backend, config);
     let report = linter.lint().await.unwrap();
@@ -486,7 +504,7 @@ async fn test_sub_10ms_performance_sla() {
     let dir = tempdir().unwrap();
     let db_path = dir.path().join("arch_bench.db");
     let storage_cfg = StorageConfig::sqlite(db_path.to_str().unwrap());
-    let backend: Arc<dyn GraphStoreBackend> = Arc::from(create_backend(&storage_cfg).unwrap());
+    let backend: Arc<dyn GraphStoreBackend> = create_backend(&storage_cfg).unwrap();
 
     // Generate a testbed with 50 files and 150 dependency edges
     let num_files = 50;
@@ -537,26 +555,28 @@ async fn test_sub_10ms_performance_sla() {
             .unwrap();
     }
 
-    let mut config = LintArchConfig::default();
-    config.detect_cycles = true;
-    config.layers = vec![
-        ArchLayerConfig {
-            name: "core".to_string(),
-            description: None,
-            patterns: vec!["src/module_[0-9]/**".to_string()],
-            forbidden: vec!["app".to_string()],
-            allowed: None,
-            severity: ArchSeverity::Error,
-        },
-        ArchLayerConfig {
-            name: "app".to_string(),
-            description: None,
-            patterns: vec!["src/module_[1-4][0-9]/**".to_string()],
-            forbidden: vec![],
-            allowed: None,
-            severity: ArchSeverity::Error,
-        },
-    ];
+    let config = LintArchConfig {
+        detect_cycles: true,
+        layers: vec![
+            ArchLayerConfig {
+                name: "core".to_string(),
+                description: None,
+                patterns: vec!["src/module_[0-9]/**".to_string()],
+                forbidden: vec!["app".to_string()],
+                allowed: None,
+                severity: ArchSeverity::Error,
+            },
+            ArchLayerConfig {
+                name: "app".to_string(),
+                description: None,
+                patterns: vec!["src/module_[1-4][0-9]/**".to_string()],
+                forbidden: vec![],
+                allowed: None,
+                severity: ArchSeverity::Error,
+            },
+        ],
+        ..Default::default()
+    };
 
     let linter = ArchLinter::new(backend, config);
 

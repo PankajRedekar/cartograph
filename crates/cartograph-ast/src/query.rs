@@ -26,16 +26,13 @@ impl QueryEngine {
             for capture in m.captures {
                 let name = &query.capture_names()[capture.index as usize];
                 let node = capture.node;
-                let text = if node.start_byte() <= node.end_byte() && node.end_byte() <= source.len() {
-                    &source[node.start_byte()..node.end_byte()]
-                } else {
-                    ""
-                };
-                captures.push(CapturedNode {
-                    name,
-                    node,
-                    text,
-                });
+                let text =
+                    if node.start_byte() <= node.end_byte() && node.end_byte() <= source.len() {
+                        &source[node.start_byte()..node.end_byte()]
+                    } else {
+                        ""
+                    };
+                captures.push(CapturedNode { name, node, text });
             }
             results.push(captures);
         }
@@ -57,16 +54,13 @@ impl QueryEngine {
             for capture in m.captures {
                 let name = &query.capture_names()[capture.index as usize];
                 let node = capture.node;
-                let text = if node.start_byte() <= node.end_byte() && node.end_byte() <= source.len() {
-                    &source[node.start_byte()..node.end_byte()]
-                } else {
-                    ""
-                };
-                results.push(CapturedNode {
-                    name,
-                    node,
-                    text,
-                });
+                let text =
+                    if node.start_byte() <= node.end_byte() && node.end_byte() <= source.len() {
+                        &source[node.start_byte()..node.end_byte()]
+                    } else {
+                        ""
+                    };
+                results.push(CapturedNode { name, node, text });
             }
         }
 

@@ -22,10 +22,10 @@ impl TestPrioritizer {
                 .then_with(|| a.test_node.name.cmp(&b.test_node.name))
         });
 
-        if let Some(limit) = max_tests {
-            if limit < tests.len() {
-                tests.truncate(limit);
-            }
+        if let Some(limit) = max_tests
+            && limit < tests.len()
+        {
+            tests.truncate(limit);
         }
 
         tests
@@ -34,7 +34,7 @@ impl TestPrioritizer {
     /// Compute fail-fast priority score (0.0 to 100.0+)
     pub fn compute_priority(test: &SelectedTest) -> f64 {
         let mut score = match test.hop_distance {
-            0 => 100.0, // Directly edited test
+            0 => 100.0,                                // Directly edited test
             1 => 80.0 + (test.relevance_score * 10.0), // Direct test of modified symbol
             d => (60.0 - ((d as f64 - 2.0) * 10.0)).max(10.0) + (test.relevance_score * 10.0),
         };

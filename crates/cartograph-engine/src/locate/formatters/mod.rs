@@ -77,7 +77,13 @@ impl OutputFormatter for TerminalFormatter {
                 for type_node in subgraph.inlined_type_contracts.values() {
                     let t_badge = format_kind_badge(&type_node.kind, self.colorize);
                     let sig = type_node.signature.as_deref().unwrap_or(&type_node.name);
-                    out.push_str(&format!("│    ├── {} {} ({}:{})\n", t_badge, sig, type_node.filepath, type_node.start_line.unwrap_or(1)));
+                    out.push_str(&format!(
+                        "│    ├── {} {} ({}:{})\n",
+                        t_badge,
+                        sig,
+                        type_node.filepath,
+                        type_node.start_line.unwrap_or(1)
+                    ));
                 }
             }
 
@@ -93,9 +99,16 @@ impl OutputFormatter for TerminalFormatter {
                     let target_name = subgraph
                         .neighbor_nodes
                         .get(&e.target_id)
-                        .map(|n| format!("{} ({}:{})", n.name, n.filepath, n.start_line.unwrap_or(1)))
+                        .map(|n| {
+                            format!("{} ({}:{})", n.name, n.filepath, n.start_line.unwrap_or(1))
+                        })
                         .unwrap_or_else(|| e.target_id.clone());
-                    out.push_str(&format!("│    ├── [{}] {} (conf: {:.2})\n", e.kind.as_str(), target_name, e.confidence));
+                    out.push_str(&format!(
+                        "│    ├── [{}] {} (conf: {:.2})\n",
+                        e.kind.as_str(),
+                        target_name,
+                        e.confidence
+                    ));
                 }
             }
 
@@ -111,9 +124,16 @@ impl OutputFormatter for TerminalFormatter {
                     let source_name = subgraph
                         .neighbor_nodes
                         .get(&e.source_id)
-                        .map(|n| format!("{} ({}:{})", n.name, n.filepath, n.start_line.unwrap_or(1)))
+                        .map(|n| {
+                            format!("{} ({}:{})", n.name, n.filepath, n.start_line.unwrap_or(1))
+                        })
                         .unwrap_or_else(|| e.source_id.clone());
-                    out.push_str(&format!("│    ├── [{}] {} (conf: {:.2})\n", e.kind.as_str(), source_name, e.confidence));
+                    out.push_str(&format!(
+                        "│    ├── [{}] {} (conf: {:.2})\n",
+                        e.kind.as_str(),
+                        source_name,
+                        e.confidence
+                    ));
                 }
             }
 
@@ -121,16 +141,25 @@ impl OutputFormatter for TerminalFormatter {
             let cross_edges: Vec<_> = subgraph
                 .edges
                 .iter()
-                .filter(|e| (e.target_id == root.node.id || e.source_id == root.node.id) && e.direction == EdgeDirection::CrossDomain)
+                .filter(|e| {
+                    (e.target_id == root.node.id || e.source_id == root.node.id)
+                        && e.direction == EdgeDirection::CrossDomain
+                })
                 .collect();
             if !cross_edges.is_empty() {
                 out.push_str("│\n🌐── Cross-Domain Mappings & Tests:\n");
                 for e in cross_edges {
-                    let other_id = if e.source_id == root.node.id { &e.target_id } else { &e.source_id };
+                    let other_id = if e.source_id == root.node.id {
+                        &e.target_id
+                    } else {
+                        &e.source_id
+                    };
                     let other_name = subgraph
                         .neighbor_nodes
                         .get(other_id)
-                        .map(|n| format!("{} ({}:{})", n.name, n.filepath, n.start_line.unwrap_or(1)))
+                        .map(|n| {
+                            format!("{} ({}:{})", n.name, n.filepath, n.start_line.unwrap_or(1))
+                        })
                         .unwrap_or_else(|| other_id.clone());
                     out.push_str(&format!("│    ├── [{}] {}\n", e.kind.as_str(), other_name));
                 }
@@ -165,7 +194,9 @@ pub struct MarkdownFormatter {
 
 impl Default for MarkdownFormatter {
     fn default() -> Self {
-        Self { include_mermaid: true }
+        Self {
+            include_mermaid: true,
+        }
     }
 }
 
@@ -188,7 +219,12 @@ impl OutputFormatter for MarkdownFormatter {
             for edge in &subgraph.edges {
                 let src_label = sanitize_mermaid_id(&edge.source_id);
                 let tgt_label = sanitize_mermaid_id(&edge.target_id);
-                out.push_str(&format!("  {} -->|{}| {}\n", src_label, edge.kind.as_str(), tgt_label));
+                out.push_str(&format!(
+                    "  {} -->|{}| {}\n",
+                    src_label,
+                    edge.kind.as_str(),
+                    tgt_label
+                ));
             }
             out.push_str("```\n\n");
         }
@@ -199,7 +235,11 @@ impl OutputFormatter for MarkdownFormatter {
                 root.node.name,
                 root.node.kind.as_str()
             ));
-            out.push_str(&format!("- **File**: `{}:{}`\n", root.node.filepath, root.node.start_line.unwrap_or(1)));
+            out.push_str(&format!(
+                "- **File**: `{}:{}`\n",
+                root.node.filepath,
+                root.node.start_line.unwrap_or(1)
+            ));
             if let Some(ref sig) = root.node.signature {
                 out.push_str(&format!("- **Signature**: `{}`\n", sig));
             }
@@ -209,13 +249,16 @@ impl OutputFormatter for MarkdownFormatter {
             out.push_str(&format!("- **Relevance Score**: `{:.1}`\n\n", root.score));
 
             // Code block
-            if let Some(ctx) = context {
-                if let Some(root_slice) = ctx.root_slices.get(idx) {
-                    let ext = Path::new(&root.node.filepath).extension().and_then(|e| e.to_str()).unwrap_or("");
-                    out.push_str(&format!("```{ext}\n"));
-                    out.push_str(&root_slice.content);
-                    out.push_str("```\n\n");
-                }
+            if let Some(ctx) = context
+                && let Some(root_slice) = ctx.root_slices.get(idx)
+            {
+                let ext = Path::new(&root.node.filepath)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("");
+                out.push_str(&format!("```{ext}\n"));
+                out.push_str(&root_slice.content);
+                out.push_str("```\n\n");
             }
         }
 
@@ -328,12 +371,12 @@ impl OutputFormatter for AgentXmlFormatter {
             if let Some(ref doc) = root.node.docstring {
                 out.push_str(&format!("    <docstring>{}</docstring>\n", doc));
             }
-            if let Some(ctx) = context {
-                if let Some(root_slice) = ctx.root_slices.get(idx) {
-                    out.push_str("    <code>\n");
-                    out.push_str(&root_slice.content);
-                    out.push_str("    </code>\n");
-                }
+            if let Some(ctx) = context
+                && let Some(root_slice) = ctx.root_slices.get(idx)
+            {
+                out.push_str("    <code>\n");
+                out.push_str(&root_slice.content);
+                out.push_str("    </code>\n");
             }
             out.push_str("  </root_symbol>\n");
         }
@@ -357,7 +400,10 @@ impl OutputFormatter for AgentXmlFormatter {
             for e in &subgraph.edges {
                 out.push_str(&format!(
                     "    <edge source=\"{}\" target=\"{}\" kind=\"{}\" confidence=\"{:.2}\" />\n",
-                    e.source_id, e.target_id, e.kind.as_str(), e.confidence
+                    e.source_id,
+                    e.target_id,
+                    e.kind.as_str(),
+                    e.confidence
                 ));
             }
             out.push_str("  </graph_edges>\n");
@@ -385,19 +431,16 @@ fn sanitize_mermaid_id(id: &str) -> String {
     let clean = id
         .replace("cartograph://", "")
         .replace("::", "_")
-        .replace('#', "_")
-        .replace('/', "_")
-        .replace('.', "_")
-        .replace('-', "_");
+        .replace(['#', '/', '.', '-'], "_");
     format!("N_{clean}")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cartograph_core::model::EdgeKind;
     use crate::locate::search::SearchChannel;
     use crate::locate::subgraph::LocalizedEdge;
+    use cartograph_core::model::EdgeKind;
 
     fn make_test_subgraph() -> LocalizedSubgraph {
         let node = cartograph_core::model::Node {

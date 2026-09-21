@@ -96,7 +96,10 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     .map_err(|e| CartographError::Database(format!("Failed to execute schema migration: {e}")))?;
 
     // Safe backwards-compatible migrations for existing SQLite databases
-    let _ = conn.execute("ALTER TABLE edges ADD COLUMN confidence REAL DEFAULT 1.0;", []);
+    let _ = conn.execute(
+        "ALTER TABLE edges ADD COLUMN confidence REAL DEFAULT 1.0;",
+        [],
+    );
     let _ = conn.execute("ALTER TABLE edges ADD COLUMN weight REAL DEFAULT 1.0;", []);
 
     conn.execute(

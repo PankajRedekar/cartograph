@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use async_trait::async_trait;
+use std::collections::HashMap;
 
 use crate::error::Result;
 use crate::model::{
@@ -48,7 +48,11 @@ pub trait GraphStoreBackend: Send + Sync {
     async fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>>;
 
     /// Downstream dependency traversal: all nodes reachable by following outgoing edges from root_id up to max_depth.
-    async fn get_downstream_dependencies(&self, root_id: &str, max_depth: usize) -> Result<Vec<Node>>;
+    async fn get_downstream_dependencies(
+        &self,
+        root_id: &str,
+        max_depth: usize,
+    ) -> Result<Vec<Node>>;
 
     /// Upstream impact traversal: all nodes that reach root_id by following incoming edges up to max_depth (blast radius).
     async fn get_upstream_impact(&self, root_id: &str, max_depth: usize) -> Result<Vec<Node>>;
@@ -58,7 +62,11 @@ pub trait GraphStoreBackend: Send + Sync {
 
     /// Retrieve all incoming and outgoing edges connecting any of the specified node IDs
     /// whose confidence is greater than or equal to min_confidence.
-    async fn get_edges_for_nodes(&self, node_ids: &[String], min_confidence: f64) -> Result<Vec<Edge>>;
+    async fn get_edges_for_nodes(
+        &self,
+        node_ids: &[String],
+        min_confidence: f64,
+    ) -> Result<Vec<Edge>>;
 
     /// Multi-root impact traversal: traverses incoming edges (upstream) or outgoing edges (downstream)
     /// from root_ids up to max_depth with min_confidence.
@@ -126,10 +134,7 @@ pub trait GraphStoreBackend: Send + Sync {
 
     /// Query all member methods and fields belonging to a class/struct node ID
     /// via Defines/Contains edges or child nodes within line boundaries.
-    async fn get_class_member_graph(
-        &self,
-        class_id: &str,
-    ) -> Result<Vec<RawClassMemberRecord>>;
+    async fn get_class_member_graph(&self, class_id: &str) -> Result<Vec<RawClassMemberRecord>>;
 
     /// Retrieve all distinct file paths tracked in the graph database.
     async fn get_all_indexed_files(&self) -> Result<Vec<String>>;

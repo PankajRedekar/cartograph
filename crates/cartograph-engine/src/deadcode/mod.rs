@@ -23,9 +23,7 @@ use std::time::Instant;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::{DeadCodeCategoryFilter, DeadCodeConfig};
 use cartograph_core::error::Result;
-use cartograph_core::model::{
-    DeadCodeCategory, DeadCodeReport, DeadSymbolItem,
-};
+use cartograph_core::model::{DeadCodeCategory, DeadCodeReport, DeadSymbolItem};
 
 pub use ai_ignore::export_ai_ignore_mask;
 pub use baseline::BaselineManager;
@@ -75,11 +73,7 @@ impl DeadCodeEngine {
         let min_lines = options.min_lines.unwrap_or(self.config.min_lines);
 
         // 1. Resolve Living Roots
-        let roots = roots::discover_living_roots(
-            &self.backend,
-            &self.config,
-        )
-        .await?;
+        let roots = roots::discover_living_roots(&self.backend, &self.config).await?;
 
         // 2. Forward Reachability Traversal
         let raw_unreachable = self
@@ -95,7 +89,9 @@ impl DeadCodeEngine {
         );
 
         // 4. Dead Islands Extraction (Tarjan SCC)
-        let dead_islands = island::extract_dead_islands(&self.backend, &filtered_unreachable, min_confidence).await?;
+        let dead_islands =
+            island::extract_dead_islands(&self.backend, &filtered_unreachable, min_confidence)
+                .await?;
 
         // 5. Domain Orphan Classifications
         let mut all_dead_symbols: Vec<DeadSymbolItem> = Vec::new();
@@ -105,15 +101,18 @@ impl DeadCodeEngine {
         all_dead_symbols.extend(components);
 
         // 5b. Dangling Routes & RPC
-        let routes = routes::classify_dangling_routes_and_rpc(&self.backend, &filtered_unreachable).await?;
+        let routes =
+            routes::classify_dangling_routes_and_rpc(&self.backend, &filtered_unreachable).await?;
         all_dead_symbols.extend(routes);
 
         // 5c. Abandoned Database Models
-        let models = models::classify_abandoned_models(&self.backend, &filtered_unreachable).await?;
+        let models =
+            models::classify_abandoned_models(&self.backend, &filtered_unreachable).await?;
         all_dead_symbols.extend(models);
 
         // 5d. Fine-grained AST elements (unread fields, unused variants, barrel exports)
-        let ast_elements = ast::extract_fine_grained_dead_elements(&self.backend, &filtered_unreachable).await?;
+        let ast_elements =
+            ast::extract_fine_grained_dead_elements(&self.backend, &filtered_unreachable).await?;
         all_dead_symbols.extend(ast_elements);
 
         // 5e. Zombie files and test-only zombies
@@ -127,13 +126,22 @@ impl DeadCodeEngine {
         all_dead_symbols.extend(test_zombies);
 
         // 5f. Add general dead functions/methods not already classified
-        let classified_ids: HashSet<String> = all_dead_symbols.iter().map(|s| s.id.clone()).collect();
+        let classified_ids: HashSet<String> =
+            all_dead_symbols.iter().map(|s| s.id.clone()).collect();
         for node in &filtered_unreachable {
             if !classified_ids.contains(&node.id) {
-                let loc = node.end_line.unwrap_or(1).saturating_sub(node.start_line.unwrap_or(1)) as usize + 1;
-                let category = if node.kind.to_lowercase() == "method" || (!node.scope.is_empty() && node.scope != "global") {
+                let loc =
+                    node.end_line
+                        .unwrap_or(1)
+                        .saturating_sub(node.start_line.unwrap_or(1)) as usize
+                        + 1;
+                let category = if node.kind.to_lowercase() == "method"
+                    || (!node.scope.is_empty() && node.scope != "global")
+                {
                     DeadCodeCategory::DeadMethod
-                } else if node.kind.to_lowercase() == "class" || node.kind.to_lowercase() == "struct" {
+                } else if node.kind.to_lowercase() == "class"
+                    || node.kind.to_lowercase() == "struct"
+                {
                     DeadCodeCategory::DeadClass
                 } else {
                     DeadCodeCategory::DeadFunction
@@ -142,7 +150,10 @@ impl DeadCodeEngine {
                 let item = DeadSymbolItem {
                     id: node.id.clone(),
                     name: node.name.clone(),
-                    kind: node.kind.parse().unwrap_or(cartograph_core::model::NodeKind::Function),
+                    kind: node
+                        .kind
+                        .parse()
+                        .unwrap_or(cartograph_core::model::NodeKind::Function),
                     filepath: node.filepath.clone(),
                     scope: node.scope.clone(),
                     start_line: node.start_line.unwrap_or(1),
@@ -167,12 +178,9 @@ impl DeadCodeEngine {
         }
 
         // 6. Ghost Dependencies
-        let ghost_dependencies = manifest::detect_ghost_dependencies(
-            &self.backend,
-            &self.repo_path,
-            &dead_islands,
-        )
-        .await?;
+        let ghost_dependencies =
+            manifest::detect_ghost_dependencies(&self.backend, &self.repo_path, &dead_islands)
+                .await?;
 
         // 7. Deprecated Symbols Status
         let deprecated_statuses = deprecated::track_deprecated_symbols(&self.backend).await?;
@@ -198,18 +206,22 @@ impl DeadCodeEngine {
 
         // 9. Baseline Management
         let mut baseline_suppressed_count = 0;
-        if let Some(ref baseline_path) = options.baseline_path {
-            if baseline_path.exists() {
-                if let Ok(mut baseline) = BaselineManager::load_baseline(baseline_path) {
-                    if options.ratchet {
-                        let current_fps: HashSet<String> = all_dead_symbols.iter().map(|s| s.fingerprint.clone()).collect();
-                        let _ = BaselineManager::ratchet_baseline(baseline_path, &mut baseline, &current_fps);
-                    }
-                    let (unsuppressed, suppressed) = BaselineManager::filter_with_baseline(all_dead_symbols, &baseline);
-                    all_dead_symbols = unsuppressed;
-                    baseline_suppressed_count = suppressed;
-                }
+        if let Some(ref baseline_path) = options.baseline_path
+            && baseline_path.exists()
+            && let Ok(mut baseline) = BaselineManager::load_baseline(baseline_path)
+        {
+            if options.ratchet {
+                let current_fps: HashSet<String> = all_dead_symbols
+                    .iter()
+                    .map(|s| s.fingerprint.clone())
+                    .collect();
+                let _ =
+                    BaselineManager::ratchet_baseline(baseline_path, &mut baseline, &current_fps);
             }
+            let (unsuppressed, suppressed) =
+                BaselineManager::filter_with_baseline(all_dead_symbols, &baseline);
+            all_dead_symbols = unsuppressed;
+            baseline_suppressed_count = suppressed;
         }
 
         if let Some(ref rec_path) = options.record_baseline_path {

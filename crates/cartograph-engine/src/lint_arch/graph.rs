@@ -89,10 +89,7 @@ impl ProjectedGraph {
 
             // Map source and target identifiers according to chosen granularity
             let (source_key, target_key) = match granularity {
-                CycleGranularity::File => (
-                    record.source_file.clone(),
-                    record.target_file.clone(),
-                ),
+                CycleGranularity::File => (record.source_file.clone(), record.target_file.clone()),
                 CycleGranularity::Module => (
                     Self::to_module_id(&record.source_file),
                     Self::to_module_id(&record.target_file),
@@ -101,10 +98,7 @@ impl ProjectedGraph {
                     Self::to_package_id(&record.source_file),
                     Self::to_package_id(&record.target_file),
                 ),
-                CycleGranularity::Symbol => (
-                    record.source_id.clone(),
-                    record.target_id.clone(),
-                ),
+                CycleGranularity::Symbol => (record.source_id.clone(), record.target_id.clone()),
             };
 
             // Discard self-dependencies resulting from granularity aggregation
@@ -166,15 +160,15 @@ impl ProjectedGraph {
 
         // 2. Check metadata flags (e.g. from Tree-sitter AST extractors)
         if let Some(ref meta) = record.metadata {
-            if let Some(type_only) = meta.get("type_only").and_then(|v| v.as_bool()) {
-                if type_only {
-                    return false;
-                }
+            if let Some(type_only) = meta.get("type_only").and_then(|v| v.as_bool())
+                && type_only
+            {
+                return false;
             }
-            if let Some(import_type) = meta.get("import_type").and_then(|v| v.as_bool()) {
-                if import_type {
-                    return false;
-                }
+            if let Some(import_type) = meta.get("import_type").and_then(|v| v.as_bool())
+                && import_type
+            {
+                return false;
             }
             if let Some(runtime) = meta.get("is_runtime").and_then(|v| v.as_bool()) {
                 return runtime;
@@ -195,11 +189,7 @@ impl ProjectedGraph {
         let p = Path::new(filepath);
         if let Some(parent) = p.parent() {
             let s = parent.to_string_lossy().replace('\\', "/");
-            if s.is_empty() {
-                ".".to_string()
-            } else {
-                s
-            }
+            if s.is_empty() { ".".to_string() } else { s }
         } else {
             ".".to_string()
         }
@@ -213,7 +203,10 @@ impl ProjectedGraph {
         // Common monorepo conventions: crates/<name>, packages/<name>, apps/<name>, services/<name>
         if parts.len() >= 2 {
             let top = parts[0];
-            if matches!(top, "crates" | "packages" | "apps" | "services" | "libs" | "modules") {
+            if matches!(
+                top,
+                "crates" | "packages" | "apps" | "services" | "libs" | "modules"
+            ) {
                 return format!("{}/{}", top, parts[1]);
             }
         }

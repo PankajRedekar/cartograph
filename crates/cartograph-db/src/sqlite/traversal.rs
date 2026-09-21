@@ -77,7 +77,9 @@ pub fn get_downstream_dependencies(
 
     let mut nodes = Vec::new();
     for row in rows {
-        nodes.push(row.map_err(|e| CartographError::Database(format!("Failed to map node row: {e}")))?);
+        nodes.push(
+            row.map_err(|e| CartographError::Database(format!("Failed to map node row: {e}")))?,
+        );
     }
 
     Ok(nodes)
@@ -118,7 +120,9 @@ pub fn get_upstream_impact(
 
     let mut nodes = Vec::new();
     for row in rows {
-        nodes.push(row.map_err(|e| CartographError::Database(format!("Failed to map node row: {e}")))?);
+        nodes.push(
+            row.map_err(|e| CartographError::Database(format!("Failed to map node row: {e}")))?,
+        );
     }
 
     Ok(nodes)
@@ -150,18 +154,19 @@ pub fn find_shortest_path(
         LIMIT 1;
     "#;
 
-    let mut stmt = conn
-        .prepare(sql)
-        .map_err(|e| CartographError::Database(format!("Failed to prepare shortest path CTE: {e}")))?;
+    let mut stmt = conn.prepare(sql).map_err(|e| {
+        CartographError::Database(format!("Failed to prepare shortest path CTE: {e}"))
+    })?;
 
     let mut rows = stmt
         .query(rusqlite::params![source_id, target_id])
-        .map_err(|e| CartographError::Database(format!("Failed to query shortest path CTE: {e}")))?;
+        .map_err(|e| {
+            CartographError::Database(format!("Failed to query shortest path CTE: {e}"))
+        })?;
 
-    if let Some(row) = rows
-        .next()
-        .map_err(|e| CartographError::Database(format!("Failed to advance shortest path row: {e}")))?
-    {
+    if let Some(row) = rows.next().map_err(|e| {
+        CartographError::Database(format!("Failed to advance shortest path row: {e}"))
+    })? {
         let path_str: String = row
             .get(0)
             .map_err(|e| CartographError::Database(format!("Failed to get path string: {e}")))?;
@@ -180,7 +185,9 @@ pub(crate) fn row_to_edge(row: &rusqlite::Row) -> rusqlite::Result<cartograph_co
     let confidence: Option<f64> = row.get(4)?;
     let weight: Option<f64> = row.get(5)?;
 
-    let kind = kind_str.parse().unwrap_or(cartograph_core::model::EdgeKind::Other(kind_str));
+    let kind = kind_str
+        .parse()
+        .unwrap_or(cartograph_core::model::EdgeKind::Other(kind_str));
     let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
 
     Ok(cartograph_core::model::Edge {
@@ -216,9 +223,9 @@ pub fn get_edges_for_nodes(
             "#
         );
 
-        let mut stmt = conn
-            .prepare(&sql)
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_edges_for_nodes: {e}")))?;
+        let mut stmt = conn.prepare(&sql).map_err(|e| {
+            CartographError::Database(format!("Failed to prepare get_edges_for_nodes: {e}"))
+        })?;
 
         let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len() * 2 + 1);
         for id in chunk {
@@ -231,15 +238,27 @@ pub fn get_edges_for_nodes(
 
         let rows = stmt
             .query_map(rusqlite::params_from_iter(params), row_to_edge)
-            .map_err(|e| CartographError::Database(format!("Failed to execute get_edges_for_nodes: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to execute get_edges_for_nodes: {e}"))
+            })?;
 
         for row in rows {
-            edges.push(row.map_err(|e| CartographError::Database(format!("Failed to map edge row: {e}")))?);
+            edges.push(
+                row.map_err(|e| CartographError::Database(format!("Failed to map edge row: {e}")))?,
+            );
         }
     }
 
-    edges.sort_by(|a, b| (&a.source_id, &a.target_id, a.kind.as_str()).cmp(&(&b.source_id, &b.target_id, b.kind.as_str())));
-    edges.dedup_by(|a, b| a.source_id == b.source_id && a.target_id == b.target_id && a.kind == b.kind);
+    edges.sort_by(|a, b| {
+        (&a.source_id, &a.target_id, a.kind.as_str()).cmp(&(
+            &b.source_id,
+            &b.target_id,
+            b.kind.as_str(),
+        ))
+    });
+    edges.dedup_by(|a, b| {
+        a.source_id == b.source_id && a.target_id == b.target_id && a.kind == b.kind
+    });
 
     Ok(edges)
 }
@@ -255,7 +274,8 @@ pub fn get_impact_subgraph(
         return Ok(Vec::new());
     }
 
-    let is_downstream = direction == "downstream" || direction == "dependencies" || direction == "callees";
+    let is_downstream =
+        direction == "downstream" || direction == "dependencies" || direction == "callees";
     let is_both = direction == "both";
 
     let mut results = Vec::new();
@@ -321,9 +341,9 @@ pub fn get_impact_subgraph(
             "#
         );
 
-        let mut stmt = conn
-            .prepare(&sql)
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_impact_subgraph CTE: {e}")))?;
+        let mut stmt = conn.prepare(&sql).map_err(|e| {
+            CartographError::Database(format!("Failed to prepare get_impact_subgraph CTE: {e}"))
+        })?;
 
         let depth_i64 = max_depth as i64;
         let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len() + 4);
@@ -344,7 +364,9 @@ pub fn get_impact_subgraph(
                 let depth: i64 = row.get(14)?;
                 let path_str: String = row.get(15)?;
                 let edge_kind_str: String = row.get(16)?;
-                let edge_kind = edge_kind_str.parse().unwrap_or(EdgeKind::Other(edge_kind_str));
+                let edge_kind = edge_kind_str
+                    .parse()
+                    .unwrap_or(EdgeKind::Other(edge_kind_str));
 
                 Ok(RawImpactRecord {
                     node,
@@ -354,10 +376,14 @@ pub fn get_impact_subgraph(
                     edge_kind,
                 })
             })
-            .map_err(|e| CartographError::Database(format!("Failed to execute get_impact_subgraph CTE: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to execute get_impact_subgraph CTE: {e}"))
+            })?;
 
         for row in rows {
-            results.push(row.map_err(|e| CartographError::Database(format!("Failed to map impact record: {e}")))?);
+            results.push(row.map_err(|e| {
+                CartographError::Database(format!("Failed to map impact record: {e}"))
+            })?);
         }
     }
 
@@ -441,9 +467,9 @@ pub fn get_tests_for_targets(
             "#
         );
 
-        let mut stmt = conn
-            .prepare(&sql)
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_tests_for_targets CTE: {e}")))?;
+        let mut stmt = conn.prepare(&sql).map_err(|e| {
+            CartographError::Database(format!("Failed to prepare get_tests_for_targets CTE: {e}"))
+        })?;
 
         let depth_i64 = max_depth as i64;
         let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len() * 2 + 3);
@@ -473,10 +499,16 @@ pub fn get_tests_for_targets(
                     confidence,
                 })
             })
-            .map_err(|e| CartographError::Database(format!("Failed to execute get_tests_for_targets CTE: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!(
+                    "Failed to execute get_tests_for_targets CTE: {e}"
+                ))
+            })?;
 
         for row in rows {
-            results.push(row.map_err(|e| CartographError::Database(format!("Failed to map test record: {e}")))?);
+            results.push(row.map_err(|e| {
+                CartographError::Database(format!("Failed to map test record: {e}"))
+            })?);
         }
     }
 
@@ -538,12 +570,14 @@ pub fn get_routes(
 
     let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
     let rows = stmt
-        .query_map(rusqlite::params_from_iter(param_refs), |row| row_to_node(row))
+        .query_map(rusqlite::params_from_iter(param_refs), row_to_node)
         .map_err(|e| CartographError::Database(format!("Failed to execute get_routes: {e}")))?;
 
     let mut nodes = Vec::new();
     for row in rows {
-        nodes.push(row.map_err(|e| CartographError::Database(format!("Failed to read route row: {e}")))?);
+        nodes.push(
+            row.map_err(|e| CartographError::Database(format!("Failed to read route row: {e}")))?,
+        );
     }
 
     Ok(nodes)
@@ -603,9 +637,11 @@ pub fn get_route_downstream_traces(
             "#
         );
 
-        let mut stmt = conn
-            .prepare(&sql)
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_route_downstream_traces CTE: {e}")))?;
+        let mut stmt = conn.prepare(&sql).map_err(|e| {
+            CartographError::Database(format!(
+                "Failed to prepare get_route_downstream_traces CTE: {e}"
+            ))
+        })?;
 
         let depth_i64 = max_depth as i64;
         let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len() + 2);
@@ -633,10 +669,16 @@ pub fn get_route_downstream_traces(
                     confidence,
                 })
             })
-            .map_err(|e| CartographError::Database(format!("Failed to execute get_route_downstream_traces CTE: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!(
+                    "Failed to execute get_route_downstream_traces CTE: {e}"
+                ))
+            })?;
 
         for row in rows {
-            results.push(row.map_err(|e| CartographError::Database(format!("Failed to map route trace record: {e}")))?);
+            results.push(row.map_err(|e| {
+                CartographError::Database(format!("Failed to map route trace record: {e}"))
+            })?);
         }
     }
 
@@ -696,9 +738,9 @@ pub fn get_routes_for_models(
             "#
         );
 
-        let mut stmt = conn
-            .prepare(&sql)
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_routes_for_models CTE: {e}")))?;
+        let mut stmt = conn.prepare(&sql).map_err(|e| {
+            CartographError::Database(format!("Failed to prepare get_routes_for_models CTE: {e}"))
+        })?;
 
         let depth_i64 = max_depth as i64;
         let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len() * 2 + 2);
@@ -727,10 +769,16 @@ pub fn get_routes_for_models(
                     confidence,
                 })
             })
-            .map_err(|e| CartographError::Database(format!("Failed to execute get_routes_for_models CTE: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!(
+                    "Failed to execute get_routes_for_models CTE: {e}"
+                ))
+            })?;
 
         for row in rows {
-            results.push(row.map_err(|e| CartographError::Database(format!("Failed to map model-to-route record: {e}")))?);
+            results.push(row.map_err(|e| {
+                CartographError::Database(format!("Failed to map model-to-route record: {e}"))
+            })?);
         }
     }
 
@@ -772,9 +820,11 @@ pub fn get_frontend_callers_for_routes(
             "#
         );
 
-        let mut stmt = conn
-            .prepare(&sql)
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_frontend_callers_for_routes: {e}")))?;
+        let mut stmt = conn.prepare(&sql).map_err(|e| {
+            CartographError::Database(format!(
+                "Failed to prepare get_frontend_callers_for_routes: {e}"
+            ))
+        })?;
 
         let mut params: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(chunk.len());
         for id in chunk {
@@ -833,10 +883,16 @@ pub fn get_frontend_callers_for_routes(
                     url_pattern,
                 })
             })
-            .map_err(|e| CartographError::Database(format!("Failed to execute get_frontend_callers_for_routes: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!(
+                    "Failed to execute get_frontend_callers_for_routes: {e}"
+                ))
+            })?;
 
         for row in rows {
-            results.push(row.map_err(|e| CartographError::Database(format!("Failed to map frontend caller record: {e}")))?);
+            results.push(row.map_err(|e| {
+                CartographError::Database(format!("Failed to map frontend caller record: {e}"))
+            })?);
         }
     }
 
@@ -871,9 +927,11 @@ pub fn get_inter_file_dependencies(
         ORDER BY sn.filepath, sn.start_line
     "#;
 
-    let mut stmt = conn
-        .prepare(sql)
-        .map_err(|e| CartographError::Database(format!("Failed to prepare get_inter_file_dependencies: {e}")))?;
+    let mut stmt = conn.prepare(sql).map_err(|e| {
+        CartographError::Database(format!(
+            "Failed to prepare get_inter_file_dependencies: {e}"
+        ))
+    })?;
 
     let rows = stmt
         .query_map([min_confidence], |row| {
@@ -909,11 +967,17 @@ pub fn get_inter_file_dependencies(
                 metadata,
             })
         })
-        .map_err(|e| CartographError::Database(format!("Failed to execute get_inter_file_dependencies: {e}")))?;
+        .map_err(|e| {
+            CartographError::Database(format!(
+                "Failed to execute get_inter_file_dependencies: {e}"
+            ))
+        })?;
 
     let mut results = Vec::new();
     for row in rows {
-        results.push(row.map_err(|e| CartographError::Database(format!("Failed to map inter-file edge record: {e}")))?);
+        results.push(row.map_err(|e| {
+            CartographError::Database(format!("Failed to map inter-file edge record: {e}"))
+        })?);
     }
 
     Ok(results)
@@ -927,20 +991,24 @@ pub fn get_all_indexed_files(conn: &Connection) -> Result<Vec<String>> {
             SELECT filepath FROM nodes
         ) ORDER BY filepath
     "#;
-    let mut stmt = conn
-        .prepare(sql)
-        .map_err(|e| CartographError::Database(format!("Failed to prepare get_all_indexed_files: {e}")))?;
+    let mut stmt = conn.prepare(sql).map_err(|e| {
+        CartographError::Database(format!("Failed to prepare get_all_indexed_files: {e}"))
+    })?;
 
     let rows = stmt
         .query_map([], |row| {
             let filepath: String = row.get(0)?;
             Ok(filepath)
         })
-        .map_err(|e| CartographError::Database(format!("Failed to execute get_all_indexed_files: {e}")))?;
+        .map_err(|e| {
+            CartographError::Database(format!("Failed to execute get_all_indexed_files: {e}"))
+        })?;
 
     let mut results = Vec::new();
     for row in rows {
-        results.push(row.map_err(|e| CartographError::Database(format!("Failed to map indexed file: {e}")))?);
+        results.push(
+            row.map_err(|e| CartographError::Database(format!("Failed to map indexed file: {e}")))?,
+        );
     }
 
     Ok(results)
@@ -974,9 +1042,11 @@ pub fn get_symbol_coupling_metrics(
             LEFT JOIN out_deg o ON n.id = o.id
             WHERE i.in_degree IS NOT NULL OR o.out_degree IS NOT NULL
         "#;
-        let mut stmt = conn
-            .prepare(sql)
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_symbol_coupling_metrics: {e}")))?;
+        let mut stmt = conn.prepare(sql).map_err(|e| {
+            CartographError::Database(format!(
+                "Failed to prepare get_symbol_coupling_metrics: {e}"
+            ))
+        })?;
         let rows = stmt
             .query_map([], |row| {
                 Ok(RawSymbolCouplingRecord {
@@ -985,9 +1055,15 @@ pub fn get_symbol_coupling_metrics(
                     out_degree: row.get::<_, usize>(2)?,
                 })
             })
-            .map_err(|e| CartographError::Database(format!("Failed to execute get_symbol_coupling_metrics: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!(
+                    "Failed to execute get_symbol_coupling_metrics: {e}"
+                ))
+            })?;
         for r in rows {
-            results.push(r.map_err(|e| CartographError::Database(format!("Failed to map coupling record: {e}")))?);
+            results.push(r.map_err(|e| {
+                CartographError::Database(format!("Failed to map coupling record: {e}"))
+            })?);
         }
     } else {
         for chunk in symbol_ids.chunks(900) {
@@ -1016,9 +1092,11 @@ pub fn get_symbol_coupling_metrics(
                 WHERE n.id IN ({placeholders})
                 "#
             );
-            let mut stmt = conn
-                .prepare(&sql)
-                .map_err(|e| CartographError::Database(format!("Failed to prepare get_symbol_coupling_metrics chunk: {e}")))?;
+            let mut stmt = conn.prepare(&sql).map_err(|e| {
+                CartographError::Database(format!(
+                    "Failed to prepare get_symbol_coupling_metrics chunk: {e}"
+                ))
+            })?;
             let params = rusqlite::params_from_iter(chunk);
             let rows = stmt
                 .query_map(params, |row| {
@@ -1028,9 +1106,15 @@ pub fn get_symbol_coupling_metrics(
                         out_degree: row.get::<_, usize>(2)?,
                     })
                 })
-                .map_err(|e| CartographError::Database(format!("Failed to execute get_symbol_coupling_metrics chunk: {e}")))?;
+                .map_err(|e| {
+                    CartographError::Database(format!(
+                        "Failed to execute get_symbol_coupling_metrics chunk: {e}"
+                    ))
+                })?;
             for r in rows {
-                results.push(r.map_err(|e| CartographError::Database(format!("Failed to map coupling record chunk: {e}")))?);
+                results.push(r.map_err(|e| {
+                    CartographError::Database(format!("Failed to map coupling record chunk: {e}"))
+                })?);
             }
         }
     }
@@ -1057,9 +1141,9 @@ pub fn get_class_member_graph(
         ORDER BY start_line ASC
     "#;
 
-    let mut stmt = conn
-        .prepare(sql)
-        .map_err(|e| CartographError::Database(format!("Failed to prepare get_class_member_graph: {e}")))?;
+    let mut stmt = conn.prepare(sql).map_err(|e| {
+        CartographError::Database(format!("Failed to prepare get_class_member_graph: {e}"))
+    })?;
 
     let rows = stmt
         .query_map([class_id], |row| {
@@ -1080,11 +1164,15 @@ pub fn get_class_member_graph(
                 metadata,
             })
         })
-        .map_err(|e| CartographError::Database(format!("Failed to execute get_class_member_graph: {e}")))?;
+        .map_err(|e| {
+            CartographError::Database(format!("Failed to execute get_class_member_graph: {e}"))
+        })?;
 
     let mut results = Vec::new();
     for r in rows {
-        results.push(r.map_err(|e| CartographError::Database(format!("Failed to map class member record: {e}")))?);
+        results.push(r.map_err(|e| {
+            CartographError::Database(format!("Failed to map class member record: {e}"))
+        })?);
     }
 
     Ok(results)
@@ -1153,15 +1241,21 @@ pub fn get_unreachable_subgraph(
             WHERE n.kind NOT IN ('module', 'file')
             ORDER BY n.filepath ASC, n.start_line ASC;
         "#;
-        let mut stmt = conn
-            .prepare(sql)
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_unreachable_subgraph: {e}")))?;
+        let mut stmt = conn.prepare(sql).map_err(|e| {
+            CartographError::Database(format!("Failed to prepare get_unreachable_subgraph: {e}"))
+        })?;
         let rows = stmt
             .query_map([min_confidence], map_dead_symbol_row)
-            .map_err(|e| CartographError::Database(format!("Failed to execute get_unreachable_subgraph: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!(
+                    "Failed to execute get_unreachable_subgraph: {e}"
+                ))
+            })?;
         let mut results = Vec::new();
         for r in rows {
-            results.push(r.map_err(|e| CartographError::Database(format!("Failed to read dead symbol record: {e}")))?);
+            results.push(r.map_err(|e| {
+                CartographError::Database(format!("Failed to read dead symbol record: {e}"))
+            })?);
         }
         return Ok(results);
     }
@@ -1177,11 +1271,13 @@ pub fn get_unreachable_subgraph(
     {
         let mut insert_stmt = conn
             .prepare("INSERT OR IGNORE INTO _temp_deadcode_roots (id) VALUES (?1);")
-            .map_err(|e| CartographError::Database(format!("Failed to prepare temp root insert: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to prepare temp root insert: {e}"))
+            })?;
         for root_id in living_root_ids {
-            insert_stmt
-                .execute([root_id])
-                .map_err(|e| CartographError::Database(format!("Failed to insert temp root: {e}")))?;
+            insert_stmt.execute([root_id]).map_err(|e| {
+                CartographError::Database(format!("Failed to insert temp root: {e}"))
+            })?;
         }
     }
 
@@ -1220,17 +1316,25 @@ pub fn get_unreachable_subgraph(
         ORDER BY n.filepath ASC, n.start_line ASC;
     "#;
 
-    let mut stmt = conn
-        .prepare(sql)
-        .map_err(|e| CartographError::Database(format!("Failed to prepare get_unreachable_subgraph CTE: {e}")))?;
+    let mut stmt = conn.prepare(sql).map_err(|e| {
+        CartographError::Database(format!(
+            "Failed to prepare get_unreachable_subgraph CTE: {e}"
+        ))
+    })?;
 
     let rows = stmt
         .query_map([min_confidence], map_dead_symbol_row)
-        .map_err(|e| CartographError::Database(format!("Failed to execute get_unreachable_subgraph CTE: {e}")))?;
+        .map_err(|e| {
+            CartographError::Database(format!(
+                "Failed to execute get_unreachable_subgraph CTE: {e}"
+            ))
+        })?;
 
     let mut results = Vec::new();
     for r in rows {
-        results.push(r.map_err(|e| CartographError::Database(format!("Failed to map dead symbol record: {e}")))?);
+        results.push(r.map_err(|e| {
+            CartographError::Database(format!("Failed to map dead symbol record: {e}"))
+        })?);
     }
 
     let _ = conn.execute("DELETE FROM _temp_deadcode_roots;", []);
@@ -1245,15 +1349,19 @@ pub fn get_ghost_dependencies(conn: &Connection) -> Result<Vec<String>> {
         WHERE e.kind = 'imports'
         ORDER BY e.target_id ASC;
     "#;
-    let mut stmt = conn
-        .prepare(sql)
-        .map_err(|e| CartographError::Database(format!("Failed to prepare get_ghost_dependencies: {e}")))?;
+    let mut stmt = conn.prepare(sql).map_err(|e| {
+        CartographError::Database(format!("Failed to prepare get_ghost_dependencies: {e}"))
+    })?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(0))
-        .map_err(|e| CartographError::Database(format!("Failed to execute get_ghost_dependencies: {e}")))?;
+        .map_err(|e| {
+            CartographError::Database(format!("Failed to execute get_ghost_dependencies: {e}"))
+        })?;
     let mut results = Vec::new();
     for r in rows {
-        results.push(r.map_err(|e| CartographError::Database(format!("Failed to read import target: {e}")))?);
+        results.push(r.map_err(|e| {
+            CartographError::Database(format!("Failed to read import target: {e}"))
+        })?);
     }
     Ok(results)
 }
@@ -1273,11 +1381,13 @@ pub fn get_test_only_reachable_symbols(
     {
         let mut insert_stmt = conn
             .prepare("INSERT OR IGNORE INTO _temp_deadcode_roots (id) VALUES (?1);")
-            .map_err(|e| CartographError::Database(format!("Failed to prepare temp root insert: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to prepare temp root insert: {e}"))
+            })?;
         for root_id in prod_root_ids {
-            insert_stmt
-                .execute([root_id])
-                .map_err(|e| CartographError::Database(format!("Failed to insert temp root: {e}")))?;
+            insert_stmt.execute([root_id]).map_err(|e| {
+                CartographError::Database(format!("Failed to insert temp root: {e}"))
+            })?;
         }
     }
 
@@ -1306,18 +1416,24 @@ pub fn get_test_only_reachable_symbols(
         ORDER BY n.id ASC;
     "#;
 
-    let mut stmt = conn
-        .prepare(sql)
-        .map_err(|e| CartographError::Database(format!("Failed to prepare get_test_only_reachable_symbols: {e}")))?;
+    let mut stmt = conn.prepare(sql).map_err(|e| {
+        CartographError::Database(format!(
+            "Failed to prepare get_test_only_reachable_symbols: {e}"
+        ))
+    })?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(0))
-        .map_err(|e| CartographError::Database(format!("Failed to execute get_test_only_reachable_symbols: {e}")))?;
+        .map_err(|e| {
+            CartographError::Database(format!(
+                "Failed to execute get_test_only_reachable_symbols: {e}"
+            ))
+        })?;
     let mut results = Vec::new();
     for r in rows {
-        results.push(r.map_err(|e| CartographError::Database(format!("Failed to read test-only reachable node id: {e}")))?);
+        results.push(r.map_err(|e| {
+            CartographError::Database(format!("Failed to read test-only reachable node id: {e}"))
+        })?);
     }
     let _ = conn.execute("DELETE FROM _temp_deadcode_roots;", []);
     Ok(results)
 }
-
-

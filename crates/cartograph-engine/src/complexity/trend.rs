@@ -1,7 +1,7 @@
-use std::path::Path;
-use std::process::Command;
 use cartograph_ast::AstComplexityAnalyzer;
 use cartograph_core::model::{ComplexityTrendMetric, TrendDirection};
+use std::path::Path;
+use std::process::Command;
 
 pub struct ComplexityTrendTracker;
 
@@ -30,11 +30,7 @@ impl ComplexityTrendTracker {
         let old_commit = match output {
             Ok(out) if out.status.success() => {
                 let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if s.is_empty() {
-                    None
-                } else {
-                    Some(s)
-                }
+                if s.is_empty() { None } else { Some(s) }
             }
             _ => None,
         };
@@ -57,7 +53,7 @@ impl ComplexityTrendTracker {
                             .iter()
                             .find(|s| s.name == symbol_name)
                             .map(|s| s.metrics.cyclomatic)
-                            .or_else(|| Some(res.file_complexity.cyclomatic))
+                            .or(Some(res.file_complexity.cyclomatic))
                     } else {
                         None
                     }

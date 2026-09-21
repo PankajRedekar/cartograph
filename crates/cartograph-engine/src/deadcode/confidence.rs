@@ -1,5 +1,7 @@
 use cartograph_core::config::ProjectProfile;
-use cartograph_core::model::{ConfidenceFactor, ConfidenceTier, DeadCodeCategory, DeadSymbolItem, RawDeadSymbolRecord};
+use cartograph_core::model::{
+    ConfidenceFactor, ConfidenceTier, DeadCodeCategory, DeadSymbolItem, RawDeadSymbolRecord,
+};
 
 /// Multi-Vector Confidence Scoring Engine (0.0 to 1.0)
 pub struct ConfidenceScorer {
@@ -21,13 +23,17 @@ impl ConfidenceScorer {
         let mut base_score: f64 = 0.80;
 
         // 1. In-code suppression check
-        let has_ignore_directive = node.metadata.as_ref().map(|m| {
-            let m_str = m.to_string();
-            m_str.contains("@deadcode ignore")
-                || m_str.contains("allow_dead")
-                || m_str.contains("unused_ok")
-                || m_str.contains("no-dead-code")
-        }).unwrap_or(false);
+        let has_ignore_directive = node
+            .metadata
+            .as_ref()
+            .map(|m| {
+                let m_str = m.to_string();
+                m_str.contains("@deadcode ignore")
+                    || m_str.contains("allow_dead")
+                    || m_str.contains("unused_ok")
+                    || m_str.contains("no-dead-code")
+            })
+            .unwrap_or(false);
 
         if has_ignore_directive {
             factors.push(ConfidenceFactor {
@@ -40,14 +46,28 @@ impl ConfidenceScorer {
         // 2. Visibility evaluation
         let is_private = node.scope.contains("private")
             || node.name.starts_with('_')
-            || (node.signature.as_ref().map(|s| !s.contains("pub ") && !s.contains("export ")).unwrap_or(true) && !node.filepath.ends_with("lib.rs"));
+            || (node
+                .signature
+                .as_ref()
+                .map(|s| !s.contains("pub ") && !s.contains("export "))
+                .unwrap_or(true)
+                && !node.filepath.ends_with("lib.rs"));
 
-        let is_crate_private = node.signature.as_ref().map(|s| s.contains("pub(crate)")).unwrap_or(false);
-        let is_public = node.signature.as_ref().map(|s| s.contains("pub ") || s.contains("export ")).unwrap_or(false);
+        let is_crate_private = node
+            .signature
+            .as_ref()
+            .map(|s| s.contains("pub(crate)"))
+            .unwrap_or(false);
+        let is_public = node
+            .signature
+            .as_ref()
+            .map(|s| s.contains("pub ") || s.contains("export "))
+            .unwrap_or(false);
 
         if is_private {
             factors.push(ConfidenceFactor {
-                description: "Private / internal visibility (unreachable outside local scope)".to_string(),
+                description: "Private / internal visibility (unreachable outside local scope)"
+                    .to_string(),
                 delta: 0.15,
             });
             base_score += 0.15;
@@ -61,14 +81,17 @@ impl ConfidenceScorer {
             match self.profile {
                 ProjectProfile::Application => {
                     factors.push(ConfidenceFactor {
-                        description: "Public symbol in application repository (internal to app)".to_string(),
+                        description: "Public symbol in application repository (internal to app)"
+                            .to_string(),
                         delta: 0.05,
                     });
                     base_score += 0.05;
                 }
                 ProjectProfile::Library => {
                     factors.push(ConfidenceFactor {
-                        description: "Public symbol in published library (may have external consumers)".to_string(),
+                        description:
+                            "Public symbol in published library (may have external consumers)"
+                                .to_string(),
                         delta: -0.45,
                     });
                     base_score -= 0.45;
@@ -115,13 +138,18 @@ impl ConfidenceScorer {
         }
 
         // 5. Serialization / ORM tag check
-        let has_serialization = node.signature.as_ref().map(|s| {
-            s.contains("Serialize") || s.contains("Deserialize") || s.contains("@dataclass")
-        }).unwrap_or(false);
+        let has_serialization = node
+            .signature
+            .as_ref()
+            .map(|s| {
+                s.contains("Serialize") || s.contains("Deserialize") || s.contains("@dataclass")
+            })
+            .unwrap_or(false);
 
         if has_serialization {
             factors.push(ConfidenceFactor {
-                description: "Struct or field tagged with serialization / dataclass attributes".to_string(),
+                description: "Struct or field tagged with serialization / dataclass attributes"
+                    .to_string(),
                 delta: -0.15,
             });
             base_score -= 0.15;
@@ -145,7 +173,8 @@ impl ConfidenceScorer {
             }
             DeadCodeCategory::UnusedEnumVariant => {
                 factors.push(ConfidenceFactor {
-                    description: "Enum variant has zero match arms or constructor calls".to_string(),
+                    description: "Enum variant has zero match arms or constructor calls"
+                        .to_string(),
                     delta: 0.10,
                 });
                 base_score += 0.10;

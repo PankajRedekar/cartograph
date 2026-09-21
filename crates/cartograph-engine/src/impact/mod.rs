@@ -16,15 +16,16 @@ use std::time::Instant;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::error::{CartographError, Result};
 use cartograph_core::model::{
-    ChangeStatus, ImpactReport, ImpactRoot, Node, SemVerTarget,
-    SemanticChangeType, SimulationMode,
+    ChangeStatus, ImpactReport, ImpactRoot, Node, SemVerTarget, SemanticChangeType, SimulationMode,
 };
 
 pub use call_sites::CallSiteExtractor;
 pub use coupling_detector::CouplingDetector;
 pub use diff_mapper::{GitDiffHunk, GitDiffMapper, MappedRootSymbol};
 pub use domain::DomainCategorizer;
-pub use formatters::{ImpactOutputFormat, TerminalFormatter, MarkdownFormatter, JsonFormatter, AgentXmlFormatter};
+pub use formatters::{
+    AgentXmlFormatter, ImpactOutputFormat, JsonFormatter, MarkdownFormatter, TerminalFormatter,
+};
 pub use risk_engine::RiskEngine;
 pub use semantic_diff::SemanticDiffClassifier;
 pub use semver_guard::SemVerGuard;
@@ -137,7 +138,8 @@ impl ImpactAnalyzer {
         let coupling_insights = CouplingDetector::detect_coupling_smells(&roots, &impacted_nodes);
 
         // 6. Domain Categorization
-        let categories = DomainCategorizer::categorize(self.backend.as_ref(), &impacted_nodes).await?;
+        let categories =
+            DomainCategorizer::categorize(self.backend.as_ref(), &impacted_nodes).await?;
 
         // 7. Total Affected Files
         let mut affected_files = std::collections::HashSet::new();
@@ -185,46 +187,49 @@ impl ImpactAnalyzer {
     async fn resolve_roots(&self, query: &ImpactQuery) -> Result<Vec<ImpactRoot>> {
         // A: Simulation Mode
         if query.simulation_mode != SimulationMode::None {
-            return SimulationEngine::create_simulated_roots(self.backend.as_ref(), &query.simulation_mode).await;
+            return SimulationEngine::create_simulated_roots(
+                self.backend.as_ref(),
+                &query.simulation_mode,
+            )
+            .await;
         }
 
         // B: Git Diff Mode (branch range or staged or working tree)
-        if query.branch_range.is_some() || query.staged || query.target.is_none() {
-            if let Ok(raw_diff) = GitDiffMapper::execute_git_diff(
+        if (query.branch_range.is_some() || query.staged || query.target.is_none())
+            && let Ok(raw_diff) = GitDiffMapper::execute_git_diff(
                 &self.repo_root,
                 query.branch_range.as_deref(),
                 query.staged,
-            ) {
-                if !raw_diff.trim().is_empty() {
-                    let hunks = GitDiffMapper::parse_unified_diff(&raw_diff);
-                    let mapped = GitDiffMapper::map_hunks_to_nodes(self.backend.as_ref(), &hunks).await?;
+            )
+            && !raw_diff.trim().is_empty()
+        {
+            let hunks = GitDiffMapper::parse_unified_diff(&raw_diff);
+            let mapped = GitDiffMapper::map_hunks_to_nodes(self.backend.as_ref(), &hunks).await?;
 
-                    if !mapped.is_empty() {
-                        let mut roots = Vec::new();
-                        for m in mapped {
-                            let semantic_change = SemanticDiffClassifier::classify_change(
-                                Some(&m.node),
-                                Some(&m.node),
-                                &m.modified_lines,
-                            );
+            if !mapped.is_empty() {
+                let mut roots = Vec::new();
+                for m in mapped {
+                    let semantic_change = SemanticDiffClassifier::classify_change(
+                        Some(&m.node),
+                        Some(&m.node),
+                        &m.modified_lines,
+                    );
 
-                            let is_pub = SemVerGuard::is_public_export(&m.node);
+                    let is_pub = SemVerGuard::is_public_export(&m.node);
 
-                            roots.push(ImpactRoot {
-                                old_signature: m.node.signature.clone(),
-                                new_signature: m.node.signature.clone(),
-                                status: m.status,
-                                semantic_change,
-                                is_public_export: is_pub,
-                                modified_lines: Some(m.modified_lines),
-                                in_degree: 0,
-                                out_degree: 0,
-                                node: m.node,
-                            });
-                        }
-                        return Ok(roots);
-                    }
+                    roots.push(ImpactRoot {
+                        old_signature: m.node.signature.clone(),
+                        new_signature: m.node.signature.clone(),
+                        status: m.status,
+                        semantic_change,
+                        is_public_export: is_pub,
+                        modified_lines: Some(m.modified_lines),
+                        in_degree: 0,
+                        out_degree: 0,
+                        node: m.node,
+                    });
                 }
+                return Ok(roots);
             }
         }
 

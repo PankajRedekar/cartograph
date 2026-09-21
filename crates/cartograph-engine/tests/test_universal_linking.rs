@@ -67,7 +67,9 @@ fn test_linker_trait_implementation_resolution() {
         arg_count: None,
     };
 
-    let edge = resolver.resolve(&reference).expect("Should resolve trait implementation");
+    let edge = resolver
+        .resolve(&reference)
+        .expect("Should resolve trait implementation");
     assert_eq!(edge.source_id, struct_node.id);
     assert_eq!(edge.target_id, trait_node.id);
     assert_eq!(edge.kind, EdgeKind::Implements);
@@ -93,7 +95,7 @@ fn test_linker_type_assisted_receiver_call() {
         metadata: None,
     };
 
-    table.register_batch(&[method_node.clone()]);
+    table.register_batch(std::slice::from_ref(&method_node));
 
     let resolver = ReferenceResolver::new(&table);
     let reference = UnresolvedReference {
@@ -108,7 +110,9 @@ fn test_linker_type_assisted_receiver_call() {
         arg_count: None,
     };
 
-    let edge = resolver.resolve(&reference).expect("Should resolve type-assisted method");
+    let edge = resolver
+        .resolve(&reference)
+        .expect("Should resolve type-assisted method");
     assert_eq!(edge.target_id, method_node.id);
     assert_eq!(edge.kind, EdgeKind::Calls);
 }
@@ -164,7 +168,9 @@ fn test_linker_predictive_test_linking() {
         arg_count: None,
     };
 
-    let edge = resolver.resolve(&reference).expect("Should resolve test call");
+    let edge = resolver
+        .resolve(&reference)
+        .expect("Should resolve test call");
     assert_eq!(edge.source_id, test_function.id);
     assert_eq!(edge.target_id, target_function.id);
     // Verified predictive test mapping produces EdgeKind::Tests!
@@ -223,7 +229,9 @@ fn test_linker_proximity_heuristics_for_polymorphic_symbols() {
         arg_count: None,
     };
 
-    let edge = resolver.resolve(&reference).expect("Should resolve polymorphic candidate");
+    let edge = resolver
+        .resolve(&reference)
+        .expect("Should resolve polymorphic candidate");
     // Should pick render_ui due to proximity score
     assert_eq!(edge.target_id, render_ui.id);
     let meta = edge.metadata.expect("Should contain candidate metadata");
@@ -275,7 +283,7 @@ fn test_metrics() {
     .unwrap();
 
     let storage_config = StorageConfig::sqlite(db_path.to_str().unwrap());
-    let backend: Arc<dyn GraphStoreBackend> = Arc::from(create_backend(&storage_config).unwrap());
+    let backend: Arc<dyn GraphStoreBackend> = create_backend(&storage_config).unwrap();
     let discovery_config = DiscoveryConfig {
         root_path: root.to_path_buf(),
         ..DiscoveryConfig::default()
@@ -289,13 +297,19 @@ fn test_metrics() {
     let run_nodes = backend.get_nodes_by_name("run").await.unwrap();
     assert!(!run_nodes.is_empty());
     let run_node = &run_nodes[0];
-    let deps = backend.get_downstream_dependencies(&run_node.id, 2).await.unwrap();
+    let deps = backend
+        .get_downstream_dependencies(&run_node.id, 2)
+        .await
+        .unwrap();
     assert!(deps.iter().any(|n| n.name == "compute_metrics"));
 
     let compute_nodes = backend.get_nodes_by_name("compute_metrics").await.unwrap();
     assert!(!compute_nodes.is_empty());
     let compute_node = &compute_nodes[0];
-    let callers = backend.get_upstream_impact(&compute_node.id, 2).await.unwrap();
+    let callers = backend
+        .get_upstream_impact(&compute_node.id, 2)
+        .await
+        .unwrap();
     let caller_names: Vec<&str> = callers.iter().map(|n| n.name.as_str()).collect();
     assert!(caller_names.contains(&"run"));
     assert!(caller_names.contains(&"test_metrics"));

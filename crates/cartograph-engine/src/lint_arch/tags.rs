@@ -27,13 +27,13 @@ impl ArchTagExtractor {
                 Self::parse_key_values(cleaned, &mut tags);
             }
             // Check for #[cartograph(...)] attribute
-            else if trimmed.contains("cartograph(") {
-                if let Some(start) = trimmed.find("cartograph(") {
-                    let inner = &trimmed[start + 11..];
-                    if let Some(end) = inner.find(')') {
-                        let attrs = &inner[..end];
-                        Self::parse_attribute_key_values(attrs, &mut tags);
-                    }
+            else if trimmed.contains("cartograph(")
+                && let Some(start) = trimmed.find("cartograph(")
+            {
+                let inner = &trimmed[start + 11..];
+                if let Some(end) = inner.find(')') {
+                    let attrs = &inner[..end];
+                    Self::parse_attribute_key_values(attrs, &mut tags);
                 }
             }
         }
@@ -83,7 +83,10 @@ mod tests {
             /// @arch layer=domain
             pub struct AuthService;
         "#;
-        assert_eq!(ArchTagExtractor::extract_layer(doc), Some("domain".to_string()));
+        assert_eq!(
+            ArchTagExtractor::extract_layer(doc),
+            Some("domain".to_string())
+        );
     }
 
     #[test]
@@ -94,13 +97,19 @@ mod tests {
              * @arch layer=presentation
              */
         "#;
-        assert_eq!(ArchTagExtractor::extract_layer(comment), Some("presentation".to_string()));
+        assert_eq!(
+            ArchTagExtractor::extract_layer(comment),
+            Some("presentation".to_string())
+        );
     }
 
     #[test]
     fn test_extract_python_comment() {
         let comment = "# @arch: layer=infrastructure";
-        assert_eq!(ArchTagExtractor::extract_layer(comment), Some("infrastructure".to_string()));
+        assert_eq!(
+            ArchTagExtractor::extract_layer(comment),
+            Some("infrastructure".to_string())
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
-use cartograph_core::model::{Node, SemanticChangeType};
 use crate::impact::semantic_diff::SemanticDiffClassifier;
 use crate::test_selector::diff_mapper::{GitDiffHunk, MappedDiffTarget, TestDiffMapper};
+use cartograph_core::model::{Node, SemanticChangeType};
 
 #[derive(Debug, Clone)]
 pub struct FilteredTargets {
@@ -27,7 +27,9 @@ impl SemanticFilter {
     ) -> FilteredTargets {
         // 1. Check if all hunks in the diff are exclusively non-code files (e.g. .md, .png)
         let all_non_code = !hunks.is_empty()
-            && hunks.iter().all(|h| TestDiffMapper::is_non_code_file(&h.filepath));
+            && hunks
+                .iter()
+                .all(|h| TestDiffMapper::is_non_code_file(&h.filepath));
 
         if all_non_code {
             return FilteredTargets {
@@ -54,7 +56,8 @@ impl SemanticFilter {
             }
 
             // Check docstring-only modification
-            let is_docstring_only = Self::is_target_docstring_only(&target.node, &target.modified_lines);
+            let is_docstring_only =
+                Self::is_target_docstring_only(&target.node, &target.modified_lines);
 
             if is_docstring_only && ignore_docstrings {
                 docstring_only_count += 1;
@@ -65,17 +68,19 @@ impl SemanticFilter {
 
         // 3. If after filtering docstring targets and direct tests, there are 0 functional targets
         // and at least 1 docstring target was pruned, and hunks contained code files
-        if functional.is_empty() && direct_tests.is_empty() && docstring_only_count > 0 && ignore_docstrings {
+        if functional.is_empty()
+            && direct_tests.is_empty()
+            && docstring_only_count > 0
+            && ignore_docstrings
+        {
             return FilteredTargets {
                 functional_targets: Vec::new(),
                 direct_test_targets: Vec::new(),
                 docstring_only_count,
                 is_zero_risk_early_exit: true,
-                early_exit_reason: Some(
-                    format!(
-                        "Zero functional code changes detected ({docstring_only_count} docstring/comment modification(s) bypassed). Skipping test suite."
-                    ),
-                ),
+                early_exit_reason: Some(format!(
+                    "Zero functional code changes detected ({docstring_only_count} docstring/comment modification(s) bypassed). Skipping test suite."
+                )),
             };
         }
 

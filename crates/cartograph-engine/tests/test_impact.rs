@@ -7,11 +7,16 @@ use tempfile::tempdir;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::model::{Edge, EdgeKind, Node, NodeKind, SemVerTarget, SimulationMode};
 use cartograph_db::memory::MemoryBackend;
-use cartograph_engine::impact::{
-    ImpactAnalyzer, ImpactOutputFormat, ImpactQuery,
-};
+use cartograph_engine::impact::{ImpactAnalyzer, ImpactOutputFormat, ImpactQuery};
 
-fn make_node(id: &str, name: &str, kind: NodeKind, file: &str, line: u32, sig: Option<&str>) -> Node {
+fn make_node(
+    id: &str,
+    name: &str,
+    kind: NodeKind,
+    file: &str,
+    line: u32,
+    sig: Option<&str>,
+) -> Node {
     Node {
         id: id.to_string(),
         name: name.to_string(),
@@ -37,19 +42,60 @@ async fn test_impact_transitive_reverse_traversal() {
     // Setup files on disk for call-site extractor
     let service_path = dir.path().join("service.rs");
     let mut f1 = fs::File::create(&service_path).unwrap();
-    write!(f1, "pub fn process_billing() {{\n    let p = AccrualPeriod::from_date();\n}}\n").unwrap();
+    write!(
+        f1,
+        "pub fn process_billing() {{\n    let p = AccrualPeriod::from_date();\n}}\n"
+    )
+    .unwrap();
 
     let router_path = dir.path().join("router.rs");
     let mut f2 = fs::File::create(&router_path).unwrap();
-    write!(f2, "pub fn invoice_route() {{\n    process_billing();\n}}\n").unwrap();
+    write!(
+        f2,
+        "pub fn invoice_route() {{\n    process_billing();\n}}\n"
+    )
+    .unwrap();
 
     // Setup graph nodes
-    let root = make_node("accrual", "AccrualPeriod", NodeKind::Model, "model.rs", 10, Some("pub struct AccrualPeriod"));
-    let service = make_node("service_fn", "process_billing", NodeKind::Function, "service.rs", 1, Some("pub fn process_billing()"));
-    let route = make_node("route_fn", "POST /api/v1/invoices", NodeKind::Route, "router.rs", 1, Some("fn invoice_route()"));
-    let test_node = make_node("test_fn", "test_billing", NodeKind::Function, "tests.rs", 1, Some("fn test_billing()"));
+    let root = make_node(
+        "accrual",
+        "AccrualPeriod",
+        NodeKind::Model,
+        "model.rs",
+        10,
+        Some("pub struct AccrualPeriod"),
+    );
+    let service = make_node(
+        "service_fn",
+        "process_billing",
+        NodeKind::Function,
+        "service.rs",
+        1,
+        Some("pub fn process_billing()"),
+    );
+    let route = make_node(
+        "route_fn",
+        "POST /api/v1/invoices",
+        NodeKind::Route,
+        "router.rs",
+        1,
+        Some("fn invoice_route()"),
+    );
+    let test_node = make_node(
+        "test_fn",
+        "test_billing",
+        NodeKind::Function,
+        "tests.rs",
+        1,
+        Some("fn test_billing()"),
+    );
 
-    let nodes = vec![root.clone(), service.clone(), route.clone(), test_node.clone()];
+    let nodes = vec![
+        root.clone(),
+        service.clone(),
+        route.clone(),
+        test_node.clone(),
+    ];
     let edges = vec![
         Edge::new("service_fn", "accrual", EdgeKind::References),
         Edge::new("route_fn", "service_fn", EdgeKind::Calls),
@@ -76,19 +122,39 @@ async fn test_impact_transitive_reverse_traversal() {
 
     // Verify entrypoints
     assert_eq!(report.categories.entrypoints.len(), 1);
-    assert_eq!(report.categories.entrypoints[0].node.name, "POST /api/v1/invoices");
+    assert_eq!(
+        report.categories.entrypoints[0].node.name,
+        "POST /api/v1/invoices"
+    );
     assert_eq!(report.categories.entrypoints[0].min_hop_distance, 2);
 
     // Verify call-site extraction
-    let service_hit = report.categories.services.iter().find(|n| n.node.id == "service_fn").unwrap();
+    let service_hit = report
+        .categories
+        .services
+        .iter()
+        .find(|n| n.node.id == "service_fn")
+        .unwrap();
     assert_eq!(service_hit.call_sites.len(), 1);
     assert_eq!(service_hit.call_sites[0].line, 2);
-    assert!(service_hit.call_sites[0].invocation_snippet.contains("AccrualPeriod::from_date"));
+    assert!(
+        service_hit.call_sites[0]
+            .invocation_snippet
+            .contains("AccrualPeriod::from_date")
+    );
 
     // Verify tests obligation
     assert_eq!(report.categories.affected_tests.len(), 1);
-    assert_eq!(report.categories.affected_tests[0].test_node.name, "test_billing");
-    assert_eq!(report.categories.affected_tests[0].runner_command.as_deref(), Some("cargo test test_billing"));
+    assert_eq!(
+        report.categories.affected_tests[0].test_node.name,
+        "test_billing"
+    );
+    assert_eq!(
+        report.categories.affected_tests[0]
+            .runner_command
+            .as_deref(),
+        Some("cargo test test_billing")
+    );
 }
 
 #[tokio::test]
@@ -96,7 +162,14 @@ async fn test_impact_semver_guard_policy_failure() {
     let dir = tempdir().unwrap();
     let backend = Arc::new(MemoryBackend::new());
 
-    let root = make_node("auth_fn", "verify_token", NodeKind::Function, "auth.rs", 10, Some("pub fn verify_token()"));
+    let root = make_node(
+        "auth_fn",
+        "verify_token",
+        NodeKind::Function,
+        "auth.rs",
+        10,
+        Some("pub fn verify_token()"),
+    );
     backend.insert_batch(&[root], &[]).await.unwrap();
 
     let analyzer = ImpactAnalyzer::new(backend, dir.path().to_path_buf());
@@ -129,9 +202,14 @@ async fn test_impact_coupling_smell_detection() {
     let dir = tempdir().unwrap();
     let backend = Arc::new(MemoryBackend::new());
 
-    let mut nodes = vec![
-        make_node("core_model", "OrderEntity", NodeKind::Model, "crates/core/src/order.rs", 1, Some("pub struct OrderEntity")),
-    ];
+    let mut nodes = vec![make_node(
+        "core_model",
+        "OrderEntity",
+        NodeKind::Model,
+        "crates/core/src/order.rs",
+        1,
+        Some("pub struct OrderEntity"),
+    )];
     let mut edges = Vec::new();
 
     // Callers in 5 distinct packages
@@ -145,7 +223,14 @@ async fn test_impact_coupling_smell_detection() {
 
     for (i, p) in pkgs.iter().enumerate() {
         let caller_id = format!("caller_{i}");
-        nodes.push(make_node(&caller_id, &format!("fn_{i}"), NodeKind::Function, p, 1, None));
+        nodes.push(make_node(
+            &caller_id,
+            &format!("fn_{i}"),
+            NodeKind::Function,
+            p,
+            1,
+            None,
+        ));
         edges.push(Edge::new(&caller_id, "core_model", EdgeKind::References));
     }
 
@@ -161,7 +246,11 @@ async fn test_impact_coupling_smell_detection() {
     assert_eq!(report.coupling_insights.len(), 1);
     assert_eq!(report.coupling_insights[0].symbol_name, "OrderEntity");
     assert_eq!(report.coupling_insights[0].subsystems_impacted.len(), 5);
-    assert!(report.coupling_insights[0].recommendation.contains("God-Object"));
+    assert!(
+        report.coupling_insights[0]
+            .recommendation
+            .contains("God-Object")
+    );
 }
 
 #[tokio::test]
@@ -169,7 +258,14 @@ async fn test_impact_quad_engine_formats() {
     let dir = tempdir().unwrap();
     let backend = Arc::new(MemoryBackend::new());
 
-    let node = make_node("n1", "User", NodeKind::Model, "user.rs", 1, Some("pub struct User"));
+    let node = make_node(
+        "n1",
+        "User",
+        NodeKind::Model,
+        "user.rs",
+        1,
+        Some("pub struct User"),
+    );
     backend.insert_batch(&[node], &[]).await.unwrap();
 
     let analyzer = ImpactAnalyzer::new(backend, dir.path().to_path_buf());
@@ -213,7 +309,14 @@ async fn test_impact_latency_benchmark() {
     let dir = tempdir().unwrap();
     let backend = Arc::new(MemoryBackend::new());
 
-    let node = make_node("bench_node", "bench_target", NodeKind::Function, "bench.rs", 1, Some("pub fn bench_target()"));
+    let node = make_node(
+        "bench_node",
+        "bench_target",
+        NodeKind::Function,
+        "bench.rs",
+        1,
+        Some("pub fn bench_target()"),
+    );
     backend.insert_batch(&[node], &[]).await.unwrap();
 
     let analyzer = ImpactAnalyzer::new(backend, dir.path().to_path_buf());
@@ -227,6 +330,10 @@ async fn test_impact_latency_benchmark() {
     let elapsed = start.elapsed();
 
     // Verify SLA: < 5ms for single symbol
-    assert!(elapsed.as_millis() < 5, "Single-symbol impact analysis took {}ms, exceeding 5ms budget", elapsed.as_millis());
+    assert!(
+        elapsed.as_millis() < 5,
+        "Single-symbol impact analysis took {}ms, exceeding 5ms budget",
+        elapsed.as_millis()
+    );
     assert_eq!(report.root_nodes.len(), 1);
 }

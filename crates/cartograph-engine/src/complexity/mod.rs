@@ -10,9 +10,9 @@ pub mod metrics;
 pub mod test_deficit;
 pub mod trend;
 
+use chrono::Utc;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use chrono::Utc;
 
 use cartograph_ast::AstComplexityAnalyzer;
 use cartograph_core::backend::GraphStoreBackend;
@@ -144,7 +144,12 @@ impl ComplexityEngine {
 
                 let (cohesion, god_eval) = GodClassAnalyzer::evaluate(cls, &class_methods, config);
 
-                let id = format!("cartograph://{}::{}#{}", rel_path, cls.name, cls.kind.as_str());
+                let id = format!(
+                    "cartograph://{}::{}#{}",
+                    rel_path,
+                    cls.name,
+                    cls.kind.as_str()
+                );
                 let (in_deg, out_deg) = coupling_map.get(&id).copied().unwrap_or((0, 0));
                 let total_degree = in_deg + out_deg;
                 let instability = if total_degree > 0 {
@@ -186,7 +191,8 @@ impl ComplexityEngine {
                     &file_churn,
                     config,
                 );
-                let quadrant = HotspotClassifier::classify_quadrant(&class_metric, &file_churn, config);
+                let quadrant =
+                    HotspotClassifier::classify_quadrant(&class_metric, &file_churn, config);
 
                 let fingerprint = BaselineManager::compute_fingerprint(&rel_path, &cls.name);
 
@@ -221,7 +227,12 @@ impl ComplexityEngine {
 
             // Functions & Methods
             for sym in file_res.symbols {
-                let id = format!("cartograph://{}::{}#{}", rel_path, sym.name, sym.kind.as_str());
+                let id = format!(
+                    "cartograph://{}::{}#{}",
+                    rel_path,
+                    sym.name,
+                    sym.kind.as_str()
+                );
                 let (in_deg, out_deg) = coupling_map.get(&id).copied().unwrap_or((0, 0));
                 let total_degree = in_deg + out_deg;
                 let instability = if total_degree > 0 {
@@ -240,11 +251,8 @@ impl ComplexityEngine {
 
                 // AI Context Friction
                 let snippet = extract_line_range(&content, sym.start_line, sym.end_line);
-                let ai_friction = AiContextFrictionEvaluator::evaluate(
-                    &snippet,
-                    sym.metrics.cognitive,
-                    config,
-                );
+                let ai_friction =
+                    AiContextFrictionEvaluator::evaluate(&snippet, sym.metrics.cognitive, config);
 
                 // Maintainability
                 let maintainability = MaintainabilityCalculator::calculate(
@@ -261,7 +269,8 @@ impl ComplexityEngine {
                     &file_churn,
                     config,
                 );
-                let quadrant = HotspotClassifier::classify_quadrant(&sym.metrics, &file_churn, config);
+                let quadrant =
+                    HotspotClassifier::classify_quadrant(&sym.metrics, &file_churn, config);
 
                 let fingerprint = BaselineManager::compute_fingerprint(&rel_path, &sym.name);
 
@@ -311,11 +320,17 @@ impl ComplexityEngine {
         }
 
         // 7. Multi-granularity aggregation (if user specified file/module/package)
-        let mut final_records = MetricAggregator::aggregate(&raw_records, options.granularity, config);
+        let mut final_records =
+            MetricAggregator::aggregate(&raw_records, options.granularity, config);
 
         // 8. Filters: God-Class only or Danger Zone only
         if options.god_class_only {
-            final_records.retain(|r| r.god_class.as_ref().map(|g| g.is_god_class).unwrap_or(false));
+            final_records.retain(|r| {
+                r.god_class
+                    .as_ref()
+                    .map(|g| g.is_god_class)
+                    .unwrap_or(false)
+            });
         }
         if options.danger_zone_only {
             final_records.retain(|r| r.test_deficit.is_danger_zone);
@@ -325,7 +340,8 @@ impl ComplexityEngine {
         let mut suppressed_baseline_count = 0;
         if let Some(ref baseline_p) = options.baseline_path {
             if let Some(baseline) = BaselineManager::load_baseline(baseline_p) {
-                suppressed_baseline_count = BaselineManager::filter_baseline(&mut final_records, &baseline);
+                suppressed_baseline_count =
+                    BaselineManager::filter_baseline(&mut final_records, &baseline);
             }
             if options.ratchet {
                 let _ = BaselineManager::ratchet(baseline_p, &final_records);
@@ -348,7 +364,12 @@ impl ComplexityEngine {
         let total_analyzed = final_records.len();
         let god_classes: Vec<ComplexityRecord> = final_records
             .iter()
-            .filter(|r| r.god_class.as_ref().map(|g| g.is_god_class).unwrap_or(false))
+            .filter(|r| {
+                r.god_class
+                    .as_ref()
+                    .map(|g| g.is_god_class)
+                    .unwrap_or(false)
+            })
             .cloned()
             .collect();
         let god_classes_detected = god_classes.len();
@@ -374,7 +395,10 @@ impl ComplexityEngine {
             let sum_cc: u32 = final_records.iter().map(|r| r.complexity.cyclomatic).sum();
             let sum_cog: u32 = final_records.iter().map(|r| r.complexity.cognitive).sum();
             let sum_loc: u32 = final_records.iter().map(|r| r.complexity.loc).sum();
-            let sum_mi: f64 = final_records.iter().map(|r| r.maintainability.maintainability_index).sum();
+            let sum_mi: f64 = final_records
+                .iter()
+                .map(|r| r.maintainability.maintainability_index)
+                .sum();
 
             (
                 sum_cc as f64 / total_analyzed as f64,
@@ -387,7 +411,11 @@ impl ComplexityEngine {
         };
 
         // Sort top hotspots by score descending and take top N
-        final_records.sort_by(|a, b| b.hotspot_score.partial_cmp(&a.hotspot_score).unwrap_or(std::cmp::Ordering::Equal));
+        final_records.sort_by(|a, b| {
+            b.hotspot_score
+                .partial_cmp(&a.hotspot_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         let top_hotspots = final_records.iter().take(options.top_n).cloned().collect();
 
         Ok(ComplexityReport {
@@ -427,16 +455,13 @@ fn collect_files_from_disk(root: &Path) -> Vec<String> {
     let extensions = ["rs", "ts", "tsx", "js", "jsx", "py", "go", "rb"];
 
     for entry in ignore::WalkBuilder::new(root).hidden(true).build() {
-        if let Ok(entry) = entry {
-            if entry.file_type().map(|f| f.is_file()).unwrap_or(false) {
-                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
-                    if extensions.contains(&ext.to_lowercase().as_str()) {
-                        if let Ok(rel) = entry.path().strip_prefix(root) {
-                            files.push(rel.to_string_lossy().to_string());
-                        }
-                    }
-                }
-            }
+        if let Ok(entry) = entry
+            && entry.file_type().map(|f| f.is_file()).unwrap_or(false)
+            && let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
+            && extensions.contains(&ext.to_lowercase().as_str())
+            && let Ok(rel) = entry.path().strip_prefix(root)
+        {
+            files.push(rel.to_string_lossy().to_string());
         }
     }
     files

@@ -164,6 +164,13 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - **Multi-Engine Presentation Layer**: Colored ANSI terminal tables with confidence badges (🟢 High, 🟡 Medium, 🟠 Low), interactive split-pane TUI (`-i`), standalone interactive HTML dashboard (`--html`), GitHub PR Markdown with Mermaid `graph TD` diagrams, SARIF 2.1.0, and machine JSON.
   - **Performance SLA**: Sub-20ms full graph traversal on 50,000+ nodes, sub-2ms PR diff check.
 
+- [x] **2.7 Consolidated Configuration, Multi-Git Polyrepo Support & Production CI/CD (`cartograph config`)**
+  - **Master Configuration Specification (`cartograph.toml`)**: Centralizes storage backends, named multi-database profiles, file exclusions/limits, watcher thresholds, predictive test runners, architectural layers/rules/exemptions, complexity scoring weights, and dead code profiles into a single declarative file.
+  - **CLI `cartograph config` Suite (`init`, `validate`, `show`)**: Turn-key generator with built-in presets (`clean-architecture`, `hexagonal`, `mvc`, `monorepo`), `--minimal` mode, strict TOML syntax and schema validation, and pretty TOML/JSON inspection.
+  - **Multi-Git Polyrepo Workspace Support**: First-class `GitWorkspaceResolver` discovering independent child Git repositories across workspace roots (e.g. `~/workspace/auth-service/.git`, `~/sl/SimpleLegal`), automatically prefixing diff headers (`a/auth-service/...`), and executing unified impact, test selection, complexity, and dead code diffs across microservices.
+  - **Turn-Key Production GitHub Actions Pipeline (`.github/workflows/cartograph-ci.yml`)**: Automated CI quality gates for test parity, zero-warning Clippy/Rustfmt, architectural boundary/cycle verification, PR dead code blocking, complexity hotspot gating, and predictive test execution.
+  - **Performance SLA**: Sub-1ms config resolution, zero-overhead polyrepo diff aggregation.
+
 ---
 
 ### Phase 3: AI Augmentation & Logic Synthesis (v1.2)

@@ -1,6 +1,6 @@
 [package]
 name = "cartograph-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
@@ -10,3 +10,4 @@ thiserror = "2.0"
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 globset = "0.4"
+toml = "0.8"

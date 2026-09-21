@@ -1,7 +1,7 @@
+use crate::test_selector::diff_mapper::MappedDiffTarget;
+use cartograph_core::model::{Node, SelectedTest, UntestedSymbolDeficit};
 use std::collections::HashSet;
 use std::path::Path;
-use cartograph_core::model::{Node, SelectedTest, UntestedSymbolDeficit};
-use crate::test_selector::diff_mapper::MappedDiffTarget;
 
 #[derive(Debug, Clone)]
 pub struct DeficitAnalysisResult {
@@ -106,9 +106,16 @@ impl UntestedDeficitAnalyzer {
             .unwrap_or(false);
 
         let reason = if is_public {
-            format!("Exported public symbol '{}' modified without test coverage", node.name)
+            format!(
+                "Exported public symbol '{}' modified without test coverage",
+                node.name
+            )
         } else {
-            format!("Internal {} '{}' modified without test coverage", node.kind.as_str(), node.name)
+            format!(
+                "Internal {} '{}' modified without test coverage",
+                node.kind.as_str(),
+                node.name
+            )
         };
 
         let path = Path::new(&node.filepath);
@@ -138,8 +145,7 @@ impl UntestedDeficitAnalyzer {
                 let file = format!("{stem}_test.go");
                 let tmpl = format!(
                     "func Test{}(t *testing.T) {{\n    // TODO: Verify behavior for {}\n}}\n",
-                    node.name,
-                    node.name
+                    node.name, node.name
                 );
                 (file, tmpl)
             }
@@ -147,8 +153,7 @@ impl UntestedDeficitAnalyzer {
                 let file = format!("tests/{stem}.test.ts");
                 let tmpl = format!(
                     "describe(\"{}\", () => {{\n    it(\"should work correctly\", () => {{\n        // TODO: Verify behavior for {}\n        expect(true).toBe(true);\n    }});\n}});\n",
-                    node.name,
-                    node.name
+                    node.name, node.name
                 );
                 (file, tmpl)
             }

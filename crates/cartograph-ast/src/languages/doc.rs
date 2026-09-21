@@ -1,11 +1,9 @@
-use cartograph_core::{build_uri, EdgeKind, Node, NodeKind};
 use crate::error::Result;
 use crate::hash::compute_node_checksum;
 use crate::line_index::LineIndex;
-use crate::model::{
-    CallFidelity, ParseContext, ParsedFile, Span, UnresolvedReference,
-};
+use crate::model::{CallFidelity, ParseContext, ParsedFile, Span, UnresolvedReference};
 use crate::traits::LanguageParser;
+use cartograph_core::{EdgeKind, Node, NodeKind, build_uri};
 
 pub struct MarkdownParser;
 
@@ -43,16 +41,36 @@ impl LanguageParser for MarkdownParser {
         for (line_idx, line) in ctx.content.lines().enumerate() {
             let line_num = (line_idx + 1) as u32;
             let trimmed = line.trim();
-            let byte_offset = ctx.content.lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>();
+            let byte_offset = ctx
+                .content
+                .lines()
+                .take(line_idx)
+                .map(|l| l.len() + 1)
+                .sum::<usize>();
 
             // Detect fenced code block toggle
             if trimmed.starts_with("```") {
                 if in_code_block {
                     // Closing code fence
                     let end_byte = byte_offset + line.len();
-                    let span = Span::new(code_block_start, end_byte, line_num, 1, line_num, line.len() as u32);
-                    let scope = heading_stack.last().map(|(_, name)| name.clone()).unwrap_or_default();
-                    let uri = build_uri(ctx.filepath, &scope, &format!("code_{line_num}"), &NodeKind::Other("code_block".to_string()));
+                    let span = Span::new(
+                        code_block_start,
+                        end_byte,
+                        line_num,
+                        1,
+                        line_num,
+                        line.len() as u32,
+                    );
+                    let scope = heading_stack
+                        .last()
+                        .map(|(_, name)| name.clone())
+                        .unwrap_or_default();
+                    let uri = build_uri(
+                        ctx.filepath,
+                        &scope,
+                        &format!("code_{line_num}"),
+                        &NodeKind::Other("code_block".to_string()),
+                    );
 
                     nodes.push(Node {
                         id: uri,
@@ -101,10 +119,25 @@ impl LanguageParser for MarkdownParser {
                         }
                     }
 
-                    let scope = heading_stack.last().map(|(_, name)| name.clone()).unwrap_or_default();
+                    let scope = heading_stack
+                        .last()
+                        .map(|(_, name)| name.clone())
+                        .unwrap_or_default();
                     let end_byte = byte_offset + line.len();
-                    let span = Span::new(byte_offset, end_byte, line_num, 1, line_num, line.len() as u32);
-                    let uri = build_uri(ctx.filepath, &scope, heading_text, &NodeKind::Other("doc".to_string()));
+                    let span = Span::new(
+                        byte_offset,
+                        end_byte,
+                        line_num,
+                        1,
+                        line_num,
+                        line.len() as u32,
+                    );
+                    let uri = build_uri(
+                        ctx.filepath,
+                        &scope,
+                        heading_text,
+                        &NodeKind::Other("doc".to_string()),
+                    );
 
                     let checksum = if ctx.options.compute_node_checksums {
                         Some(compute_node_checksum(heading_text))
@@ -141,28 +174,36 @@ impl LanguageParser for MarkdownParser {
                 while let Some(open_bracket) = rest.find('[') {
                     if let Some(close_bracket) = rest[open_bracket..].find(']') {
                         let after_bracket = &rest[open_bracket + close_bracket + 1..];
-                        if after_bracket.starts_with('(') {
-                            if let Some(close_paren) = after_bracket.find(')') {
-                                let target_path = &after_bracket[1..close_paren];
-                                if target_path.ends_with(".md") {
-                                    let span = Span::new(byte_offset, byte_offset + line.len(), line_num, 1, line_num, line.len() as u32);
-                                    let caller_id = nodes.last().map(|n| n.id.clone()).unwrap_or_default();
+                        if after_bracket.starts_with('(')
+                            && let Some(close_paren) = after_bracket.find(')')
+                        {
+                            let target_path = &after_bracket[1..close_paren];
+                            if target_path.ends_with(".md") {
+                                let span = Span::new(
+                                    byte_offset,
+                                    byte_offset + line.len(),
+                                    line_num,
+                                    1,
+                                    line_num,
+                                    line.len() as u32,
+                                );
+                                let caller_id =
+                                    nodes.last().map(|n| n.id.clone()).unwrap_or_default();
 
-                                    unresolved_references.push(UnresolvedReference {
-                                        source_node_id: caller_id,
-                                        target_symbol: target_path.to_string(),
-                                        import_source: Some(target_path.to_string()),
-                                        kind: EdgeKind::References,
-                                        span,
-                                        call_fidelity: CallFidelity::Definite,
-                                        receiver_type_hint: None,
-                                        receiver_var: None,
-                                        arg_count: None,
-                                    });
-                                }
-                                rest = &after_bracket[close_paren + 1..];
-                                continue;
+                                unresolved_references.push(UnresolvedReference {
+                                    source_node_id: caller_id,
+                                    target_symbol: target_path.to_string(),
+                                    import_source: Some(target_path.to_string()),
+                                    kind: EdgeKind::References,
+                                    span,
+                                    call_fidelity: CallFidelity::Definite,
+                                    receiver_type_hint: None,
+                                    receiver_var: None,
+                                    arg_count: None,
+                                });
                             }
+                            rest = &after_bracket[close_paren + 1..];
+                            continue;
                         }
                     }
                     break;

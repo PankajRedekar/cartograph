@@ -58,32 +58,68 @@ impl BillingManager {
 "#;
 
     let analyzer = AstComplexityAnalyzer::new();
-    let result = analyzer.analyze("src/orders.rs", code).expect("Analysis failed");
+    let result = analyzer
+        .analyze("src/orders.rs", code)
+        .expect("Analysis failed");
 
     assert_eq!(result.language, "rust");
     assert!(!result.symbols.is_empty(), "Should extract symbols");
 
     // Check process_order
-    let order_fn = result.symbols.iter().find(|s| s.name == "process_order").expect("process_order not found");
+    let order_fn = result
+        .symbols
+        .iter()
+        .find(|s| s.name == "process_order")
+        .expect("process_order not found");
     assert_eq!(order_fn.kind, NodeKind::Function);
     assert_eq!(order_fn.metrics.parameter_count, 3);
-    assert!(order_fn.metrics.cyclomatic >= 6, "Expected CC >= 6, got {}", order_fn.metrics.cyclomatic);
-    assert!(order_fn.metrics.cognitive >= 4, "Expected Cognitive >= 4, got {}", order_fn.metrics.cognitive);
-    assert!(order_fn.metrics.max_nesting_depth >= 2, "Expected nesting >= 2, got {}", order_fn.metrics.max_nesting_depth);
+    assert!(
+        order_fn.metrics.cyclomatic >= 6,
+        "Expected CC >= 6, got {}",
+        order_fn.metrics.cyclomatic
+    );
+    assert!(
+        order_fn.metrics.cognitive >= 4,
+        "Expected Cognitive >= 4, got {}",
+        order_fn.metrics.cognitive
+    );
+    assert!(
+        order_fn.metrics.max_nesting_depth >= 2,
+        "Expected nesting >= 2, got {}",
+        order_fn.metrics.max_nesting_depth
+    );
     assert!(order_fn.metrics.sloc > 0);
 
     // Check BillingManager struct
-    let billing = result.classes.iter().find(|c| c.name == "BillingManager").expect("BillingManager not found");
+    let billing = result
+        .classes
+        .iter()
+        .find(|c| c.name == "BillingManager")
+        .expect("BillingManager not found");
     assert_eq!(billing.kind, NodeKind::Struct);
     assert!(billing.fields.contains(&"balance".to_string()));
 
     // Check deposit method field access
-    let deposit_m = result.symbols.iter().find(|s| s.name == "deposit").expect("deposit not found");
-    assert!(deposit_m.fields_accessed.contains(&"balance".to_string()), "deposit should access self.balance");
+    let deposit_m = result
+        .symbols
+        .iter()
+        .find(|s| s.name == "deposit")
+        .expect("deposit not found");
+    assert!(
+        deposit_m.fields_accessed.contains(&"balance".to_string()),
+        "deposit should access self.balance"
+    );
 
     // Check execute method call
-    let execute_m = result.symbols.iter().find(|s| s.name == "execute").expect("execute not found");
-    assert!(execute_m.methods_called.contains(&"deposit".to_string()), "execute should call self.deposit");
+    let execute_m = result
+        .symbols
+        .iter()
+        .find(|s| s.name == "execute")
+        .expect("execute not found");
+    assert!(
+        execute_m.methods_called.contains(&"deposit".to_string()),
+        "execute should call self.deposit"
+    );
 }
 
 #[test]
@@ -129,16 +165,34 @@ export class OrderService {
 "#;
 
     let analyzer = AstComplexityAnalyzer::new();
-    let result = analyzer.analyze("src/order_service.ts", code).expect("Analysis failed");
+    let result = analyzer
+        .analyze("src/order_service.ts", code)
+        .expect("Analysis failed");
 
     assert_eq!(result.language, "typescript");
-    let tax_fn = result.symbols.iter().find(|s| s.name == "calculateTax").expect("calculateTax not found");
+    let tax_fn = result
+        .symbols
+        .iter()
+        .find(|s| s.name == "calculateTax")
+        .expect("calculateTax not found");
     assert_eq!(tax_fn.kind, NodeKind::Method);
     assert_eq!(tax_fn.metrics.parameter_count, 3);
-    assert!(tax_fn.metrics.cyclomatic >= 6, "Expected CC >= 6, got {}", tax_fn.metrics.cyclomatic);
-    assert!(tax_fn.metrics.cognitive >= 3, "Expected Cog >= 3, got {}", tax_fn.metrics.cognitive);
+    assert!(
+        tax_fn.metrics.cyclomatic >= 6,
+        "Expected CC >= 6, got {}",
+        tax_fn.metrics.cyclomatic
+    );
+    assert!(
+        tax_fn.metrics.cognitive >= 3,
+        "Expected Cog >= 3, got {}",
+        tax_fn.metrics.cognitive
+    );
 
-    let get_cache = result.symbols.iter().find(|s| s.name == "getFromCache").expect("getFromCache not found");
+    let get_cache = result
+        .symbols
+        .iter()
+        .find(|s| s.name == "getFromCache")
+        .expect("getFromCache not found");
     assert!(get_cache.fields_accessed.contains(&"cache".to_string()));
 }
 
@@ -168,17 +222,37 @@ class PaymentProcessor:
 "#;
 
     let analyzer = AstComplexityAnalyzer::new();
-    let result = analyzer.analyze("src/payments.py", code).expect("Analysis failed");
+    let result = analyzer
+        .analyze("src/payments.py", code)
+        .expect("Analysis failed");
 
     assert_eq!(result.language, "python");
-    let auth_fn = result.symbols.iter().find(|s| s.name == "authenticate").expect("authenticate not found");
+    let auth_fn = result
+        .symbols
+        .iter()
+        .find(|s| s.name == "authenticate")
+        .expect("authenticate not found");
     assert_eq!(auth_fn.kind, NodeKind::Method);
     // retries (self ignored in param count)
     assert_eq!(auth_fn.metrics.parameter_count, 1);
-    assert!(auth_fn.metrics.cyclomatic >= 4, "Expected CC >= 4, got {}", auth_fn.metrics.cyclomatic);
-    assert!(auth_fn.metrics.cognitive >= 3, "Expected Cog >= 3, got {}", auth_fn.metrics.cognitive);
-    assert!(auth_fn.methods_called.contains(&"connect".to_string()), "authenticate should call connect");
-    assert!(auth_fn.fields_accessed.contains(&"api_key".to_string()) || auth_fn.fields_accessed.contains(&"connected".to_string()));
+    assert!(
+        auth_fn.metrics.cyclomatic >= 4,
+        "Expected CC >= 4, got {}",
+        auth_fn.metrics.cyclomatic
+    );
+    assert!(
+        auth_fn.metrics.cognitive >= 3,
+        "Expected Cog >= 3, got {}",
+        auth_fn.metrics.cognitive
+    );
+    assert!(
+        auth_fn.methods_called.contains(&"connect".to_string()),
+        "authenticate should call connect"
+    );
+    assert!(
+        auth_fn.fields_accessed.contains(&"api_key".to_string())
+            || auth_fn.fields_accessed.contains(&"connected".to_string())
+    );
 }
 
 #[test]
@@ -209,12 +283,22 @@ func (s *Server) Start(port int) error {
 "#;
 
     let analyzer = AstComplexityAnalyzer::new();
-    let result = analyzer.analyze("server.go", code).expect("Analysis failed");
+    let result = analyzer
+        .analyze("server.go", code)
+        .expect("Analysis failed");
 
     assert_eq!(result.language, "go");
-    let start_fn = result.symbols.iter().find(|s| s.name == "Start").expect("Start not found");
+    let start_fn = result
+        .symbols
+        .iter()
+        .find(|s| s.name == "Start")
+        .expect("Start not found");
     assert_eq!(start_fn.kind, NodeKind::Method);
-    assert!(start_fn.metrics.cyclomatic >= 4, "Expected CC >= 4, got {}", start_fn.metrics.cyclomatic);
+    assert!(
+        start_fn.metrics.cyclomatic >= 4,
+        "Expected CC >= 4, got {}",
+        start_fn.metrics.cyclomatic
+    );
 }
 
 #[test]
@@ -237,11 +321,21 @@ end
 "#;
 
     let analyzer = AstComplexityAnalyzer::new();
-    let result = analyzer.analyze("account.rb", code).expect("Analysis failed");
+    let result = analyzer
+        .analyze("account.rb", code)
+        .expect("Analysis failed");
 
     assert_eq!(result.language, "ruby");
-    let withdraw_fn = result.symbols.iter().find(|s| s.name == "withdraw").expect("withdraw not found");
+    let withdraw_fn = result
+        .symbols
+        .iter()
+        .find(|s| s.name == "withdraw")
+        .expect("withdraw not found");
     assert_eq!(withdraw_fn.kind, NodeKind::Method);
-    assert!(withdraw_fn.metrics.cyclomatic >= 3, "Expected CC >= 3, got {}", withdraw_fn.metrics.cyclomatic);
+    assert!(
+        withdraw_fn.metrics.cyclomatic >= 3,
+        "Expected CC >= 3, got {}",
+        withdraw_fn.metrics.cyclomatic
+    );
     assert!(withdraw_fn.fields_accessed.contains(&"balance".to_string()));
 }

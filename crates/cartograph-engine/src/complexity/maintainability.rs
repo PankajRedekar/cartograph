@@ -29,21 +29,13 @@ impl MaintainabilityCalculator {
         };
 
         let wmc_debt = if let Some(w) = wmc {
-            if w > 50 {
-                (w - 50) as f64 * 0.8
-            } else {
-                0.0
-            }
+            if w > 50 { (w - 50) as f64 * 0.8 } else { 0.0 }
         } else {
             0.0
         };
 
         let lcom4_debt = if let Some(l) = lcom4 {
-            if l > 1 {
-                (l - 1) as f64 * 3.0
-            } else {
-                0.0
-            }
+            if l > 1 { (l - 1) as f64 * 3.0 } else { 0.0 }
         } else {
             0.0
         };

@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use crate::complexity::hotspot::HotspotClassifier;
+use crate::complexity::maintainability::MaintainabilityCalculator;
 use cartograph_core::config::ComplexityConfig;
 use cartograph_core::model::{
     ChurnMetric, ComplexityGranularity, ComplexityMetric, ComplexityRecord, CouplingMetric,
     TestDeficitMetric,
 };
-use crate::complexity::hotspot::HotspotClassifier;
-use crate::complexity::maintainability::MaintainabilityCalculator;
+use std::collections::HashMap;
 
 pub struct MetricAggregator;
 
@@ -18,24 +18,30 @@ impl MetricAggregator {
     ) -> Vec<ComplexityRecord> {
         match target_granularity {
             ComplexityGranularity::Symbol => records.to_vec(),
-            ComplexityGranularity::File => Self::aggregate_by_group(records, target_granularity, config, |r| {
-                r.filepath.clone()
-            }),
-            ComplexityGranularity::Module => Self::aggregate_by_group(records, target_granularity, config, |r| {
-                let p = std::path::Path::new(&r.filepath);
-                p.parent()
-                    .and_then(|d| d.to_str())
-                    .unwrap_or("")
-                    .to_string()
-            }),
-            ComplexityGranularity::Package => Self::aggregate_by_group(records, target_granularity, config, |r| {
-                let parts: Vec<&str> = r.filepath.split('/').collect();
-                if parts.len() >= 2 && parts[0] == "crates" {
-                    format!("{}/{}", parts[0], parts[1])
-                } else {
-                    parts.first().unwrap_or(&"root").to_string()
-                }
-            }),
+            ComplexityGranularity::File => {
+                Self::aggregate_by_group(records, target_granularity, config, |r| {
+                    r.filepath.clone()
+                })
+            }
+            ComplexityGranularity::Module => {
+                Self::aggregate_by_group(records, target_granularity, config, |r| {
+                    let p = std::path::Path::new(&r.filepath);
+                    p.parent()
+                        .and_then(|d| d.to_str())
+                        .unwrap_or("")
+                        .to_string()
+                })
+            }
+            ComplexityGranularity::Package => {
+                Self::aggregate_by_group(records, target_granularity, config, |r| {
+                    let parts: Vec<&str> = r.filepath.split('/').collect();
+                    if parts.len() >= 2 && parts[0] == "crates" {
+                        format!("{}/{}", parts[0], parts[1])
+                    } else {
+                        parts.first().unwrap_or(&"root").to_string()
+                    }
+                })
+            }
         }
     }
 
@@ -136,17 +142,31 @@ impl MetricAggregator {
                 test_deficit_ratio: sum_cc as f64 / (sum_tests.max(1) as f64),
             };
 
-            let maintainability = MaintainabilityCalculator::calculate(sum_cc, sum_loc, sum_sloc, None, None);
-            let hotspot_score = HotspotClassifier::compute_hotspot_score(&complexity, &coupling, &max_churn, config);
+            let maintainability =
+                MaintainabilityCalculator::calculate(sum_cc, sum_loc, sum_sloc, None, None);
+            let hotspot_score = HotspotClassifier::compute_hotspot_score(
+                &complexity,
+                &coupling,
+                &max_churn,
+                config,
+            );
             let quadrant = HotspotClassifier::classify_quadrant(&complexity, &max_churn, config);
 
-            let id = format!("cartograph://aggregated/{}#{}", group_name, granularity.as_str());
+            let id = format!(
+                "cartograph://aggregated/{}#{}",
+                group_name,
+                granularity.as_str()
+            );
 
             aggregated.push(ComplexityRecord {
                 id: id.clone(),
                 name: group_name.clone(),
                 kind: granularity.as_str().to_string(),
-                filepath: if granularity == ComplexityGranularity::File { group_name.clone() } else { sample_filepath },
+                filepath: if granularity == ComplexityGranularity::File {
+                    group_name.clone()
+                } else {
+                    sample_filepath
+                },
                 scope: "".to_string(),
                 start_line: 1,
                 end_line: sum_loc,
@@ -165,7 +185,11 @@ impl MetricAggregator {
             });
         }
 
-        aggregated.sort_by(|a, b| b.hotspot_score.partial_cmp(&a.hotspot_score).unwrap_or(std::cmp::Ordering::Equal));
+        aggregated.sort_by(|a, b| {
+            b.hotspot_score
+                .partial_cmp(&a.hotspot_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         aggregated
     }
 }

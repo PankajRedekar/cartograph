@@ -12,9 +12,7 @@ impl SemanticDiffClassifier {
         match (old_node, new_node) {
             (None, Some(_)) => SemanticChangeType::Added,
             (Some(_), None) => SemanticChangeType::Deleted,
-            (Some(old), Some(new)) => {
-                Self::compare_nodes(old, new, modified_lines)
-            }
+            (Some(old), Some(new)) => Self::compare_nodes(old, new, modified_lines),
             (None, None) => SemanticChangeType::BodyOnly,
         }
     }
@@ -28,8 +26,10 @@ impl SemanticDiffClassifier {
 
             if old_trimmed != new_trimmed {
                 // Check if visibility was reduced:
-                let old_is_pub = old_trimmed.starts_with("pub ") || old_trimmed.starts_with("export ");
-                let new_is_pub = new_trimmed.starts_with("pub ") || new_trimmed.starts_with("export ");
+                let old_is_pub =
+                    old_trimmed.starts_with("pub ") || old_trimmed.starts_with("export ");
+                let new_is_pub =
+                    new_trimmed.starts_with("pub ") || new_trimmed.starts_with("export ");
                 if old_is_pub && !new_is_pub {
                     return SemanticChangeType::VisibilityReduced;
                 }
@@ -108,8 +108,18 @@ mod tests {
 
     #[test]
     fn test_docstring_only_detection() {
-        let old = test_node(Some("pub fn calculate(a: i32) -> i32"), Some("/// Documenting"), 10, 20);
-        let new = test_node(Some("pub fn calculate(a: i32) -> i32"), Some("/// Updated doc"), 10, 20);
+        let old = test_node(
+            Some("pub fn calculate(a: i32) -> i32"),
+            Some("/// Documenting"),
+            10,
+            20,
+        );
+        let new = test_node(
+            Some("pub fn calculate(a: i32) -> i32"),
+            Some("/// Updated doc"),
+            10,
+            20,
+        );
 
         let change = SemanticDiffClassifier::classify_change(Some(&old), Some(&new), &[10]);
         assert_eq!(change, SemanticChangeType::DocstringOnly);

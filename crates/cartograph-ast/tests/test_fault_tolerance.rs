@@ -12,10 +12,17 @@ class Broken:
         return 42
 "#;
     let py_res = registry.parse_file("broken.py", broken_python, None);
-    assert!(py_res.is_ok(), "Parser should not panic on broken Python syntax");
+    assert!(
+        py_res.is_ok(),
+        "Parser should not panic on broken Python syntax"
+    );
     let res = py_res.unwrap();
     // Valid surrounding helper should still be extracted!
-    assert!(res.nodes.iter().any(|n| n.name == "valid_helper" || n.name == "Broken"));
+    assert!(
+        res.nodes
+            .iter()
+            .any(|n| n.name == "valid_helper" || n.name == "Broken")
+    );
 
     // Incomplete TypeScript syntax
     let broken_ts = r#"
@@ -23,7 +30,10 @@ export function broken(a: string, {
     const x = 1;
 "#;
     let ts_res = registry.parse_file("broken.ts", broken_ts, None);
-    assert!(ts_res.is_ok(), "Parser should not panic on broken TS syntax");
+    assert!(
+        ts_res.is_ok(),
+        "Parser should not panic on broken TS syntax"
+    );
 
     // Incomplete Ruby syntax
     let broken_ruby = r#"
@@ -32,7 +42,10 @@ class BrokenRuby
 end
 "#;
     let rb_res = registry.parse_file("broken.rb", broken_ruby, None);
-    assert!(rb_res.is_ok(), "Parser should not panic on broken Ruby syntax");
+    assert!(
+        rb_res.is_ok(),
+        "Parser should not panic on broken Ruby syntax"
+    );
 
     // Empty file
     let empty_res = registry.parse_file("empty.rs", "", None);

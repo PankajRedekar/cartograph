@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::process::Command;
 
 use cartograph_core::model::{BoundaryViolation, DependencyCycle};
 
@@ -25,32 +24,11 @@ impl GitDiffScope {
         }
     }
 
-    /// Extract changed files and line hunks from local Git repository
-    pub fn from_git(
-        repo_root: &Path,
-        branch: Option<&str>,
-        staged: bool,
-    ) -> Result<Self, String> {
-        let mut args = vec!["diff", "-U0"];
-
-        if staged {
-            args.push("--cached");
-        } else if let Some(target_branch) = branch {
-            args.push(target_branch);
-        }
-
-        let output = Command::new("git")
-            .args(&args)
-            .current_dir(repo_root)
-            .output()
-            .map_err(|e| format!("Failed to execute git: {e}"))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("git diff exited with error: {stderr}"));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
+    /// Extract changed files and line hunks from local Git repository or polyrepo workspace
+    pub fn from_git(repo_root: &Path, branch: Option<&str>, staged: bool) -> Result<Self, String> {
+        let stdout =
+            crate::discovery::GitWorkspaceResolver::execute_diff(repo_root, branch, staged)
+                .map_err(|e| format!("git diff exited with error: {e}"))?;
         Ok(Self::parse_diff_output(&stdout))
     }
 
@@ -70,34 +48,34 @@ impl GitDiffScope {
                 // If a file was only deleted, it's recorded here
                 let path = line.trim_start_matches("--- a/").trim().replace('\\', "/");
                 changed_files.insert(path);
-            } else if line.starts_with("@@ ") {
-                if let Some(ref file) = current_file {
-                    // Unified diff hunk header format: @@ -from,len +to,len @@
-                    // Example: @@ -10,3 +12,4 @@ or @@ -10 +12 @@
-                    if let Some(plus_idx) = line.find('+') {
-                        let after_plus = &line[plus_idx + 1..];
-                        let hunk_spec = after_plus.split_whitespace().next().unwrap_or("");
-                        let parts: Vec<&str> = hunk_spec.split(',').collect();
-                        if let Ok(start) = parts[0].parse::<usize>() {
-                            let count = if parts.len() > 1 {
-                                parts[1].parse::<usize>().unwrap_or(1)
-                            } else {
-                                1
-                            };
-                            let end = if count == 0 {
-                                start
-                            } else {
-                                start + count.saturating_sub(1)
-                            };
+            } else if line.starts_with("@@ ")
+                && let Some(ref file) = current_file
+            {
+                // Unified diff hunk header format: @@ -from,len +to,len @@
+                // Example: @@ -10,3 +12,4 @@ or @@ -10 +12 @@
+                if let Some(plus_idx) = line.find('+') {
+                    let after_plus = &line[plus_idx + 1..];
+                    let hunk_spec = after_plus.split_whitespace().next().unwrap_or("");
+                    let parts: Vec<&str> = hunk_spec.split(',').collect();
+                    if let Ok(start) = parts[0].parse::<usize>() {
+                        let count = if parts.len() > 1 {
+                            parts[1].parse::<usize>().unwrap_or(1)
+                        } else {
+                            1
+                        };
+                        let end = if count == 0 {
+                            start
+                        } else {
+                            start + count.saturating_sub(1)
+                        };
 
-                            file_hunks
-                                .entry(file.clone())
-                                .or_default()
-                                .push(FileHunkRange {
-                                    start_line: start,
-                                    end_line: end,
-                                });
-                        }
+                        file_hunks
+                            .entry(file.clone())
+                            .or_default()
+                            .push(FileHunkRange {
+                                start_line: start,
+                                end_line: end,
+                            });
                     }
                 }
             }
@@ -141,12 +119,12 @@ impl GitDiffScope {
         };
 
         // If line hunks are available for this file and violation has a line number, check hunk containment
-        if let (Some(hunks), Some(line)) = (self.file_hunks.get(matched_key), violation.line) {
-            if !hunks.is_empty() {
-                return hunks
-                    .iter()
-                    .any(|h| line >= h.start_line && line <= h.end_line);
-            }
+        if let (Some(hunks), Some(line)) = (self.file_hunks.get(matched_key), violation.line)
+            && !hunks.is_empty()
+        {
+            return hunks
+                .iter()
+                .any(|h| line >= h.start_line && line <= h.end_line);
         }
 
         // If no specific hunks or no violation line, presence in changed_files is sufficient
@@ -155,9 +133,10 @@ impl GitDiffScope {
 
     /// Check if a cycle intersects with changed files in this diff
     pub fn is_cycle_in_diff(&self, cycle: &DependencyCycle) -> bool {
-        cycle.hops.iter().any(|hop| {
-            self.is_file_changed(&hop.filepath)
-        })
+        cycle
+            .hops
+            .iter()
+            .any(|hop| self.is_file_changed(&hop.filepath))
     }
 
     /// Filter violations retaining only those introduced/touched in this git diff

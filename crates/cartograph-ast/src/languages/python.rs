@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use tree_sitter::{Node as TsNode, Parser, Query, Tree};
 
-use cartograph_core::{build_uri, Edge, EdgeKind, Node, NodeKind};
 use crate::error::{AstError, Result};
 use crate::hash::compute_node_checksum;
 use crate::line_index::LineIndex;
@@ -12,6 +11,7 @@ use crate::model::{
 };
 use crate::traits::LanguageParser;
 use crate::trivia::{SignatureNormalizer, TriviaBinder};
+use cartograph_core::{Edge, EdgeKind, Node, NodeKind, build_uri};
 
 pub static PYTHON_TAGS_QUERY: LazyLock<Query> = LazyLock::new(|| {
     let language = tree_sitter_python::LANGUAGE.into();
@@ -41,11 +41,7 @@ impl PythonParser {
         Ok(parser)
     }
 
-    fn parse_internal(
-        &self,
-        ctx: &ParseContext,
-        tree: &Tree,
-    ) -> Result<ParsedFile> {
+    fn parse_internal(&self, ctx: &ParseContext, tree: &Tree) -> Result<ParsedFile> {
         let line_index = LineIndex::new(ctx.content);
         let root = tree.root_node();
 
@@ -243,7 +239,10 @@ impl<'a> PythonExtractor<'a> {
             metadata["superclasses"] = serde_json::json!(superclasses);
         }
 
-        let is_test_class = class_name.starts_with("Test") || class_name.ends_with("Test") || class_name.ends_with("Tests") || superclasses.iter().any(|s| s.contains("TestCase"));
+        let is_test_class = class_name.starts_with("Test")
+            || class_name.ends_with("Test")
+            || class_name.ends_with("Tests")
+            || superclasses.iter().any(|s| s.contains("TestCase"));
         if is_test_class {
             metadata["is_test"] = serde_json::json!(true);
             metadata["framework"] = serde_json::json!("pytest");
@@ -326,8 +325,12 @@ impl<'a> PythonExtractor<'a> {
             for child in params_node.children(&mut cursor) {
                 if child.kind() == "identifier" {
                     params.push(self.node_text(child).to_string());
-                } else if child.kind() == "typed_parameter" || child.kind() == "default_parameter" || child.kind() == "typed_default_parameter" {
-                    let param_name = child.child_by_field_name("name")
+                } else if child.kind() == "typed_parameter"
+                    || child.kind() == "default_parameter"
+                    || child.kind() == "typed_default_parameter"
+                {
+                    let param_name = child
+                        .child_by_field_name("name")
                         .or_else(|| child.named_child(0));
                     if let Some(name_node) = param_name {
                         let name_str = self.node_text(name_node).to_string();
@@ -343,7 +346,9 @@ impl<'a> PythonExtractor<'a> {
         }
 
         // Return type
-        let return_type = node.child_by_field_name("return_type").map(|n| self.node_text(n).to_string());
+        let return_type = node
+            .child_by_field_name("return_type")
+            .map(|n| self.node_text(n).to_string());
 
         // Signature
         let raw_sig = if let Some(ret) = &return_type {
@@ -367,8 +372,10 @@ impl<'a> PythonExtractor<'a> {
         };
 
         // Pytest / test detection
-        let is_test = fn_name.starts_with("test_") || fn_name.ends_with("_test")
-            || (self.filepath.contains("test") && (fn_name.starts_with("test") || fn_name.ends_with("test")))
+        let is_test = fn_name.starts_with("test_")
+            || fn_name.ends_with("_test")
+            || (self.filepath.contains("test")
+                && (fn_name.starts_with("test") || fn_name.ends_with("test")))
             || (scope.starts_with("Test") && fn_name.starts_with("test"));
 
         let test_type = if self.filepath.contains("e2e") {
@@ -412,7 +419,11 @@ impl<'a> PythonExtractor<'a> {
 
         // If parent class exists, emit `defines` edge
         if let Some(parent_uri) = parent_class_uri {
-            self.edges.push(Edge::new(parent_uri.to_string(), uri.clone(), EdgeKind::Defines));
+            self.edges.push(Edge::new(
+                parent_uri.to_string(),
+                uri.clone(),
+                EdgeKind::Defines,
+            ));
         }
 
         // Enter function scope for body inspection
@@ -433,7 +444,12 @@ impl<'a> PythonExtractor<'a> {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "decorator" {
-                decorators.push(self.node_text(child).trim_start_matches('@').trim().to_string());
+                decorators.push(
+                    self.node_text(child)
+                        .trim_start_matches('@')
+                        .trim()
+                        .to_string(),
+                );
             } else if child.kind() == "function_definition" {
                 self.visit_function(child, None);
                 self.annotate_last_node_decorators(&decorators, Some(child));
@@ -449,7 +465,12 @@ impl<'a> PythonExtractor<'a> {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "decorator" {
-                decorators.push(self.node_text(child).trim_start_matches('@').trim().to_string());
+                decorators.push(
+                    self.node_text(child)
+                        .trim_start_matches('@')
+                        .trim()
+                        .to_string(),
+                );
             } else if child.kind() == "function_definition" {
                 self.visit_function(child, parent_class_uri);
                 self.annotate_last_node_decorators(&decorators, Some(child));
@@ -459,26 +480,41 @@ impl<'a> PythonExtractor<'a> {
 
     fn annotate_last_node_decorators(&mut self, decorators: &[String], func_node: Option<TsNode>) {
         let (handler_id, handler_name, handler_span) = match self.nodes.last() {
-            Some(n) => (n.id.clone(), n.name.clone(), Span::new(0, 0, n.start_line.unwrap_or(1), n.start_col.unwrap_or(1), n.end_line.unwrap_or(1), n.end_col.unwrap_or(1))),
+            Some(n) => (
+                n.id.clone(),
+                n.name.clone(),
+                Span::new(
+                    0,
+                    0,
+                    n.start_line.unwrap_or(1),
+                    n.start_col.unwrap_or(1),
+                    n.end_line.unwrap_or(1),
+                    n.end_col.unwrap_or(1),
+                ),
+            ),
             None => return,
         };
 
-        let is_celery = decorators.iter().any(|d| d.contains("shared_task") || d.contains("task"));
-        let is_pytest_mark = decorators.iter().any(|d| d.starts_with("pytest.mark") || d.starts_with("mark."));
-        if let Some(last_node) = self.nodes.last_mut() {
-            if let Some(meta) = &mut last_node.metadata {
-                meta["decorators"] = serde_json::json!(decorators);
-                if is_celery {
-                    meta["is_celery_task"] = serde_json::json!(true);
-                }
-                if is_pytest_mark {
-                    meta["is_test"] = serde_json::json!(true);
-                    meta["framework"] = serde_json::json!("pytest");
-                }
+        let is_celery = decorators
+            .iter()
+            .any(|d| d.contains("shared_task") || d.contains("task"));
+        let is_pytest_mark = decorators
+            .iter()
+            .any(|d| d.starts_with("pytest.mark") || d.starts_with("mark."));
+        if let Some(last_node) = self.nodes.last_mut()
+            && let Some(meta) = &mut last_node.metadata
+        {
+            meta["decorators"] = serde_json::json!(decorators);
+            if is_celery {
+                meta["is_celery_task"] = serde_json::json!(true);
+            }
+            if is_pytest_mark {
+                meta["is_test"] = serde_json::json!(true);
+                meta["framework"] = serde_json::json!("pytest");
             }
         }
 
-        let func_has_depends = func_node.map_or(false, |fn_node| {
+        let func_has_depends = func_node.is_some_and(|fn_node| {
             let text = self.node_text(fn_node);
             text.contains("Depends(") || text.contains("Security(")
         });
@@ -497,7 +533,13 @@ impl<'a> PythonExtractor<'a> {
                         let inside = &d[idx + pattern_prefix.len()..];
                         let path = self.extract_first_string_arg(inside);
                         if !path.is_empty() {
-                            let has_depends = func_has_depends || d.contains("Depends") || decorators.iter().any(|dec| dec.contains("login_required") || dec.contains("jwt_required") || dec.contains("auth"));
+                            let has_depends = func_has_depends
+                                || d.contains("Depends")
+                                || decorators.iter().any(|dec| {
+                                    dec.contains("login_required")
+                                        || dec.contains("jwt_required")
+                                        || dec.contains("auth")
+                                });
                             new_routes.push((method_upper, path, "fastapi", has_depends));
                         }
                     }
@@ -514,13 +556,20 @@ impl<'a> PythonExtractor<'a> {
                         let after_m = &inside[m_idx + 8..];
                         if let Some(end_m) = after_m.find(']') {
                             let m_list = &after_m[..end_m];
-                            methods = m_list.split(',')
-                                .map(|s| s.trim().trim_matches(['\'', '"', '[', ']']).to_uppercase())
+                            methods = m_list
+                                .split(',')
+                                .map(|s| {
+                                    s.trim().trim_matches(['\'', '"', '[', ']']).to_uppercase()
+                                })
                                 .filter(|s| !s.is_empty())
                                 .collect();
                         }
                     }
-                    let has_auth = decorators.iter().any(|dec| dec.contains("login_required") || dec.contains("jwt_required") || dec.contains("auth"));
+                    let has_auth = decorators.iter().any(|dec| {
+                        dec.contains("login_required")
+                            || dec.contains("jwt_required")
+                            || dec.contains("auth")
+                    });
                     for m in methods {
                         new_routes.push((m, path.clone(), "flask", has_auth));
                     }
@@ -528,14 +577,14 @@ impl<'a> PythonExtractor<'a> {
             }
 
             // 3. Django REST Framework: action(detail=True, methods=['post', 'delete'], url_path='reset-password')
-            if d.starts_with("action(") {
-                let inside = &d[7..];
+            if let Some(inside) = d.strip_prefix("action(") {
                 let mut methods = vec!["POST".to_string()];
                 if let Some(m_idx) = inside.find("methods=") {
                     let after_m = &inside[m_idx + 8..];
                     if let Some(end_m) = after_m.find(']') {
                         let m_list = &after_m[..end_m];
-                        methods = m_list.split(',')
+                        methods = m_list
+                            .split(',')
                             .map(|s| s.trim().trim_matches(['\'', '"', '[', ']']).to_uppercase())
                             .filter(|s| !s.is_empty())
                             .collect();
@@ -546,10 +595,16 @@ impl<'a> PythonExtractor<'a> {
                     let after_p = &inside[p_idx + 9..];
                     let raw_p = self.extract_first_string_arg(after_p);
                     if !raw_p.is_empty() {
-                        path = if raw_p.starts_with('/') { raw_p } else { format!("/{raw_p}") };
+                        path = if raw_p.starts_with('/') {
+                            raw_p
+                        } else {
+                            format!("/{raw_p}")
+                        };
                     }
                 }
-                let has_auth = decorators.iter().any(|dec| dec.contains("permission_classes") || dec.contains("auth"));
+                let has_auth = decorators
+                    .iter()
+                    .any(|dec| dec.contains("permission_classes") || dec.contains("auth"));
                 for m in methods {
                     new_routes.push((m, path.clone(), "django", has_auth));
                 }
@@ -580,7 +635,8 @@ impl<'a> PythonExtractor<'a> {
                     "auth": if is_auth { "protected" } else { "public" },
                 })),
             });
-            self.edges.push(Edge::new(route_uri, handler_id.clone(), EdgeKind::MapsTo));
+            self.edges
+                .push(Edge::new(route_uri, handler_id.clone(), EdgeKind::MapsTo));
         }
     }
 
@@ -619,7 +675,12 @@ impl<'a> PythonExtractor<'a> {
         }
 
         // Inline SQL Slicing check: cursor.execute("SELECT ...") or execute("SELECT ...")
-        if self.options.extract_inline_sql && (fn_text.ends_with(".execute") || fn_text == "execute" || fn_text.ends_with(".raw") || fn_text == "raw") {
+        if self.options.extract_inline_sql
+            && (fn_text.ends_with(".execute")
+                || fn_text == "execute"
+                || fn_text.ends_with(".raw")
+                || fn_text == "raw")
+        {
             self.extract_inline_sql(node, span, &caller_id);
         }
 
@@ -684,7 +745,11 @@ impl<'a> PythonExtractor<'a> {
                 if child.kind() == "string" && route_pattern.is_none() {
                     let raw = self.node_text(child);
                     route_pattern = Some(raw.trim_matches(|c| c == '\'' || c == '"').to_string());
-                } else if target_view.is_none() && (child.kind() == "identifier" || child.kind() == "attribute" || child.kind() == "call") {
+                } else if target_view.is_none()
+                    && (child.kind() == "identifier"
+                        || child.kind() == "attribute"
+                        || child.kind() == "call")
+                {
                     target_view = Some(self.node_text(child).to_string());
                 }
             }
@@ -732,7 +797,9 @@ impl<'a> PythonExtractor<'a> {
             let mut cursor = args.walk();
             for child in args.children(&mut cursor) {
                 if child.kind() == "string" {
-                    let raw_sql = self.node_text(child).trim_matches(|c| c == '\'' || c == '"');
+                    let raw_sql = self
+                        .node_text(child)
+                        .trim_matches(|c| c == '\'' || c == '"');
                     let uppercase_sql = raw_sql.to_uppercase();
 
                     // Find FROM or JOIN table names
@@ -786,7 +853,9 @@ impl<'a> PythonExtractor<'a> {
 
     fn visit_import_from(&mut self, node: TsNode) {
         let span = self.line_index.span_for_node(&node, self.content);
-        let module_name = node.child_by_field_name("module_name").map(|n| self.node_text(n).to_string());
+        let module_name = node
+            .child_by_field_name("module_name")
+            .map(|n| self.node_text(n).to_string());
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -810,15 +879,21 @@ impl<'a> PythonExtractor<'a> {
     }
 
     fn visit_assignment(&mut self, node: TsNode) {
-        if let (Some(left), Some(right)) = (node.child_by_field_name("left"), node.child_by_field_name("right")) {
+        if let (Some(left), Some(right)) = (
+            node.child_by_field_name("left"),
+            node.child_by_field_name("right"),
+        ) {
             let left_text = self.node_text(left);
             let right_text = self.node_text(right);
 
             // Simple RHS object creation type inference: invoice = Invoice(...)
             if let Some(idx) = right_text.find('(') {
                 let constructor = &right_text[..idx].trim();
-                if !constructor.is_empty() && constructor.chars().next().map_or(false, |c| c.is_uppercase()) {
-                    self.type_bindings.insert(left_text.to_string(), constructor.to_string());
+                if !constructor.is_empty()
+                    && constructor.chars().next().is_some_and(|c| c.is_uppercase())
+                {
+                    self.type_bindings
+                        .insert(left_text.to_string(), constructor.to_string());
                 }
             }
         }
@@ -831,9 +906,9 @@ impl<'a> PythonExtractor<'a> {
     }
 
     fn extract_visibility(&self, name: &str) -> Visibility {
-        if name.starts_with("__") && !name.ends_with("__") {
-            Visibility::Private
-        } else if name.starts_with('_') && !name.ends_with('_') {
+        if (name.starts_with("__") && !name.ends_with("__"))
+            || (name.starts_with('_') && !name.ends_with('_'))
+        {
             Visibility::Private
         } else {
             Visibility::Public
@@ -843,17 +918,15 @@ impl<'a> PythonExtractor<'a> {
     fn extract_body_docstring(&self, body_node: Option<TsNode>) -> Option<String> {
         let body = body_node?;
         let mut cursor = body.walk();
-        if let Some(child) = body.children(&mut cursor).next() {
-            if child.kind() == "expression_statement" {
-                if let Some(str_node) = child.named_child(0) {
-                    if str_node.kind() == "string" {
-                        let raw = self.node_text(str_node);
-                        let cleaned = TriviaBinder::clean_python_docstring(raw);
-                        if !cleaned.is_empty() {
-                            return Some(cleaned);
-                        }
-                    }
-                }
+        if let Some(child) = body.children(&mut cursor).next()
+            && child.kind() == "expression_statement"
+            && let Some(str_node) = child.named_child(0)
+            && str_node.kind() == "string"
+        {
+            let raw = self.node_text(str_node);
+            let cleaned = TriviaBinder::clean_python_docstring(raw);
+            if !cleaned.is_empty() {
+                return Some(cleaned);
             }
         }
         None
@@ -898,7 +971,10 @@ def process_invoice(inv: Invoice):
         let invoice_node = &parsed.nodes[0];
         assert_eq!(invoice_node.name, "Invoice");
         assert_eq!(invoice_node.kind, NodeKind::Model);
-        assert_eq!(invoice_node.docstring.as_deref(), Some("Represents a customer invoice."));
+        assert_eq!(
+            invoice_node.docstring.as_deref(),
+            Some("Represents a customer invoice.")
+        );
 
         // Check method
         let calc_node = &parsed.nodes[1];
@@ -987,7 +1063,10 @@ def test_standalone_helper():
             .find(|n| n.name == "test_create_user")
             .expect("Should extract test method");
         assert_eq!(method_node.metadata.as_ref().unwrap()["is_test"], true);
-        assert_eq!(method_node.metadata.as_ref().unwrap()["framework"], "pytest");
+        assert_eq!(
+            method_node.metadata.as_ref().unwrap()["framework"],
+            "pytest"
+        );
 
         let fn_node = parsed
             .nodes
@@ -1012,18 +1091,29 @@ def manage_item(item_id):
         let ctx = ParseContext::new("routes.py", code);
         let parsed = parser.parse(&ctx).expect("Parsing Python routes failed");
 
-        let fastapi_route = parsed.nodes.iter().find(|n| n.name == "GET /users/{user_id}").expect("FastAPI route not found");
+        let fastapi_route = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "GET /users/{user_id}")
+            .expect("FastAPI route not found");
         assert_eq!(fastapi_route.kind, NodeKind::Route);
         let meta = fastapi_route.metadata.as_ref().unwrap();
         assert_eq!(meta["framework"], "fastapi");
         assert_eq!(meta["auth"], "protected");
 
-        let flask_get = parsed.nodes.iter().find(|n| n.name == "GET /items/<int:item_id>").expect("Flask GET route not found");
+        let flask_get = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "GET /items/<int:item_id>")
+            .expect("Flask GET route not found");
         assert_eq!(flask_get.kind, NodeKind::Route);
         assert_eq!(flask_get.metadata.as_ref().unwrap()["framework"], "flask");
 
-        let flask_post = parsed.nodes.iter().find(|n| n.name == "POST /items/<int:item_id>").expect("Flask POST route not found");
+        let flask_post = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "POST /items/<int:item_id>")
+            .expect("Flask POST route not found");
         assert_eq!(flask_post.kind, NodeKind::Route);
     }
 }
-

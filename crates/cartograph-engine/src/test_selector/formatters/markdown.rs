@@ -10,24 +10,48 @@ impl MarkdownFormatter {
 
         if report.is_zero_risk_bypass {
             out.push_str("> ⚡ **Zero Tests Needed**: Only non-functional files, docstrings, or markdown were modified in this PR. Full test suite execution skipped.\n\n");
-            out.push_str(&format!("*Analysis completed in `{:.2}ms`.*\n", report.analysis_duration_ms));
+            out.push_str(&format!(
+                "*Analysis completed in `{:.2}ms`.*\n",
+                report.analysis_duration_ms
+            ));
             return out;
         }
 
         // Summary Table
         out.push_str("| Metric | Value |\n");
         out.push_str("| :--- | :--- |\n");
-        out.push_str(&format!("| **Modified Symbols** | `{}` |\n", report.modified_symbols_count));
+        out.push_str(&format!(
+            "| **Modified Symbols** | `{}` |\n",
+            report.modified_symbols_count
+        ));
         if report.docstring_only_symbols_count > 0 {
-            out.push_str(&format!("| **Docstring Bypassed** | `{}` |\n", report.docstring_only_symbols_count));
+            out.push_str(&format!(
+                "| **Docstring Bypassed** | `{}` |\n",
+                report.docstring_only_symbols_count
+            ));
         }
-        out.push_str(&format!("| **Tests Selected** | `{}` (in `{}` files) |\n", report.total_tests_selected, report.total_test_files_count));
+        out.push_str(&format!(
+            "| **Tests Selected** | `{}` (in `{}` files) |\n",
+            report.total_tests_selected, report.total_test_files_count
+        ));
         if report.total_repo_tests_count > 0 {
-            out.push_str(&format!("| **Suite Reduction** | `+{:.1}% avoided` |\n", report.test_reduction_percentage));
-            out.push_str(&format!("| **Estimated Time Saved** | `~{:.1}s` |\n", report.estimated_time_saved_seconds));
+            out.push_str(&format!(
+                "| **Suite Reduction** | `+{:.1}% avoided` |\n",
+                report.test_reduction_percentage
+            ));
+            out.push_str(&format!(
+                "| **Estimated Time Saved** | `~{:.1}s` |\n",
+                report.estimated_time_saved_seconds
+            ));
         }
-        out.push_str(&format!("| **Test Coverage Ratio** | `{:.1}%` |\n", report.test_coverage_ratio * 100.0));
-        out.push_str(&format!("| **Analysis Latency** | `{:.2}ms` |\n\n", report.analysis_duration_ms));
+        out.push_str(&format!(
+            "| **Test Coverage Ratio** | `{:.1}%` |\n",
+            report.test_coverage_ratio * 100.0
+        ));
+        out.push_str(&format!(
+            "| **Analysis Latency** | `{:.2}ms` |\n\n",
+            report.analysis_duration_ms
+        ));
 
         // Commands to Run
         if !report.runner_invocations.is_empty() {

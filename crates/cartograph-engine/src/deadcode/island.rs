@@ -22,7 +22,10 @@ pub async fn extract_dead_islands(
         .collect();
 
     let unreachable_ids: Vec<String> = unreachable_nodes.iter().map(|n| n.id.clone()).collect();
-    let edges = backend.get_edges_for_nodes(&unreachable_ids, min_confidence).await.unwrap_or_default();
+    let edges = backend
+        .get_edges_for_nodes(&unreachable_ids, min_confidence)
+        .await
+        .unwrap_or_default();
 
     // Build induced adjacency list: only edges between unreachable nodes
     let mut adj: HashMap<String, HashSet<String>> = HashMap::new();
@@ -30,11 +33,25 @@ pub async fn extract_dead_islands(
     let mut undirected_adj: HashMap<String, HashSet<String>> = HashMap::new();
 
     for edge in edges {
-        if node_map.contains_key(&edge.source_id) && node_map.contains_key(&edge.target_id) && edge.source_id != edge.target_id {
-            adj.entry(edge.source_id.clone()).or_default().insert(edge.target_id.clone());
-            rev_adj.entry(edge.target_id.clone()).or_default().insert(edge.source_id.clone());
-            undirected_adj.entry(edge.source_id.clone()).or_default().insert(edge.target_id.clone());
-            undirected_adj.entry(edge.target_id.clone()).or_default().insert(edge.source_id.clone());
+        if node_map.contains_key(&edge.source_id)
+            && node_map.contains_key(&edge.target_id)
+            && edge.source_id != edge.target_id
+        {
+            adj.entry(edge.source_id.clone())
+                .or_default()
+                .insert(edge.target_id.clone());
+            rev_adj
+                .entry(edge.target_id.clone())
+                .or_default()
+                .insert(edge.source_id.clone());
+            undirected_adj
+                .entry(edge.source_id.clone())
+                .or_default()
+                .insert(edge.target_id.clone());
+            undirected_adj
+                .entry(edge.target_id.clone())
+                .or_default()
+                .insert(edge.source_id.clone());
         }
     }
 
@@ -68,7 +85,7 @@ pub async fn extract_dead_islands(
         // Only components with >= 2 mutually connected symbols form a Dead Island
         if component.len() >= 2 {
             let island_id = format!("island-{}", &format!("{:x}", md5_hash(&component[0]))[0..8]);
-            
+
             // Determine internal roots: nodes with no incoming edges from within this component
             let comp_set: HashSet<String> = component.iter().cloned().collect();
             let mut internal_roots = Vec::new();
@@ -99,7 +116,10 @@ pub async fn extract_dead_islands(
             let mut deletion_order = Vec::new();
             let mut in_degrees: HashMap<String, usize> = HashMap::new();
             for member in &component {
-                let out = adj.get(member).map(|targets| targets.iter().filter(|t| comp_set.contains(*t)).count()).unwrap_or(0);
+                let out = adj
+                    .get(member)
+                    .map(|targets| targets.iter().filter(|t| comp_set.contains(*t)).count())
+                    .unwrap_or(0);
                 in_degrees.insert(member.clone(), out);
             }
 
@@ -120,12 +140,12 @@ pub async fn extract_dead_islands(
 
                 if let Some(callers) = rev_adj.get(&curr) {
                     for caller in callers {
-                        if comp_set.contains(caller) {
-                            if let Some(deg) = in_degrees.get_mut(caller) {
-                                *deg = deg.saturating_sub(1);
-                                if *deg == 0 && !processed.contains(caller) {
-                                    del_queue.push_back(caller.clone());
-                                }
+                        if comp_set.contains(caller)
+                            && let Some(deg) = in_degrees.get_mut(caller)
+                        {
+                            *deg = deg.saturating_sub(1);
+                            if *deg == 0 && !processed.contains(caller) {
+                                del_queue.push_back(caller.clone());
                             }
                         }
                     }
@@ -173,7 +193,7 @@ pub async fn extract_dead_islands(
         }
     }
 
-    islands.sort_by(|a, b| b.total_loc.cmp(&a.total_loc));
+    islands.sort_by_key(|b| std::cmp::Reverse(b.total_loc));
     Ok(islands)
 }
 

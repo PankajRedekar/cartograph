@@ -1,7 +1,7 @@
+use crate::error::Result;
+use cartograph_core::{ComplexityMetric, NodeKind};
 use std::collections::HashSet;
 use tree_sitter::{Node as TsNode, Parser, Tree};
-use cartograph_core::{ComplexityMetric, NodeKind};
-use crate::error::Result;
 
 /// Complexity extraction result for a single AST symbol (function, method, constructor)
 #[derive(Debug, Clone, PartialEq)]
@@ -83,8 +83,14 @@ impl AstComplexityAnalyzer {
     }
 
     /// Analyze complexity of source code given an explicit language tag
-    pub fn analyze_language(&self, filepath: &str, language: &str, content: &str) -> Result<FileComplexityResult> {
-        let (loc, sloc, cloc, comment_ratio) = compute_loc_metrics(content, 1, count_lines(content) as u32);
+    pub fn analyze_language(
+        &self,
+        filepath: &str,
+        language: &str,
+        content: &str,
+    ) -> Result<FileComplexityResult> {
+        let (loc, sloc, cloc, comment_ratio) =
+            compute_loc_metrics(content, 1, count_lines(content) as u32);
 
         let tree = parse_cst(language, content);
         if let Some(tree) = tree {
@@ -106,7 +112,12 @@ impl AstComplexityAnalyzer {
             if !visitor.symbols.is_empty() {
                 let sum_cc: u32 = visitor.symbols.iter().map(|s| s.metrics.cyclomatic).sum();
                 let sum_cog: u32 = visitor.symbols.iter().map(|s| s.metrics.cognitive).sum();
-                let max_nest: u32 = visitor.symbols.iter().map(|s| s.metrics.max_nesting_depth).max().unwrap_or(0);
+                let max_nest: u32 = visitor
+                    .symbols
+                    .iter()
+                    .map(|s| s.metrics.max_nesting_depth)
+                    .max()
+                    .unwrap_or(0);
                 file_metric.cyclomatic = sum_cc.max(1);
                 file_metric.cognitive = sum_cog;
                 file_metric.max_nesting_depth = max_nest.max(visitor.file_max_nesting);
@@ -114,7 +125,8 @@ impl AstComplexityAnalyzer {
 
             // Merge duplicate classes (e.g. Rust struct_item + impl_item)
             let mut merged_classes: Vec<ClassComplexity> = Vec::new();
-            let mut class_map: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+            let mut class_map: std::collections::HashMap<String, usize> =
+                std::collections::HashMap::new();
 
             for cls in visitor.classes {
                 if let Some(&idx) = class_map.get(&cls.name) {
@@ -134,7 +146,8 @@ impl AstComplexityAnalyzer {
                     }
                     existing.method_count = existing.methods.len();
                     existing.field_count = existing.fields.len();
-                    let (loc, sloc, _, _) = compute_loc_metrics(content, existing.start_line, existing.end_line);
+                    let (loc, sloc, _, _) =
+                        compute_loc_metrics(content, existing.start_line, existing.end_line);
                     existing.loc = loc;
                     existing.sloc = sloc;
                 } else {
@@ -180,7 +193,9 @@ fn parse_cst(language: &str, content: &str) -> Option<Tree> {
         #[cfg(feature = "rust")]
         "rust" => parser.set_language(&tree_sitter_rust::LANGUAGE.into()),
         #[cfg(feature = "typescript")]
-        "typescript" | "javascript" => parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
+        "typescript" | "javascript" => {
+            parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
+        }
         #[cfg(feature = "typescript")]
         "tsx" => parser.set_language(&tree_sitter_typescript::LANGUAGE_TSX.into()),
         #[cfg(feature = "python")]
@@ -308,15 +323,17 @@ impl<'a> ComplexityVisitor<'a> {
     }
 
     fn visit_root(&mut self, root: TsNode) {
-        self.walk_node(root, "", 0);
+        self.walk_node(root, "");
     }
 
-    fn walk_node(&mut self, node: TsNode, current_scope: &str, nesting: u32) {
+    fn walk_node(&mut self, node: TsNode, current_scope: &str) {
         let kind = node.kind();
 
         // 1. Check for Class / Struct / Interface declaration
         if self.is_class_node(kind) {
-            let class_name = self.extract_name(node).unwrap_or_else(|| "AnonymousClass".to_string());
+            let class_name = self
+                .extract_name(node)
+                .unwrap_or_else(|| "AnonymousClass".to_string());
             let node_kind = self.classify_class_kind(kind);
             let start_line = (node.start_position().row + 1) as u32;
             let end_line = (node.end_position().row + 1) as u32;
@@ -342,11 +359,12 @@ impl<'a> ComplexityVisitor<'a> {
             // Walk children inside class
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                self.walk_node(child, &new_scope, nesting);
+                self.walk_node(child, &new_scope);
             }
 
             if let Some(ctx) = self.current_class.take() {
-                let (loc, sloc, _, _) = compute_loc_metrics(self.content, ctx.start_line, ctx.end_line);
+                let (loc, sloc, _, _) =
+                    compute_loc_metrics(self.content, ctx.start_line, ctx.end_line);
                 self.classes.push(ClassComplexity {
                     name: ctx.name,
                     kind: ctx.kind,
@@ -369,7 +387,9 @@ impl<'a> ComplexityVisitor<'a> {
 
         // 2. Check for Function / Method declaration
         if self.is_function_node(kind) {
-            let fn_name = self.extract_name(node).unwrap_or_else(|| "anonymous_fn".to_string());
+            let fn_name = self
+                .extract_name(node)
+                .unwrap_or_else(|| "anonymous_fn".to_string());
             let start_line = (node.start_position().row + 1) as u32;
             let end_line = (node.end_position().row + 1) as u32;
 
@@ -377,7 +397,8 @@ impl<'a> ComplexityVisitor<'a> {
             let parent_class_name = self.current_class.as_ref().map(|c| c.name.clone());
 
             let param_count = self.extract_param_count(node);
-            let (loc, sloc, cloc, comment_ratio) = compute_loc_metrics(self.content, start_line, end_line);
+            let (loc, sloc, cloc, comment_ratio) =
+                compute_loc_metrics(self.content, start_line, end_line);
 
             // Compute cyclomatic & cognitive complexity for this function
             let mut fn_analyzer = FunctionComplexityAnalyzer::new(self.content, self.language);
@@ -401,7 +422,11 @@ impl<'a> ComplexityVisitor<'a> {
 
             self.symbols.push(SymbolComplexity {
                 name: fn_name,
-                kind: if is_method { NodeKind::Method } else { NodeKind::Function },
+                kind: if is_method {
+                    NodeKind::Method
+                } else {
+                    NodeKind::Function
+                },
                 scope: current_scope.to_string(),
                 start_line,
                 end_line,
@@ -419,14 +444,20 @@ impl<'a> ComplexityVisitor<'a> {
         // 3. Fallthrough: walk children
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            self.walk_node(child, current_scope, nesting);
+            self.walk_node(child, current_scope);
         }
     }
 
     fn is_class_node(&self, kind: &str) -> bool {
         match self.language {
-            "rust" => matches!(kind, "struct_item" | "enum_item" | "trait_item" | "impl_item"),
-            "typescript" | "tsx" | "javascript" => matches!(kind, "class_declaration" | "class" | "interface_declaration"),
+            "rust" => matches!(
+                kind,
+                "struct_item" | "enum_item" | "trait_item" | "impl_item"
+            ),
+            "typescript" | "tsx" | "javascript" => matches!(
+                kind,
+                "class_declaration" | "class" | "interface_declaration"
+            ),
             "python" => kind == "class_definition",
             "go" => kind == "type_declaration" || kind == "type_spec",
             "ruby" => matches!(kind, "class" | "module"),
@@ -448,7 +479,13 @@ impl<'a> ComplexityVisitor<'a> {
         match self.language {
             "rust" => kind == "function_item",
             "typescript" | "tsx" | "javascript" => {
-                matches!(kind, "function_declaration" | "method_definition" | "arrow_function" | "function_expression")
+                matches!(
+                    kind,
+                    "function_declaration"
+                        | "method_definition"
+                        | "arrow_function"
+                        | "function_expression"
+                )
             }
             "python" => kind == "function_definition",
             "go" => matches!(kind, "function_declaration" | "method_declaration"),
@@ -474,11 +511,13 @@ impl<'a> ComplexityVisitor<'a> {
         }
 
         // Check for Go type_spec name or Rust impl_item type
-        if self.language == "rust" && node.kind() == "impl_item" {
-            if let Some(type_node) = node.child_by_field_name("type") {
-                let bytes = self.content.as_bytes();
-                return String::from_utf8(bytes[type_node.start_byte()..type_node.end_byte()].to_vec()).ok();
-            }
+        if self.language == "rust"
+            && node.kind() == "impl_item"
+            && let Some(type_node) = node.child_by_field_name("type")
+        {
+            let bytes = self.content.as_bytes();
+            return String::from_utf8(bytes[type_node.start_byte()..type_node.end_byte()].to_vec())
+                .ok();
         }
 
         None
@@ -518,10 +557,10 @@ impl<'a> ComplexityVisitor<'a> {
                     if child.kind() == "field_declaration_list" {
                         let mut inner_cursor = child.walk();
                         for field in child.children(&mut inner_cursor) {
-                            if field.kind() == "field_declaration" {
-                                if let Some(name_node) = field.child_by_field_name("name") {
-                                    fields.push(self.get_node_text(name_node));
-                                }
+                            if field.kind() == "field_declaration"
+                                && let Some(name_node) = field.child_by_field_name("name")
+                            {
+                                fields.push(self.get_node_text(name_node));
                             }
                         }
                     }
@@ -530,28 +569,30 @@ impl<'a> ComplexityVisitor<'a> {
                     if child.kind() == "class_body" || child.kind() == "interface_body" {
                         let mut inner_cursor = child.walk();
                         for member in child.children(&mut inner_cursor) {
-                            if matches!(member.kind(), "public_field_definition" | "field_definition" | "property_signature") {
-                                if let Some(name_node) = member.child_by_field_name("name") {
-                                    fields.push(self.get_node_text(name_node));
-                                }
+                            if matches!(
+                                member.kind(),
+                                "public_field_definition"
+                                    | "field_definition"
+                                    | "property_signature"
+                            ) && let Some(name_node) = member.child_by_field_name("name")
+                            {
+                                fields.push(self.get_node_text(name_node));
                             }
                         }
                     }
                 }
                 "go" => {
-                    if child.kind() == "type_spec" {
-                        if let Some(type_node) = child.child_by_field_name("type") {
-                            if type_node.kind() == "struct_type" {
-                                if let Some(field_list) = type_node.child_by_field_name("fields") {
-                                    let mut inner_cursor = field_list.walk();
-                                    for field in field_list.children(&mut inner_cursor) {
-                                        if field.kind() == "field_declaration" {
-                                            if let Some(name_node) = field.child_by_field_name("name") {
-                                                fields.push(self.get_node_text(name_node));
-                                            }
-                                        }
-                                    }
-                                }
+                    if child.kind() == "type_spec"
+                        && let Some(type_node) = child.child_by_field_name("type")
+                        && type_node.kind() == "struct_type"
+                        && let Some(field_list) = type_node.child_by_field_name("fields")
+                    {
+                        let mut inner_cursor = field_list.walk();
+                        for field in field_list.children(&mut inner_cursor) {
+                            if field.kind() == "field_declaration"
+                                && let Some(name_node) = field.child_by_field_name("name")
+                            {
+                                fields.push(self.get_node_text(name_node));
                             }
                         }
                     }
@@ -598,9 +639,7 @@ impl<'a> FunctionComplexityAnalyzer<'a> {
         for child in fn_node.children(&mut cursor) {
             // Find function body or block
             let k = child.kind();
-            if k == "body" || k == "block" || k == "statement_block" || k == "body_statement" {
-                self.walk_body(child, 0);
-            } else if k != "parameters" && k != "name" && k != "return_type" {
+            if k != "parameters" && k != "name" && k != "return_type" {
                 self.walk_body(child, 0);
             }
         }
@@ -634,7 +673,13 @@ impl<'a> FunctionComplexityAnalyzer<'a> {
         }
     }
 
-    fn handle_rust_node(&mut self, node: TsNode, kind: &str, current_nesting: u32, next_nesting: &mut u32) {
+    fn handle_rust_node(
+        &mut self,
+        node: TsNode,
+        kind: &str,
+        current_nesting: u32,
+        next_nesting: &mut u32,
+    ) {
         match kind {
             "if_expression" => {
                 self.cyclomatic += 1;
@@ -682,7 +727,13 @@ impl<'a> FunctionComplexityAnalyzer<'a> {
         }
     }
 
-    fn handle_ts_node(&mut self, node: TsNode, kind: &str, current_nesting: u32, next_nesting: &mut u32) {
+    fn handle_ts_node(
+        &mut self,
+        node: TsNode,
+        kind: &str,
+        current_nesting: u32,
+        next_nesting: &mut u32,
+    ) {
         match kind {
             "if_statement" => {
                 self.cyclomatic += 1;
@@ -729,7 +780,13 @@ impl<'a> FunctionComplexityAnalyzer<'a> {
         }
     }
 
-    fn handle_python_node(&mut self, node: TsNode, kind: &str, current_nesting: u32, next_nesting: &mut u32) {
+    fn handle_python_node(
+        &mut self,
+        node: TsNode,
+        kind: &str,
+        current_nesting: u32,
+        next_nesting: &mut u32,
+    ) {
         match kind {
             "if_statement" => {
                 self.cyclomatic += 1;
@@ -775,7 +832,13 @@ impl<'a> FunctionComplexityAnalyzer<'a> {
         }
     }
 
-    fn handle_go_node(&mut self, node: TsNode, kind: &str, current_nesting: u32, next_nesting: &mut u32) {
+    fn handle_go_node(
+        &mut self,
+        node: TsNode,
+        kind: &str,
+        current_nesting: u32,
+        next_nesting: &mut u32,
+    ) {
         match kind {
             "if_statement" => {
                 self.cyclomatic += 1;
@@ -813,7 +876,13 @@ impl<'a> FunctionComplexityAnalyzer<'a> {
         }
     }
 
-    fn handle_ruby_node(&mut self, _node: TsNode, kind: &str, current_nesting: u32, next_nesting: &mut u32) {
+    fn handle_ruby_node(
+        &mut self,
+        _node: TsNode,
+        kind: &str,
+        current_nesting: u32,
+        next_nesting: &mut u32,
+    ) {
         match kind {
             "if" | "unless" => {
                 self.cyclomatic += 1;
@@ -863,69 +932,56 @@ impl<'a> FunctionComplexityAnalyzer<'a> {
         match self.language {
             "rust" => {
                 // self.foo or self.bar()
-                if kind == "field_expression" {
-                    if let Some(val) = node.child_by_field_name("value") {
-                        if self.get_node_text(val) == "self" {
-                            if let Some(field) = node.child_by_field_name("field") {
+                if kind == "field_expression"
+                    && let Some(val) = node.child_by_field_name("value")
+                        && self.get_node_text(val) == "self"
+                            && let Some(field) = node.child_by_field_name("field") {
                                 let field_name = self.get_node_text(field);
-                                if let Some(parent) = node.parent() {
-                                    if parent.kind() == "call_expression" && parent.child_by_field_name("function") == Some(node) {
+                                if let Some(parent) = node.parent()
+                                    && parent.kind() == "call_expression" && parent.child_by_field_name("function") == Some(node) {
                                         self.methods_called.insert(field_name);
                                         return;
                                     }
-                                }
                                 self.fields_accessed.insert(field_name);
                             }
-                        }
-                    }
-                }
             }
             "typescript" | "tsx" | "javascript" => {
                 // this.foo or this.bar()
-                if kind == "member_expression" {
-                    if let Some(obj) = node.child_by_field_name("object") {
-                        if self.get_node_text(obj) == "this" {
-                            if let Some(prop) = node.child_by_field_name("property") {
+                if kind == "member_expression"
+                    && let Some(obj) = node.child_by_field_name("object")
+                        && self.get_node_text(obj) == "this"
+                            && let Some(prop) = node.child_by_field_name("property") {
                                 let prop_name = self.get_node_text(prop);
-                                if let Some(parent) = node.parent() {
-                                    if parent.kind() == "call_expression" && parent.child_by_field_name("function") == Some(node) {
+                                if let Some(parent) = node.parent()
+                                    && parent.kind() == "call_expression" && parent.child_by_field_name("function") == Some(node) {
                                         self.methods_called.insert(prop_name);
                                         return;
                                     }
-                                }
                                 self.fields_accessed.insert(prop_name);
                             }
-                        }
-                    }
-                }
             }
             "python" => {
                 // self.foo or self.bar()
-                if kind == "attribute" {
-                    if let Some(obj) = node.child_by_field_name("object") {
-                        if self.get_node_text(obj) == "self" {
-                            if let Some(attr) = node.child_by_field_name("attribute") {
+                if kind == "attribute"
+                    && let Some(obj) = node.child_by_field_name("object")
+                        && self.get_node_text(obj) == "self"
+                            && let Some(attr) = node.child_by_field_name("attribute") {
                                 let attr_name = self.get_node_text(attr);
-                                if let Some(parent) = node.parent() {
-                                    if parent.kind() == "call" && parent.child_by_field_name("function") == Some(node) {
+                                if let Some(parent) = node.parent()
+                                    && parent.kind() == "call" && parent.child_by_field_name("function") == Some(node) {
                                         self.methods_called.insert(attr_name);
                                         return;
                                     }
-                                }
                                 self.fields_accessed.insert(attr_name);
                             }
-                        }
-                    }
-                }
             }
-            "ruby" => {
+            "ruby"
                 // @foo instance variable
-                if kind == "instance_variable" {
+                if kind == "instance_variable" => {
                     let text = self.get_node_text(node);
                     let clean = text.trim_start_matches('@').to_string();
                     self.fields_accessed.insert(clean);
                 }
-            }
             _ => {}
         }
     }

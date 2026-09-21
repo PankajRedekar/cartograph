@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 
 use cartograph_core::config::{ArchSeverity, CycleGranularity};
 use cartograph_core::model::{CycleHop, DependencyCycle, NodeKind};

@@ -1,7 +1,7 @@
-use std::collections::HashSet;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::error::Result;
-use cartograph_core::model::{CategorizedImpact, EdgeKind, ImpactedTest, ImpactedNode, NodeKind};
+use cartograph_core::model::{CategorizedImpact, EdgeKind, ImpactedNode, ImpactedTest, NodeKind};
+use std::collections::HashSet;
 
 pub struct DomainCategorizer;
 
@@ -45,22 +45,25 @@ impl DomainCategorizer {
         let mut affected_tests = Vec::new();
         let impacted_ids: Vec<String> = impacted_nodes.iter().map(|n| n.node.id.clone()).collect();
 
-        if !impacted_ids.is_empty() {
-            if let Ok(edges) = backend.get_edges_for_nodes(&impacted_ids, 0.0).await {
-                let test_edges: Vec<_> = edges.into_iter().filter(|e| e.kind == EdgeKind::Tests).collect();
-                let mut seen_test_nodes = HashSet::new();
+        if !impacted_ids.is_empty()
+            && let Ok(edges) = backend.get_edges_for_nodes(&impacted_ids, 0.0).await
+        {
+            let test_edges: Vec<_> = edges
+                .into_iter()
+                .filter(|e| e.kind == EdgeKind::Tests)
+                .collect();
+            let mut seen_test_nodes = HashSet::new();
 
-                for edge in test_edges {
-                    if seen_test_nodes.insert(edge.source_id.clone()) {
-                        if let Ok(Some(test_node)) = backend.get_node(&edge.source_id).await {
-                            let runner_cmd = Self::synthesize_runner_command(&test_node);
-                            affected_tests.push(ImpactedTest {
-                                test_node,
-                                targets_tested: vec![edge.target_id],
-                                runner_command: Some(runner_cmd),
-                            });
-                        }
-                    }
+            for edge in test_edges {
+                if seen_test_nodes.insert(edge.source_id.clone())
+                    && let Ok(Some(test_node)) = backend.get_node(&edge.source_id).await
+                {
+                    let runner_cmd = Self::synthesize_runner_command(&test_node);
+                    affected_tests.push(ImpactedTest {
+                        test_node,
+                        targets_tested: vec![edge.target_id],
+                        runner_command: Some(runner_cmd),
+                    });
                 }
             }
         }

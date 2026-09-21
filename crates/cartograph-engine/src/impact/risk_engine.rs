@@ -1,5 +1,7 @@
+use cartograph_core::model::{
+    ImpactRoot, ImpactedNode, NodeKind, RiskBreakdown, RiskLevel, SemanticChangeType,
+};
 use std::collections::HashSet;
-use cartograph_core::model::{ImpactRoot, ImpactedNode, NodeKind, RiskBreakdown, RiskLevel, SemanticChangeType};
 
 pub struct RiskEngine;
 
@@ -49,7 +51,9 @@ impl RiskEngine {
         // 5. Boundary Crossing (max 10.0)
         let mut packages = HashSet::new();
         for node in impacted_nodes {
-            let pkg = crate::impact::coupling_detector::CouplingDetector::extract_subsystem(&node.node.filepath);
+            let pkg = crate::impact::coupling_detector::CouplingDetector::extract_subsystem(
+                &node.node.filepath,
+            );
             packages.insert(pkg);
         }
         let boundary_score = (3.0 * packages.len() as f64).min(10.0);
@@ -73,7 +77,12 @@ impl RiskEngine {
                 .fold(0.0f64, |acc, m| acc.max(m))
         };
 
-        let raw_score = scale_score + centrality_score + entrypoint_score + data_model_score + boundary_score + test_deficit_score;
+        let raw_score = scale_score
+            + centrality_score
+            + entrypoint_score
+            + data_model_score
+            + boundary_score
+            + test_deficit_score;
         let total_score = (raw_score * max_semantic_multiplier).min(100.0);
 
         let level = if total_score >= 70.0 {
@@ -87,20 +96,34 @@ impl RiskEngine {
         };
 
         let mut primary_risk_drivers = Vec::new();
-        if roots.iter().any(|r| r.semantic_change == SemanticChangeType::SignatureBreak) {
-            primary_risk_drivers.push("Signature contract breaking change in modified symbol".to_string());
+        if roots
+            .iter()
+            .any(|r| r.semantic_change == SemanticChangeType::SignatureBreak)
+        {
+            primary_risk_drivers
+                .push("Signature contract breaking change in modified symbol".to_string());
         }
         if routes_count > 0 {
-            primary_risk_drivers.push(format!("{routes_count} public HTTP route(s) directly exposed in blast radius"));
+            primary_risk_drivers.push(format!(
+                "{routes_count} public HTTP route(s) directly exposed in blast radius"
+            ));
         }
         if models_count > 0 {
-            primary_risk_drivers.push(format!("{models_count} core data model(s) mutated or impacted"));
+            primary_risk_drivers.push(format!(
+                "{models_count} core data model(s) mutated or impacted"
+            ));
         }
         if coverage_ratio < 0.6 && !impacted_nodes.is_empty() {
-            primary_risk_drivers.push(format!("Low test coverage ({:.1}% tested across blast radius)", coverage_ratio * 100.0));
+            primary_risk_drivers.push(format!(
+                "Low test coverage ({:.1}% tested across blast radius)",
+                coverage_ratio * 100.0
+            ));
         }
         if packages.len() >= 4 {
-            primary_risk_drivers.push(format!("Blast radius spans {} distinct packages / subsystems", packages.len()));
+            primary_risk_drivers.push(format!(
+                "Blast radius spans {} distinct packages / subsystems",
+                packages.len()
+            ));
         }
 
         RiskBreakdown {

@@ -71,9 +71,10 @@ impl RuleEvaluator {
                 t_b.add(g);
             }
 
-            let expiry = entry.expires.as_deref().and_then(|exp| {
-                NaiveDate::parse_from_str(exp, "%Y-%m-%d").ok()
-            });
+            let expiry = entry
+                .expires
+                .as_deref()
+                .and_then(|exp| NaiveDate::parse_from_str(exp, "%Y-%m-%d").ok());
 
             allowed.push((
                 s_b.build().unwrap_or_else(|_| GlobSet::empty()),
@@ -108,10 +109,10 @@ impl RuleEvaluator {
         for (src_set, tgt_set, expiry) in &self.exemptions.allowed {
             if src_set.is_match(&s_norm) && tgt_set.is_match(&t_norm) {
                 // If expired, exemption no longer applies
-                if let Some(exp_date) = expiry {
-                    if today > *exp_date {
-                        continue;
-                    }
+                if let Some(exp_date) = expiry
+                    && today > *exp_date
+                {
+                    continue;
                 }
                 return true;
             }
@@ -133,10 +134,10 @@ impl RuleEvaluator {
         for compiled in &self.rules {
             if compiled.source_glob.is_match(&s_norm) && compiled.target_glob.is_match(&t_norm) {
                 // Check edge kinds filter if configured
-                if let Some(ref kinds) = compiled.config.edge_kinds {
-                    if !kinds.contains(&edge_kind) {
-                        continue;
-                    }
+                if let Some(ref kinds) = compiled.config.edge_kinds
+                    && !kinds.contains(&edge_kind)
+                {
+                    continue;
                 }
 
                 // If rule action is Deny -> emit violation!

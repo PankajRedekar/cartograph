@@ -57,13 +57,25 @@ impl SarifFormatter {
 
         // 2. Dependency Cycles to SARIF results
         for (idx, cycle) in report.cycles.iter().enumerate() {
-            let level = if cycle.is_runtime_cycle { "error" } else { "warning" };
+            let level = if cycle.is_runtime_cycle {
+                "error"
+            } else {
+                "warning"
+            };
             let first_hop = cycle.hops.first();
             let file_uri = first_hop.map(|h| h.filepath.as_str()).unwrap_or("unknown");
             let line = first_hop.and_then(|h| h.line).unwrap_or(1);
 
-            let trace = cycle.hops.iter().map(|h| h.name.as_str()).collect::<Vec<_>>().join(" -> ");
-            let text = format!("Circular dependency detected (length {}): {}", cycle.length, trace);
+            let trace = cycle
+                .hops
+                .iter()
+                .map(|h| h.name.as_str())
+                .collect::<Vec<_>>()
+                .join(" -> ");
+            let text = format!(
+                "Circular dependency detected (length {}): {}",
+                cycle.length, trace
+            );
 
             results.push(json!({
                 "ruleId": "ARCH-CYCLE",

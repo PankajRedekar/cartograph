@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::error::Result;
-use cartograph_core::model::{ConfidenceTier, DeadCodeCategory, DeadSymbolItem, RawDeadSymbolRecord, ZombieFileReport};
+use cartograph_core::model::{
+    ConfidenceTier, DeadCodeCategory, DeadSymbolItem, RawDeadSymbolRecord, ZombieFileReport,
+};
 use sha2::{Digest, Sha256};
 
 /// Analyzes files and symbols to detect:
@@ -31,9 +33,9 @@ pub async fn analyze_file_and_class_zombies(
     // 1. Identify Zombie Files (where all symbols in the file are unreachable)
     for (filepath, nodes) in &unreachable_by_file {
         // Skip test files, build scripts, or root files
-        if filepath.starts_with("test") 
-            || filepath.contains("/test") 
-            || filepath.contains("/tests/") 
+        if filepath.starts_with("test")
+            || filepath.contains("/test")
+            || filepath.contains("/tests/")
             || filepath.ends_with("_test.go")
             || filepath.ends_with(".spec.ts")
             || filepath.ends_with(".test.ts")
@@ -45,7 +47,11 @@ pub async fn analyze_file_and_class_zombies(
         let mut total_loc = 0;
         let mut total_tokens = 0;
         for node in nodes {
-            let loc = node.end_line.unwrap_or(1).saturating_sub(node.start_line.unwrap_or(1)) as usize + 1;
+            let loc = node
+                .end_line
+                .unwrap_or(1)
+                .saturating_sub(node.start_line.unwrap_or(1)) as usize
+                + 1;
             total_loc += loc;
             total_tokens += loc * 8;
         }
@@ -68,7 +74,9 @@ pub async fn analyze_file_and_class_zombies(
     }
 
     // 2. Identify Test-Only Zombies
-    let test_only_ids = backend.get_test_only_reachable_symbols(prod_root_ids).await?;
+    let test_only_ids = backend
+        .get_test_only_reachable_symbols(prod_root_ids)
+        .await?;
     for node_id in test_only_ids {
         if let Ok(Some(node)) = backend.get_node(&node_id).await {
             let start = node.start_line.unwrap_or(1);

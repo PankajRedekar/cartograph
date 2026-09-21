@@ -100,14 +100,9 @@ fn test_incremental_detector_changes() {
 
     // 1. Initial cold detection (empty db_hashes)
     let empty_hashes = HashMap::new();
-    let changeset = IncrementalDetector::compute_changeset(
-        &files,
-        root,
-        &empty_hashes,
-        false,
-        64 * 1024,
-    )
-    .unwrap();
+    let changeset =
+        IncrementalDetector::compute_changeset(&files, root, &empty_hashes, false, 64 * 1024)
+            .unwrap();
 
     assert_eq!(changeset.to_index.len(), 2);
     assert_eq!(changeset.deleted_paths.len(), 0);
@@ -119,28 +114,18 @@ fn test_incremental_detector_changes() {
     assert_eq!(current_hashes.len(), 2);
 
     // 2. Unchanged detection
-    let changeset2 = IncrementalDetector::compute_changeset(
-        &files,
-        root,
-        &current_hashes,
-        false,
-        64 * 1024,
-    )
-    .unwrap();
+    let changeset2 =
+        IncrementalDetector::compute_changeset(&files, root, &current_hashes, false, 64 * 1024)
+            .unwrap();
     assert_eq!(changeset2.to_index.len(), 0);
     assert_eq!(changeset2.deleted_paths.len(), 0);
     assert_eq!(changeset2.unchanged_count, 2);
 
     // 3. Modify one file
     fs::write(&f1, "fn a_modified() {}").unwrap();
-    let changeset3 = IncrementalDetector::compute_changeset(
-        &files,
-        root,
-        &current_hashes,
-        false,
-        64 * 1024,
-    )
-    .unwrap();
+    let changeset3 =
+        IncrementalDetector::compute_changeset(&files, root, &current_hashes, false, 64 * 1024)
+            .unwrap();
     assert_eq!(changeset3.to_index.len(), 1);
     assert_eq!(changeset3.to_index[0].absolute_path, f1);
     assert_eq!(changeset3.deleted_paths.len(), 0);
@@ -220,7 +205,7 @@ export function createSession(token: string): UserSession {
 
     let storage_config = StorageConfig::sqlite(db_path.to_str().unwrap());
     use cartograph_core::backend::GraphStoreBackend;
-    let backend: Arc<dyn GraphStoreBackend> = Arc::from(create_backend(&storage_config).unwrap());
+    let backend: Arc<dyn GraphStoreBackend> = create_backend(&storage_config).unwrap();
     let discovery_config = DiscoveryConfig {
         root_path: root.to_path_buf(),
         ..DiscoveryConfig::default()
@@ -237,12 +222,28 @@ export function createSession(token: string): UserSession {
 
     // Verify stored nodes
     let nodes_in_rust = backend.get_nodes_by_filepath("main.rs").await.unwrap();
-    assert!(nodes_in_rust.iter().any(|n| n.name == "RustServer" && n.kind == NodeKind::Struct));
-    assert!(nodes_in_rust.iter().any(|n| n.name == "start" && n.kind == NodeKind::Method));
+    assert!(
+        nodes_in_rust
+            .iter()
+            .any(|n| n.name == "RustServer" && n.kind == NodeKind::Struct)
+    );
+    assert!(
+        nodes_in_rust
+            .iter()
+            .any(|n| n.name == "start" && n.kind == NodeKind::Method)
+    );
 
     let nodes_in_py = backend.get_nodes_by_filepath("service.py").await.unwrap();
-    assert!(nodes_in_py.iter().any(|n| n.name == "AuthService" && n.kind == NodeKind::Class));
-    assert!(nodes_in_py.iter().any(|n| n.name == "authenticate" && n.kind == NodeKind::Method));
+    assert!(
+        nodes_in_py
+            .iter()
+            .any(|n| n.name == "AuthService" && n.kind == NodeKind::Class)
+    );
+    assert!(
+        nodes_in_py
+            .iter()
+            .any(|n| n.name == "authenticate" && n.kind == NodeKind::Method)
+    );
 
     // Step 2: Immediate Incremental Re-index (No-Op)
     let stats2 = pipeline.run(false).await.unwrap();

@@ -1,11 +1,9 @@
-use cartograph_core::{build_uri, EdgeKind, Node, NodeKind};
 use crate::error::Result;
 use crate::hash::compute_node_checksum;
 use crate::line_index::LineIndex;
-use crate::model::{
-    CallFidelity, ParseContext, ParsedFile, Span, UnresolvedReference,
-};
+use crate::model::{CallFidelity, ParseContext, ParsedFile, Span, UnresolvedReference};
 use crate::traits::LanguageParser;
+use cartograph_core::{EdgeKind, Node, NodeKind, build_uri};
 
 pub struct SqlParser;
 
@@ -28,8 +26,9 @@ impl SqlParser {
 
         for (i, token) in tokens.iter().enumerate() {
             if (*token == "FROM" || *token == "JOIN") && i + 1 < tokens.len() {
-                let candidate = tokens[i + 1]
-                    .trim_matches(|c| c == '(' || c == ')' || c == ',' || c == ';' || c == '`' || c == '"');
+                let candidate = tokens[i + 1].trim_matches(|c| {
+                    c == '(' || c == ')' || c == ',' || c == ';' || c == '`' || c == '"'
+                });
                 // Avoid keywords
                 if !candidate.is_empty() && candidate != "SELECT" && candidate != "WHERE" {
                     let clean = candidate.to_lowercase();
@@ -79,7 +78,12 @@ impl LanguageParser for SqlParser {
                 if parts.len() > name_idx {
                     let raw_name = parts[name_idx]
                         .trim_matches(|c| c == '(' || c == '`' || c == '"' || c == ';');
-                    let byte_offset = ctx.content.lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>();
+                    let byte_offset = ctx
+                        .content
+                        .lines()
+                        .take(line_idx)
+                        .map(|l| l.len() + 1)
+                        .sum::<usize>();
                     in_create_table = Some((raw_name.to_string(), byte_offset, line_num));
                     current_columns.clear();
                     current_foreign_keys.clear();
@@ -88,10 +92,27 @@ impl LanguageParser for SqlParser {
                 let parts: Vec<&str> = trimmed.split_whitespace().collect();
                 if parts.len() > 2 {
                     let view_name = parts[2].trim_matches(|c| c == '`' || c == '"' || c == ';');
-                    let byte_offset = ctx.content.lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>();
+                    let byte_offset = ctx
+                        .content
+                        .lines()
+                        .take(line_idx)
+                        .map(|l| l.len() + 1)
+                        .sum::<usize>();
                     let end_byte = byte_offset + line.len();
-                    let span = Span::new(byte_offset, end_byte, line_num, 1, line_num, line.len() as u32);
-                    let uri = build_uri(ctx.filepath, "", view_name, &NodeKind::Other("sql_view".to_string()));
+                    let span = Span::new(
+                        byte_offset,
+                        end_byte,
+                        line_num,
+                        1,
+                        line_num,
+                        line.len() as u32,
+                    );
+                    let uri = build_uri(
+                        ctx.filepath,
+                        "",
+                        view_name,
+                        &NodeKind::Other("sql_view".to_string()),
+                    );
 
                     nodes.push(Node {
                         id: uri,
@@ -123,8 +144,21 @@ impl LanguageParser for SqlParser {
                     }
                 } else if trimmed.starts_with(')') || trimmed.ends_with(");") {
                     // End of CREATE TABLE statement
-                    let end_byte = ctx.content.lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>() + line.len();
-                    let span = Span::new(start_byte, end_byte, start_line, 1, line_num, line.len() as u32);
+                    let end_byte = ctx
+                        .content
+                        .lines()
+                        .take(line_idx)
+                        .map(|l| l.len() + 1)
+                        .sum::<usize>()
+                        + line.len();
+                    let span = Span::new(
+                        start_byte,
+                        end_byte,
+                        start_line,
+                        1,
+                        line_num,
+                        line.len() as u32,
+                    );
                     let uri = build_uri(ctx.filepath, "", table_name, &NodeKind::Model);
 
                     let checksum = if ctx.options.compute_node_checksums {
@@ -172,7 +206,8 @@ impl LanguageParser for SqlParser {
                     // Column definition
                     let col_parts: Vec<&str> = trimmed.split_whitespace().collect();
                     if !col_parts.is_empty() {
-                        let col_name = col_parts[0].trim_matches(|c| c == '`' || c == '"' || c == ',');
+                        let col_name =
+                            col_parts[0].trim_matches(|c| c == '`' || c == '"' || c == ',');
                         let col_type = col_parts.get(1).map(|t| t.trim_matches(',')).unwrap_or("");
                         current_columns.push(serde_json::json!({
                             "name": col_name,

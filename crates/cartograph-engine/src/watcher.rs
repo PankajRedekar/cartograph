@@ -82,8 +82,12 @@ pub struct FileWatcher {
 
 impl FileWatcher {
     pub fn new(backend: Arc<dyn GraphStoreBackend>, settings: WatcherSettings) -> Self {
-        let capacity = NonZeroUsize::new(settings.cst_cache_capacity).unwrap_or(NonZeroUsize::new(500).unwrap());
-        let root_path = settings.root_path.canonicalize().unwrap_or_else(|_| settings.root_path.clone());
+        let capacity = NonZeroUsize::new(settings.cst_cache_capacity)
+            .unwrap_or(NonZeroUsize::new(500).unwrap());
+        let root_path = settings
+            .root_path
+            .canonicalize()
+            .unwrap_or_else(|_| settings.root_path.clone());
         let mut settings = settings;
         settings.root_path = root_path;
         Self {
@@ -146,10 +150,10 @@ impl FileWatcher {
         let new_hash = IncrementalDetector::compute_sha256(&buf);
         let stored_hash = self.backend.get_file_hash(&rel_path).await?;
 
-        if let Some(ref sh) = stored_hash {
-            if sh == &new_hash {
-                return Ok(None); // Unmodified, discard
-            }
+        if let Some(ref sh) = stored_hash
+            && sh == &new_hash
+        {
+            return Ok(None); // Unmodified, discard
         }
 
         let content = buf.as_str().map_err(EngineError::Utf8)?;

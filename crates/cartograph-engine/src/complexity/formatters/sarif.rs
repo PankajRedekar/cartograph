@@ -1,5 +1,5 @@
-use serde_json::json;
 use cartograph_core::model::{ComplexityReport, HotspotQuadrant};
+use serde_json::json;
 
 pub struct SarifFormatter;
 
@@ -59,9 +59,10 @@ impl SarifFormatter {
                 }));
             }
 
-            if let Some(gc) = &r.god_class {
-                if gc.is_god_class {
-                    results.push(json!({
+            if let Some(gc) = &r.god_class
+                && gc.is_god_class
+            {
+                results.push(json!({
                         "ruleId": "complexity/god-class",
                         "level": "error",
                         "message": {
@@ -83,7 +84,6 @@ impl SarifFormatter {
                         }
                     }]
                 }));
-                }
             }
         }
 

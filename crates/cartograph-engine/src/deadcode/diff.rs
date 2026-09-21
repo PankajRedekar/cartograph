@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use cartograph_core::model::{DeadCodePRDelta, DeadSymbolItem};
 use crate::lint_arch::diff::GitDiffScope;
+use cartograph_core::model::{DeadCodePRDelta, DeadSymbolItem};
 
 /// Evaluates PR git diff against dead code to classify:
 /// 1. Newly authored dead code (authored in this branch's changed hunks)
@@ -25,17 +25,15 @@ pub fn evaluate_pr_delta(
         let is_in_changed_file = diff_scope.changed_files.contains(&item.filepath);
         let mut is_authored_in_hunk = false;
 
-        if is_in_changed_file {
-            if let Some(hunks) = diff_scope.file_hunks.get(&item.filepath) {
-                for hunk in hunks {
-                    // Check if symbol range overlaps with modified hunk
-                    let sym_start = item.start_line as usize;
-                    let sym_end = item.end_line as usize;
+        if is_in_changed_file && let Some(hunks) = diff_scope.file_hunks.get(&item.filepath) {
+            for hunk in hunks {
+                // Check if symbol range overlaps with modified hunk
+                let sym_start = item.start_line as usize;
+                let sym_end = item.end_line as usize;
 
-                    if sym_start <= hunk.end_line && sym_end >= hunk.start_line {
-                        is_authored_in_hunk = true;
-                        break;
-                    }
+                if sym_start <= hunk.end_line && sym_end >= hunk.start_line {
+                    is_authored_in_hunk = true;
+                    break;
                 }
             }
         }
@@ -52,7 +50,10 @@ pub fn evaluate_pr_delta(
 
     let mut resolved_symbols = Vec::new();
     if let Some(baseline_fps) = baseline_fingerprints {
-        let current_fps: HashSet<&str> = dead_symbols.iter().map(|s| s.fingerprint.as_str()).collect();
+        let current_fps: HashSet<&str> = dead_symbols
+            .iter()
+            .map(|s| s.fingerprint.as_str())
+            .collect();
         for bp in baseline_fps {
             if !current_fps.contains(bp.as_str()) {
                 resolved_symbols.push(bp.clone());

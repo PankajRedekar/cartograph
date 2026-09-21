@@ -13,7 +13,11 @@ impl TerminalFormatter {
             HttpMethod::Put => " PUT ".black().on_yellow().bold().to_string(),
             HttpMethod::Patch => " PATCH ".black().on_magenta().bold().to_string(),
             HttpMethod::Delete => " DELETE ".white().on_red().bold().to_string(),
-            _ => format!(" {} ", method.as_str()).black().on_white().bold().to_string(),
+            _ => format!(" {} ", method.as_str())
+                .black()
+                .on_white()
+                .bold()
+                .to_string(),
         }
     }
 
@@ -22,7 +26,11 @@ impl TerminalFormatter {
         let mut out = String::new();
         out.push_str(&format!(
             "\n{}\n",
-            format!("  DISCOVERED ROUTES (Total: {})", report.summary.total_routes).bold()
+            format!(
+                "  DISCOVERED ROUTES (Total: {})",
+                report.summary.total_routes
+            )
+            .bold()
         ));
         out.push_str(&format!(
             "{:<10} {:<35} {:<12} {:<12} {:<10} {}\n",
@@ -86,9 +94,15 @@ impl TerminalFormatter {
         out.push_str(&format!("╰{}╯\n", "─".repeat(78)));
 
         // 360° Frontend Ingress Callers
-        out.push_str(&format!("\n▲ {}\n", "360° Frontend Ingress Callers:".bold().cyan()));
+        out.push_str(&format!(
+            "\n▲ {}\n",
+            "360° Frontend Ingress Callers:".bold().cyan()
+        ));
         if trace.frontend_callers.is_empty() {
-            out.push_str(&format!("  {}\n", "No clientside UI component callers detected".dimmed()));
+            out.push_str(&format!(
+                "  {}\n",
+                "No clientside UI component callers detected".dimmed()
+            ));
         } else {
             for (i, caller) in trace.frontend_callers.iter().enumerate() {
                 let is_last = i == trace.frontend_callers.len() - 1;
@@ -112,8 +126,15 @@ impl TerminalFormatter {
         }
 
         // Vertical Request Flow
-        out.push_str(&format!("\n▼ {}\n", "Vertical Request Execution Flow:".bold().green()));
-        out.push_str(&format!("  Route: {} {}\n", trace.method.as_str().green(), trace.normalized_path.bold()));
+        out.push_str(&format!(
+            "\n▼ {}\n",
+            "Vertical Request Execution Flow:".bold().green()
+        ));
+        out.push_str(&format!(
+            "  Route: {} {}\n",
+            trace.method.as_str().green(),
+            trace.normalized_path.bold()
+        ));
 
         for (i, step) in trace.call_chain.iter().enumerate() {
             let indent = "  ".to_string() + &"│  ".repeat(i + 1);
@@ -139,32 +160,58 @@ impl TerminalFormatter {
 
         // Models and DB Tables Touched
         if !trace.models_touched.is_empty() || !trace.sql_tables.is_empty() {
-            out.push_str(&format!("\n◆ {}\n", "Storage & ORM Models:".bold().yellow()));
+            out.push_str(&format!(
+                "\n◆ {}\n",
+                "Storage & ORM Models:".bold().yellow()
+            ));
             if !trace.models_touched.is_empty() {
-                let models: Vec<String> = trace.models_touched.iter().map(|m| m.name.clone()).collect();
+                let models: Vec<String> = trace
+                    .models_touched
+                    .iter()
+                    .map(|m| m.name.clone())
+                    .collect();
                 out.push_str(&format!("  ORM Models: {}\n", models.join(", ").green()));
             }
             if !trace.sql_tables.is_empty() {
-                out.push_str(&format!("  SQL Tables: {}\n", trace.sql_tables.join(", ").red()));
+                out.push_str(&format!(
+                    "  SQL Tables: {}\n",
+                    trace.sql_tables.join(", ").red()
+                ));
             }
         }
 
         // Health Issues
         if !trace.issues.is_empty() {
-            out.push_str(&format!("\n⚠ {}\n", "Route Health & Security Issues:".bold().red()));
+            out.push_str(&format!(
+                "\n⚠ {}\n",
+                "Route Health & Security Issues:".bold().red()
+            ));
             for issue in &trace.issues {
                 match issue {
-                    cartograph_core::model::RouteHealthIssue::ShadowedBy { shadowing_pattern, line } => {
-                        out.push_str(&format!("  • Shadowed by earlier pattern '{}' at line {}\n", shadowing_pattern.red(), line));
+                    cartograph_core::model::RouteHealthIssue::ShadowedBy {
+                        shadowing_pattern,
+                        line,
+                    } => {
+                        out.push_str(&format!(
+                            "  • Shadowed by earlier pattern '{}' at line {}\n",
+                            shadowing_pattern.red(),
+                            line
+                        ));
                     }
                     cartograph_core::model::RouteHealthIssue::UnauthenticatedMutation => {
                         out.push_str(&format!("  • {}\n", "Unauthenticated mutating endpoint (POST/PUT/DELETE/PATCH without auth guard)".red()));
                     }
                     cartograph_core::model::RouteHealthIssue::DanglingHandler { handler_name } => {
-                        out.push_str(&format!("  • Handler '{}' cannot be resolved in codebase\n", handler_name.red()));
+                        out.push_str(&format!(
+                            "  • Handler '{}' cannot be resolved in codebase\n",
+                            handler_name.red()
+                        ));
                     }
                     cartograph_core::model::RouteHealthIssue::HighCoupling { model_count } => {
-                        out.push_str(&format!("  • High coupling: endpoint touches {} data models\n", model_count));
+                        out.push_str(&format!(
+                            "  • High coupling: endpoint touches {} data models\n",
+                            model_count
+                        ));
                     }
                     _ => {}
                 }
@@ -179,7 +226,11 @@ impl TerminalFormatter {
         let mut out = String::new();
         out.push_str(&format!(
             "\n{}\n",
-            format!("  API CONTRACT VERIFICATION ({}...{})", diff.base_ref, diff.head_ref).bold()
+            format!(
+                "  API CONTRACT VERIFICATION ({}...{})",
+                diff.base_ref, diff.head_ref
+            )
+            .bold()
         ));
         out.push_str(&format!("{}\n", "─".repeat(85).dimmed()));
 

@@ -5,16 +5,15 @@ use std::time::Duration;
 
 use std::str::FromStr;
 
-use cartograph_core::config::{
-    ComplexityConfig, GitDiffMode, IndexConfig, LintArchConfig, StorageConfig,
-};
+use cartograph_core::config::{DeadCodeCategoryFilter, GitDiffMode, ProjectConfig, StorageConfig};
 use cartograph_core::model::{
     ComplexityGranularity, HttpMethod, RiskLevel, RouteFilterOptions, SemVerTarget, SimulationMode,
 };
 use cartograph_db::create_backend;
 use cartograph_engine::complexity::{
-    formatters::*, BaselineManager, ComplexityAnalysisOptions, ComplexityEngine,
+    BaselineManager, ComplexityAnalysisOptions, ComplexityEngine, formatters::*,
 };
+use cartograph_engine::deadcode::{DeadCodeEngine, DeadCodeRunOptions, PruneAdvisor};
 use cartograph_engine::discovery::DiscoveryConfig;
 use cartograph_engine::impact::{ImpactAnalyzer, ImpactOutputFormat, ImpactQuery};
 use cartograph_engine::locate::{LocateCliOptions, OutputFormat, QueryParser, SubgraphLocator};
@@ -23,8 +22,6 @@ use cartograph_engine::watcher::{FileWatcher, WatchEvent, WatcherSettings};
 use cartograph_engine::{
     ArchBaselineManager, ArchLinter, ArchOutputFormat, GitDiffScope, RouteEngine,
 };
-use cartograph_core::config::{DeadCodeCategoryFilter, DeadCodeConfig};
-use cartograph_engine::deadcode::{DeadCodeEngine, DeadCodeRunOptions, PruneAdvisor};
 mod deadcode_formatters;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -34,7 +31,7 @@ use tokio::sync::{broadcast, oneshot};
 #[derive(Parser, Debug)]
 #[command(name = "cartograph")]
 #[command(author = "Pankaj Redekar")]
-#[command(version = "0.1.0")]
+#[command(version = "0.2.0")]
 #[command(about = "Ultra-Fast Native AST Code Graph & Indexing Engine", long_about = None)]
 struct Cli {
     #[command(subcommand)]
@@ -42,7 +39,65 @@ struct Cli {
 }
 
 #[derive(Subcommand, Debug)]
+enum ConfigCommands {
+    /// Initialize a starter cartograph.toml configuration file
+    Init {
+        /// Target path or directory to create cartograph.toml
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
+
+        /// Explicit path flag (alternative to positional argument)
+        #[arg(long = "path")]
+        path_flag: Option<PathBuf>,
+
+        /// Architecture preset template (clean-architecture, hexagonal, mvc, monorepo)
+        #[arg(short, long)]
+        preset: Option<String>,
+
+        /// Generate a minimal configuration file with essential settings only
+        #[arg(short, long)]
+        minimal: bool,
+
+        /// Overwrite existing cartograph.toml if it already exists
+        #[arg(short, long)]
+        force: bool,
+    },
+
+    /// Validate syntax and structure of cartograph.toml
+    Validate {
+        /// Path to cartograph.toml or directory containing it
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
+
+        /// Explicit path flag (alternative to positional argument)
+        #[arg(long = "path")]
+        path_flag: Option<PathBuf>,
+    },
+
+    /// Display currently resolved project configuration
+    Show {
+        /// Path to cartograph.toml or directory containing it
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
+
+        /// Explicit path flag (alternative to positional argument)
+        #[arg(long = "path")]
+        path_flag: Option<PathBuf>,
+
+        /// Output configuration as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
 enum Commands {
+    /// Manage cartograph.toml configuration files (init, validate, show)
+    Config {
+        #[command(subcommand)]
+        action: ConfigCommands,
+    },
+
     /// Index a repository into the AST structural graph database
     Index {
         /// Root directory of repository to index
@@ -593,7 +648,12 @@ enum Commands {
     },
 
     /// Detect dead code, zombie functions, abandoned UI components, and ghost dependencies (<20ms)
-    #[command(name = "deadcode", alias = "dead", alias = "orphan", alias = "dead-code")]
+    #[command(
+        name = "deadcode",
+        alias = "dead",
+        alias = "orphan",
+        alias = "dead-code"
+    )]
     DeadCode {
         /// Root directory of repository
         #[arg(value_name = "PATH", default_value = ".")]
@@ -715,12 +775,39 @@ enum Commands {
 
 /// Resolve storage config and ensure database parent directories exist
 fn resolve_storage_config(root_path: &Path, db_arg: &str) -> (StorageConfig, String) {
+    let proj_config = ProjectConfig::find_and_load(root_path);
     let db_path_str = if db_arg.ends_with(".db") || db_arg.contains('/') || db_arg.contains('\\') {
         db_arg.to_string()
     } else if db_arg == "default" {
-        root_path.join(".cartograph/cartograph.db").to_string_lossy().to_string()
+        let configured = proj_config
+            .storage
+            .sqlite
+            .as_ref()
+            .map(|s| s.path.as_str())
+            .unwrap_or(".cartograph/cartograph.db");
+        if Path::new(configured).is_absolute() {
+            configured.to_string()
+        } else {
+            root_path.join(configured).to_string_lossy().to_string()
+        }
+    } else if let Some(profile_storage) = proj_config.profiles.profiles.get(db_arg) {
+        if let Some(ref sqlite) = profile_storage.sqlite {
+            if Path::new(&sqlite.path).is_absolute() {
+                sqlite.path.clone()
+            } else {
+                root_path.join(&sqlite.path).to_string_lossy().to_string()
+            }
+        } else {
+            root_path
+                .join(format!(".cartograph/cartograph_{db_arg}.db"))
+                .to_string_lossy()
+                .to_string()
+        }
     } else {
-        root_path.join(format!(".cartograph/cartograph_{db_arg}.db")).to_string_lossy().to_string()
+        root_path
+            .join(format!(".cartograph/cartograph_{db_arg}.db"))
+            .to_string_lossy()
+            .to_string()
     };
 
     if let Some(parent) = Path::new(&db_path_str).parent() {
@@ -735,6 +822,130 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Config { action } => match action {
+            ConfigCommands::Init {
+                path,
+                path_flag,
+                preset,
+                minimal,
+                force,
+            } => {
+                let resolved_path = path.or(path_flag).unwrap_or_else(|| PathBuf::from("."));
+                let target_file = if resolved_path.is_dir() {
+                    resolved_path.join("cartograph.toml")
+                } else if resolved_path.file_name().is_some_and(|n| {
+                    n == "cartograph.toml" || n.to_string_lossy().ends_with(".toml")
+                }) {
+                    resolved_path
+                } else {
+                    resolved_path.join("cartograph.toml")
+                };
+
+                if target_file.exists() && !force {
+                    eprintln!(
+                        "{} File already exists at {}. Use --force to overwrite.",
+                        "⚠️".yellow().bold(),
+                        target_file.display().to_string().bold()
+                    );
+                    std::process::exit(1);
+                }
+
+                let project_name = target_file
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "my-project".to_string());
+
+                let content =
+                    ProjectConfig::generate_template(&project_name, preset.as_deref(), minimal);
+
+                if let Some(parent) = target_file.parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+
+                fs::write(&target_file, content)?;
+                println!(
+                    "{} Initialized {} configuration at {}",
+                    "✔".green().bold(),
+                    if minimal {
+                        "minimal"
+                    } else {
+                        preset.as_deref().unwrap_or("standard")
+                    },
+                    target_file.display().to_string().cyan().bold()
+                );
+            }
+            ConfigCommands::Validate { path, path_flag } => {
+                let resolved_path = path.or(path_flag).unwrap_or_else(|| PathBuf::from("."));
+                let target_file = if resolved_path.is_file() {
+                    resolved_path
+                } else {
+                    let p = resolved_path.join("cartograph.toml");
+                    if p.is_file() {
+                        p
+                    } else {
+                        resolved_path.join(".cartograph/config.toml")
+                    }
+                };
+
+                if !target_file.exists() {
+                    eprintln!(
+                        "{} Configuration file not found at {}",
+                        "✖".red().bold(),
+                        target_file.display().to_string().bold()
+                    );
+                    std::process::exit(1);
+                }
+
+                match ProjectConfig::load_from_path(&target_file) {
+                    Ok(cfg) => {
+                        println!(
+                            "{} Configuration at {} is valid!",
+                            "✔".green().bold(),
+                            target_file.display().to_string().cyan().bold()
+                        );
+                        println!("  • Project:     {}", cfg.project.name.bold());
+                        println!("  • Profile:     {:?}", cfg.project.profile);
+                        println!("  • Storage:     {}", cfg.storage.backend.bold());
+                        println!("  • Arch Layers: {}", cfg.lint_arch.layers.len());
+                        println!("  • Arch Rules:  {}", cfg.lint_arch.rules.len());
+                    }
+                    Err(err) => {
+                        eprintln!(
+                            "{} Validation error in {}:",
+                            "✖".red().bold(),
+                            target_file.display().to_string().bold()
+                        );
+                        eprintln!("  {err}");
+                        std::process::exit(1);
+                    }
+                }
+            }
+            ConfigCommands::Show {
+                path,
+                path_flag,
+                json,
+            } => {
+                let resolved_path = path.or(path_flag).unwrap_or_else(|| PathBuf::from("."));
+                let target_dir = if resolved_path.is_file() {
+                    resolved_path
+                        .parent()
+                        .unwrap_or(Path::new("."))
+                        .to_path_buf()
+                } else {
+                    resolved_path
+                };
+                let canonical = fs::canonicalize(&target_dir).unwrap_or(target_dir);
+                let cfg = ProjectConfig::find_and_load(&canonical);
+
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&cfg)?);
+                } else {
+                    println!("{}", cfg.to_toml_string().map_err(|e| e.to_string())?);
+                }
+            }
+        },
+
         Commands::Index {
             path,
             db,
@@ -746,6 +957,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             json,
         } => {
             let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
+            let proj_config = ProjectConfig::find_and_load(&canonical_root);
             let (storage_cfg, db_path) = resolve_storage_config(&canonical_root, &db);
 
             let pb = if !json {
@@ -773,11 +985,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let discovery_config = DiscoveryConfig {
                 root_path: canonical_root.clone(),
-                exclude_patterns: IndexConfig::default().exclude_patterns,
-                max_file_size_bytes: IndexConfig::default().max_file_size_bytes,
-                mmap_threshold_bytes: IndexConfig::default().mmap_threshold_bytes,
-                follow_symlinks: false,
-                num_threads: threads,
+                exclude_patterns: proj_config.index.exclude_patterns.clone(),
+                max_file_size_bytes: proj_config.index.max_file_size_bytes,
+                mmap_threshold_bytes: proj_config.index.mmap_threshold_bytes,
+                follow_symlinks: proj_config.index.follow_symlinks,
+                num_threads: threads.or(proj_config.index.num_threads),
                 git_diff_mode,
             };
 
@@ -799,27 +1011,59 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .bold()
                         .cyan()
                 );
-                println!("Repository: {}", canonical_root.display().to_string().bold());
+                println!(
+                    "Repository: {}",
+                    canonical_root.display().to_string().bold()
+                );
                 println!("Database:   {}", db_path.dimmed());
                 println!();
-                println!("{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan());
+                println!(
+                    "{}",
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan()
+                );
                 println!("  {:<24} {:>30}", "Metric".bold(), "Value".bold());
-                println!("{}", "────────────────────────────────────────────────────────────".dimmed());
-                println!("  {:<24} {:>30}", "Files Scanned", stats.files_scanned.to_string().yellow());
+                println!(
+                    "{}",
+                    "────────────────────────────────────────────────────────────".dimmed()
+                );
+                println!(
+                    "  {:<24} {:>30}",
+                    "Files Scanned",
+                    stats.files_scanned.to_string().yellow()
+                );
                 println!(
                     "  {:<24} {:>30}",
                     "Files Indexed",
-                    format!("{} ({} unchanged)", stats.files_indexed, stats.files_skipped).green()
+                    format!(
+                        "{} ({} unchanged)",
+                        stats.files_indexed, stats.files_skipped
+                    )
+                    .green()
                 );
-                println!("  {:<24} {:>30}", "Files Deleted", stats.files_deleted.to_string());
-                println!("  {:<24} {:>30}", "AST Nodes Stored", stats.nodes_indexed.to_string().cyan());
-                println!("  {:<24} {:>30}", "Graph Edges Stored", stats.edges_indexed.to_string().cyan());
+                println!(
+                    "  {:<24} {:>30}",
+                    "Files Deleted",
+                    stats.files_deleted.to_string()
+                );
+                println!(
+                    "  {:<24} {:>30}",
+                    "AST Nodes Stored",
+                    stats.nodes_indexed.to_string().cyan()
+                );
+                println!(
+                    "  {:<24} {:>30}",
+                    "Graph Edges Stored",
+                    stats.edges_indexed.to_string().cyan()
+                );
                 println!(
                     "  {:<24} {:>30}",
                     "Duration",
                     format!("{:.2} ms", stats.elapsed_ms).bold().green()
                 );
-                println!("{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan());
+                println!(
+                    "{}",
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan()
+                );
                 println!(
                     "✨ Indexing completed successfully in {} ms.\n",
                     stats.elapsed_ms.to_string().green().bold()
@@ -836,26 +1080,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             deadcode,
         } => {
             let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
+            let proj_config = ProjectConfig::find_and_load(&canonical_root);
             let (storage_cfg, db_path) = resolve_storage_config(&canonical_root, &db);
-            let backend = std::sync::Arc::from(create_backend(&storage_cfg)?);
+            let backend = create_backend(&storage_cfg)?;
 
-            let arch_cfg = if lint_arch {
-                Some(LintArchConfig::default())
+            let debounce_ms = if debounce != 25 {
+                debounce
+            } else {
+                proj_config.watch.debounce_ms
+            };
+
+            let arch_cfg = if lint_arch || proj_config.lint_arch.enabled {
+                Some(proj_config.lint_arch.clone())
             } else {
                 None
             };
 
             let deadcode_cfg = if deadcode {
-                Some(DeadCodeConfig::default())
+                Some(proj_config.deadcode.clone())
             } else {
                 None
             };
 
             let settings = WatcherSettings {
                 root_path: canonical_root.clone(),
-                debounce_duration: Duration::from_millis(debounce),
-                cst_cache_capacity: 500,
-                track_blast_radius: true,
+                debounce_duration: Duration::from_millis(debounce_ms),
+                cst_cache_capacity: proj_config.watch.cst_cache_capacity,
+                track_blast_radius: proj_config.watch.track_blast_radius,
                 lint_arch: arch_cfg,
                 deadcode: deadcode_cfg,
             };
@@ -864,11 +1115,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (event_tx, mut event_rx) = broadcast::channel(128);
             let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
+            println!("{}", "🗺️  Cartograph File Watcher Active".bold().cyan());
             println!(
-                "{}",
-                "🗺️  Cartograph File Watcher Active".bold().cyan()
+                "Root directory: {}",
+                canonical_root.display().to_string().bold()
             );
-            println!("Root directory: {}", canonical_root.display().to_string().bold());
             println!("Database:       {}", db_path.dimmed());
             println!("Watching for changes (Press Ctrl+C to stop)...");
             println!();
@@ -909,7 +1160,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     println!("               • {}", dep.dimmed());
                                 }
                                 if affected_dependents.len() > 5 {
-                                    println!("               ... and {} more", affected_dependents.len() - 5);
+                                    println!(
+                                        "               ... and {} more",
+                                        affected_dependents.len() - 5
+                                    );
                                 }
                             }
                         }
@@ -987,7 +1241,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         WatchEvent::Error { message } => {
                             if verbose {
-                                eprintln!("[{}] {} {}", now.dimmed(), "ERROR".bold().red(), message);
+                                eprintln!(
+                                    "[{}] {} {}",
+                                    now.dimmed(),
+                                    "ERROR".bold().red(),
+                                    message
+                                );
                             }
                         }
                     }
@@ -1015,17 +1274,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 println!("{}", "🗺️  Cartograph Code Graph Status".bold().cyan());
                 println!("Database: {}\n", db_path.bold());
-                println!("{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan());
+                println!(
+                    "{}",
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan()
+                );
                 println!("  {:<24} {:>30}", "Metric".bold(), "Value".bold());
-                println!("{}", "────────────────────────────────────────────────────────────".dimmed());
-                println!("  {:<24} {:>30}", "Total Indexed Files", stats.total_files.to_string().yellow());
-                println!("  {:<24} {:>30}", "Total AST Nodes", stats.total_nodes.to_string().green().bold());
-                println!("  {:<24} {:>30}", "Total Graph Edges", stats.total_edges.to_string().cyan().bold());
+                println!(
+                    "{}",
+                    "────────────────────────────────────────────────────────────".dimmed()
+                );
+                println!(
+                    "  {:<24} {:>30}",
+                    "Total Indexed Files",
+                    stats.total_files.to_string().yellow()
+                );
+                println!(
+                    "  {:<24} {:>30}",
+                    "Total AST Nodes",
+                    stats.total_nodes.to_string().green().bold()
+                );
+                println!(
+                    "  {:<24} {:>30}",
+                    "Total Graph Edges",
+                    stats.total_edges.to_string().cyan().bold()
+                );
                 if let Some(bytes) = stats.size_bytes {
                     let mb = bytes as f64 / (1024.0 * 1024.0);
-                    println!("  {:<24} {:>30}", "Database File Size", format!("{mb:.2} MB"));
+                    println!(
+                        "  {:<24} {:>30}",
+                        "Database File Size",
+                        format!("{mb:.2} MB")
+                    );
                 }
-                println!("{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan());
+                println!(
+                    "{}",
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".cyan()
+                );
             }
         }
 
@@ -1089,7 +1373,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 && result.clusters.len() > 1
                 && io::stdin().is_terminal()
             {
-                eprintln!("\n{}", "Multiple candidate symbol clusters found:".yellow().bold());
+                eprintln!(
+                    "\n{}",
+                    "Multiple candidate symbol clusters found:".yellow().bold()
+                );
                 for (idx, cluster) in result.clusters.iter().enumerate() {
                     if let Some(primary) = cluster.nodes.first() {
                         eprintln!(
@@ -1108,24 +1395,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = io::stderr().flush();
 
                 let mut input = String::new();
-                if io::stdin().read_line(&mut input).is_ok() {
-                    if let Ok(choice) = input.trim().parse::<usize>() {
-                        if choice >= 1 && choice <= result.clusters.len() {
-                            let chosen = &result.clusters[choice - 1];
-                            if let Some(primary) = chosen.nodes.first() {
-                                let mut specific_opts = cli_opts;
-                                specific_opts.format = Some(chosen_format);
-                                let mut specific_query =
-                                    QueryParser::parse(&primary.node.name, specific_opts);
-                                specific_query.path_filter = Some(primary.node.filepath.clone());
-                                let specific_result = locator.locate(specific_query).await?;
-                                print!("{}", specific_result.rendered_output);
-                                if !specific_result.rendered_output.ends_with('\n') {
-                                    println!();
-                                }
-                                return Ok(());
-                            }
+                if io::stdin().read_line(&mut input).is_ok()
+                    && let Ok(choice) = input.trim().parse::<usize>()
+                    && choice >= 1
+                    && choice <= result.clusters.len()
+                {
+                    let chosen = &result.clusters[choice - 1];
+                    if let Some(primary) = chosen.nodes.first() {
+                        let mut specific_opts = cli_opts;
+                        specific_opts.format = Some(chosen_format);
+                        let mut specific_query =
+                            QueryParser::parse(&primary.node.name, specific_opts);
+                        specific_query.path_filter = Some(primary.node.filepath.clone());
+                        let specific_result = locator.locate(specific_query).await?;
+                        print!("{}", specific_result.rendered_output);
+                        if !specific_result.rendered_output.ends_with('\n') {
+                            println!();
                         }
+                        return Ok(());
                     }
                 }
             }
@@ -1181,7 +1468,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 SimulationMode::None
             };
 
-            let semver_policy = verify_semver.as_deref().and_then(|s| s.parse::<SemVerTarget>().ok());
+            let semver_policy = verify_semver
+                .as_deref()
+                .and_then(|s| s.parse::<SemVerTarget>().ok());
 
             let is_tty = io::stdout().is_terminal();
             let output_format = if json {
@@ -1230,37 +1519,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // CI Gating Checks
             let mut exit_code = 0;
 
-            if let Some(ref semver) = report.semver_guard {
-                if !semver.is_compliant {
-                    eprintln!("{}: {}", "CI SemVer Gate Failure".bold().red(), semver.explanation);
-                    exit_code = 1;
-                }
+            if let Some(ref semver) = report.semver_guard
+                && !semver.is_compliant
+            {
+                eprintln!(
+                    "{}: {}",
+                    "CI SemVer Gate Failure".bold().red(),
+                    semver.explanation
+                );
+                exit_code = 1;
             }
 
-            if let Some(ref threshold_str) = fail_on {
-                if let Ok(threshold) = threshold_str.parse::<RiskLevel>() {
-                    if report.risk.level >= threshold {
-                        eprintln!(
-                            "{}: Risk level '{}' meets or exceeds threshold '{}'",
-                            "CI Risk Gate Failure".bold().red(),
-                            report.risk.level.as_str(),
-                            threshold.as_str()
-                        );
-                        exit_code = 1;
-                    }
-                }
+            if let Some(ref threshold_str) = fail_on
+                && let Ok(threshold) = threshold_str.parse::<RiskLevel>()
+                && report.risk.level >= threshold
+            {
+                eprintln!(
+                    "{}: Risk level '{}' meets or exceeds threshold '{}'",
+                    "CI Risk Gate Failure".bold().red(),
+                    report.risk.level.as_str(),
+                    threshold.as_str()
+                );
+                exit_code = 1;
             }
 
-            if let Some(min_cov) = min_test_coverage {
-                if report.test_coverage_ratio < min_cov {
-                    eprintln!(
-                        "{}: Test coverage ratio {:.1}% is below required {:.1}%",
-                        "CI Test Coverage Gate Failure".bold().red(),
-                        report.test_coverage_ratio * 100.0,
-                        min_cov * 100.0
-                    );
-                    exit_code = 1;
-                }
+            if let Some(min_cov) = min_test_coverage
+                && report.test_coverage_ratio < min_cov
+            {
+                eprintln!(
+                    "{}: Test coverage ratio {:.1}% is below required {:.1}%",
+                    "CI Test Coverage Gate Failure".bold().red(),
+                    report.test_coverage_ratio * 100.0,
+                    min_cov * 100.0
+                );
+                exit_code = 1;
             }
 
             if exit_code != 0 {
@@ -1288,7 +1580,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             format,
             json,
         } => {
-            let (storage_config, _db_path) = resolve_storage_config(&path, &db);
+            let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
+            let proj_config = ProjectConfig::find_and_load(&canonical_root);
+            let (storage_config, _db_path) = resolve_storage_config(&canonical_root, &db);
             let backend = match create_backend(&storage_config) {
                 Ok(b) => b,
                 Err(e) => {
@@ -1297,9 +1591,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            let test_granularity = granularity
+            let effective_granularity =
+                if granularity == "auto" && proj_config.tests.granularity != "auto" {
+                    proj_config.tests.granularity.clone()
+                } else {
+                    granularity
+                };
+
+            let test_granularity = effective_granularity
                 .parse::<cartograph_core::model::TestGranularity>()
                 .unwrap_or(cartograph_core::model::TestGranularity::Auto);
+
+            let effective_max_tests = max_tests.or(Some(proj_config.tests.max_tests));
+            let effective_min_confidence = if (min_confidence - 0.5).abs() < f64::EPSILON
+                && (proj_config.tests.min_confidence - 0.7).abs() > f64::EPSILON
+            {
+                proj_config.tests.min_confidence
+            } else {
+                min_confidence
+            };
+            let effective_depth = if depth == 5 && proj_config.tests.max_depth != 5 {
+                proj_config.tests.max_depth
+            } else {
+                depth
+            };
+            let effective_fail_on_untested = fail_on_untested || proj_config.tests.fail_on_untested;
+            let effective_min_coverage = min_coverage.or(if proj_config.tests.min_coverage > 0.0 {
+                Some(proj_config.tests.min_coverage)
+            } else {
+                None
+            });
 
             let output_format = if json {
                 cartograph_engine::TestSelectorOutputFormat::Json
@@ -1312,17 +1633,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let selector = cartograph_engine::TestSelector::new(backend.as_ref());
             let options = cartograph_engine::TestSelectorOptions {
-                repo_root: path.clone(),
+                repo_root: canonical_root,
                 branch_range: branch,
                 staged,
                 diff_content: None,
                 granularity: test_granularity,
-                max_tests,
-                min_confidence,
-                max_hops: depth,
-                ignore_docstrings,
-                fail_on_untested,
-                min_coverage,
+                max_tests: effective_max_tests,
+                min_confidence: effective_min_confidence,
+                max_hops: effective_depth,
+                ignore_docstrings: ignore_docstrings && proj_config.tests.ignore_docstrings,
+                fail_on_untested: effective_fail_on_untested,
+                min_coverage: effective_min_coverage,
                 format: output_format,
                 dry_run,
                 command_only,
@@ -1429,7 +1750,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 {
                     Ok(doc) => doc,
                     Err(e) => {
-                        eprintln!("{}: Failed to generate OpenAPI spec: {e}", "Error".bold().red());
+                        eprintln!(
+                            "{}: Failed to generate OpenAPI spec: {e}",
+                            "Error".bold().red()
+                        );
                         std::process::exit(1);
                     }
                 };
@@ -1459,11 +1783,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 let rendered = if json || format.as_deref() == Some("json") {
-                    serde_json::to_string_pretty(&cartograph_engine::routes::formatters::JsonFormatter::format_contract_diff(&diff_report)).unwrap()
+                    serde_json::to_string_pretty(
+                        &cartograph_engine::routes::formatters::JsonFormatter::format_contract_diff(
+                            &diff_report,
+                        ),
+                    )
+                    .unwrap()
                 } else if format.as_deref() == Some("markdown") {
-                    cartograph_engine::routes::formatters::MarkdownFormatter::format_contract_diff(&diff_report)
+                    cartograph_engine::routes::formatters::MarkdownFormatter::format_contract_diff(
+                        &diff_report,
+                    )
                 } else {
-                    cartograph_engine::routes::formatters::TerminalFormatter::format_contract_diff(&diff_report)
+                    cartograph_engine::routes::formatters::TerminalFormatter::format_contract_diff(
+                        &diff_report,
+                    )
                 };
 
                 println!("{}", rendered);
@@ -1497,21 +1830,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if is_json {
                 println!(
                     "{}",
-                    serde_json::to_string_pretty(&cartograph_engine::routes::formatters::JsonFormatter::format_report(&report)).unwrap()
+                    serde_json::to_string_pretty(
+                        &cartograph_engine::routes::formatters::JsonFormatter::format_report(
+                            &report
+                        )
+                    )
+                    .unwrap()
                 );
             } else if is_markdown {
                 if pattern.is_some() && report.routes.len() == 1 {
                     print!("{}", cartograph_engine::routes::formatters::MarkdownFormatter::format_trace_detail(&report.routes[0]));
                 } else {
-                    print!("{}", cartograph_engine::routes::formatters::MarkdownFormatter::format_report(&report));
+                    print!(
+                        "{}",
+                        cartograph_engine::routes::formatters::MarkdownFormatter::format_report(
+                            &report
+                        )
+                    );
                 }
             } else if is_xml {
-                print!("{}", cartograph_engine::routes::formatters::XmlFormatter::format_report(&report));
+                print!(
+                    "{}",
+                    cartograph_engine::routes::formatters::XmlFormatter::format_report(&report)
+                );
             } else {
                 if pattern.is_some() && report.routes.len() == 1 {
                     print!("{}", cartograph_engine::routes::formatters::TerminalFormatter::format_route_trace(&report.routes[0]));
                 } else {
-                    print!("{}", cartograph_engine::routes::formatters::TerminalFormatter::format_route_list(&report));
+                    print!(
+                        "{}",
+                        cartograph_engine::routes::formatters::TerminalFormatter::format_route_list(
+                            &report
+                        )
+                    );
                     if show_callers {
                         for trace in &report.routes {
                             if !trace.frontend_callers.is_empty() {
@@ -1541,22 +1892,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             sarif,
         } => {
             let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
+            let proj_config = ProjectConfig::find_and_load(&canonical_root);
             let (storage_cfg, _db_path) = resolve_storage_config(&canonical_root, &db);
-            let backend = std::sync::Arc::from(create_backend(&storage_cfg)?);
+            let backend = create_backend(&storage_cfg)?;
 
-            let mut config = LintArchConfig::default();
+            let mut config = proj_config.lint_arch;
             if let Some(p) = preset {
                 config.preset = Some(p);
             }
-            if let Some(g) = granularity {
-                if let Ok(gr) = g.parse() {
-                    config.cycle_granularity = gr;
-                }
+            if let Some(g) = granularity
+                && let Ok(gr) = g.parse()
+            {
+                config.cycle_granularity = gr;
             }
-            if let Some(c) = coupling {
-                if let Ok(cp) = c.parse() {
-                    config.coupling = cp;
-                }
+            if let Some(c) = coupling
+                && let Ok(cp) = c.parse()
+            {
+                config.coupling = cp;
             }
             if strict {
                 config.strict = true;
@@ -1579,12 +1931,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
 
             // Baseline management
-            let baseline_file = baseline.unwrap_or_else(|| canonical_root.join(".cartograph/arch-baseline.json"));
+            let baseline_file =
+                baseline.unwrap_or_else(|| canonical_root.join(".cartograph/arch-baseline.json"));
             let loaded_baseline = if baseline_file.exists() && !record_baseline {
                 match ArchBaselineManager::load_from_path(&baseline_file) {
                     Ok(b) => Some(b),
                     Err(e) => {
-                        eprintln!("Warning: Failed to load baseline from {}: {e}", baseline_file.display());
+                        eprintln!(
+                            "Warning: Failed to load baseline from {}: {e}",
+                            baseline_file.display()
+                        );
                         None
                     }
                 }
@@ -1600,11 +1956,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let report = linter.lint().await?;
 
             if record_baseline {
-                let new_baseline = ArchBaselineManager::record_baseline(
-                    &report.violations,
-                    &report.cycles,
-                    None,
-                );
+                let new_baseline =
+                    ArchBaselineManager::record_baseline(&report.violations, &report.cycles, None);
                 ArchBaselineManager::save_to_path(&baseline_file, &new_baseline)?;
                 println!(
                     "{} Recorded {} violations and {} cycles to baseline: {}",
@@ -1665,13 +2018,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             interactive,
         } => {
             let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
+            let proj_config = ProjectConfig::find_and_load(&canonical_root);
             let (storage_cfg, _db_path) = resolve_storage_config(&canonical_root, &db);
             let backend = create_backend(&storage_cfg)?;
 
             let gran = granularity
                 .parse::<ComplexityGranularity>()
                 .unwrap_or(ComplexityGranularity::Symbol);
-            let config = ComplexityConfig::default();
+            let config = proj_config.complexity;
+            let effective_top = if top != 15 { top } else { config.default_top_n };
 
             let baseline_file = baseline.or_else(|| {
                 let default_p = canonical_root.join(".cartograph-complexity-baseline.json");
@@ -1685,7 +2040,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let options = ComplexityAnalysisOptions {
                 repo_root: canonical_root.clone(),
                 granularity: gran,
-                top_n: top,
+                top_n: effective_top,
                 file_filter: file,
                 god_class_only: god_class,
                 danger_zone_only: danger_zone,
@@ -1699,7 +2054,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let report = ComplexityEngine::analyze(&*backend, &config, &options).await?;
 
             if record_baseline {
-                let target_p = baseline_file.unwrap_or_else(|| canonical_root.join(".cartograph-complexity-baseline.json"));
+                let target_p = baseline_file
+                    .unwrap_or_else(|| canonical_root.join(".cartograph-complexity-baseline.json"));
                 BaselineManager::save_baseline(&target_p, &report.top_hotspots, None)?;
                 println!(
                     "{} Recorded {} hotspots to baseline: {}",
@@ -1760,7 +2116,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             print!("{output_str}");
 
             // CI Quality Gates
-            if fail_on_hotspots && (report.critical_hotspots_count > 0 || report.danger_zone_count > 0) {
+            if fail_on_hotspots
+                && (report.critical_hotspots_count > 0 || report.danger_zone_count > 0)
+            {
                 eprintln!(
                     "{} CI Quality Gate Failed: {} critical hotspots (Q1) and {} danger zone items exist.",
                     "FAIL:".red().bold(),
@@ -1770,16 +2128,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(1);
             }
 
-            if let Some(max_h) = max_debt_hours {
-                if report.total_debt_hours > max_h {
-                    eprintln!(
-                        "{} CI Quality Gate Failed: Total technical debt ({:.1}h) exceeds threshold ({:.1}h).",
-                        "FAIL:".red().bold(),
-                        report.total_debt_hours,
-                        max_h
-                    );
-                    std::process::exit(1);
-                }
+            if let Some(max_h) = max_debt_hours
+                && report.total_debt_hours > max_h
+            {
+                eprintln!(
+                    "{} CI Quality Gate Failed: Total technical debt ({:.1}h) exceeds threshold ({:.1}h).",
+                    "FAIL:".red().bold(),
+                    report.total_debt_hours,
+                    max_h
+                );
+                std::process::exit(1);
             }
         }
 
@@ -1815,24 +2173,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             interactive,
         } => {
             let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
+            let proj_config = ProjectConfig::find_and_load(&canonical_root);
             let (storage_cfg, _db_path) = resolve_storage_config(&canonical_root, &db);
-            let backend: std::sync::Arc<dyn cartograph_core::backend::GraphStoreBackend> = std::sync::Arc::from(create_backend(&storage_cfg)?);
+            let backend: std::sync::Arc<dyn cartograph_core::backend::GraphStoreBackend> =
+                create_backend(&storage_cfg)?;
 
             // Handle simulate_prune if requested
             if let Some(target) = simulate_prune {
                 let advisor = PruneAdvisor::new(backend.clone(), canonical_root.clone());
                 let report = advisor.simulate_prune(&target).await?;
-                println!("{}", "🔮 Speculative Prune Blast-Radius Simulation".bold().cyan());
+                println!(
+                    "{}",
+                    "🔮 Speculative Prune Blast-Radius Simulation".bold().cyan()
+                );
                 println!("Target Symbol: {}", target.bold());
                 println!("Affected Files: {}", report.total_affected_files);
                 println!("Affected Nodes: {}", report.total_affected_nodes);
                 println!("Blast Radius Risk: {:?}", report.risk.level);
                 if report.risk.level == RiskLevel::Low {
-                    println!("{}", "✔ Safe to prune: No living roots or callers depend on this symbol!".green().bold());
+                    println!(
+                        "{}",
+                        "✔ Safe to prune: No living roots or callers depend on this symbol!"
+                            .green()
+                            .bold()
+                    );
                 } else {
-                    println!("{}", "⚠️ Warning: Pruning this symbol may cause downstream breakage:".yellow().bold());
+                    println!(
+                        "{}",
+                        "⚠️ Warning: Pruning this symbol may cause downstream breakage:"
+                            .yellow()
+                            .bold()
+                    );
                     for path in &report.paths_to_entrypoints {
-                        println!("  └── {} ──► {} ({} hops)", path.root_id.dimmed(), path.target_id.bold(), path.hops);
+                        println!(
+                            "  └── {} ──► {} ({} hops)",
+                            path.root_id.dimmed(),
+                            path.target_id.bold(),
+                            path.hops
+                        );
                     }
                 }
                 return Ok(());
@@ -1863,19 +2241,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 DeadCodeCategoryFilter::All
             };
 
-            let config = DeadCodeConfig::default();
-            let engine = DeadCodeEngine::new(backend.clone(), config, canonical_root.clone());
+            let config = proj_config.deadcode;
+            let engine =
+                DeadCodeEngine::new(backend.clone(), config.clone(), canonical_root.clone());
+
+            let effective_export_ai_ignore =
+                export_ai_ignore.or_else(|| config.ai_ignore_file.map(|f| canonical_root.join(f)));
 
             let options = DeadCodeRunOptions {
                 category_filter,
-                min_confidence,
-                min_lines,
+                min_confidence: min_confidence.or(Some(config.min_confidence)),
+                min_lines: min_lines.or(Some(config.min_lines)),
                 baseline_path: baseline,
                 record_baseline_path: record_baseline,
                 ratchet,
                 git_branch: branch,
                 git_staged: staged,
-                export_ai_ignore: export_ai_ignore.clone(),
+                export_ai_ignore: effective_export_ai_ignore.clone(),
             };
 
             let report = engine.run(options).await?;
@@ -1883,12 +2265,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Handle prompt_prune if requested
             if let Some(target) = prompt_prune {
                 let advisor = PruneAdvisor::new(backend.clone(), canonical_root.clone());
-                if let Some(sym) = report.dead_symbols.iter().find(|s| s.name == target || s.name.contains(&target)) {
-                    let island = sym.island_id.as_ref().and_then(|iid| report.dead_islands.iter().find(|isl| isl.id == *iid));
+                if let Some(sym) = report
+                    .dead_symbols
+                    .iter()
+                    .find(|s| s.name == target || s.name.contains(&target))
+                {
+                    let island = sym
+                        .island_id
+                        .as_ref()
+                        .and_then(|iid| report.dead_islands.iter().find(|isl| isl.id == *iid));
                     let prompt = advisor.generate_ai_prune_prompt(sym, island);
                     println!("{prompt}");
                 } else {
-                    eprintln!("{} Symbol '{}' not found in dead code report.", "Error:".red().bold(), target);
+                    eprintln!(
+                        "{} Symbol '{}' not found in dead code report.",
+                        "Error:".red().bold(),
+                        target
+                    );
                     std::process::exit(1);
                 }
                 return Ok(());
@@ -1921,7 +2314,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             print!("{output_str}");
 
-            if let Some(ref ai_path) = export_ai_ignore {
+            if let Some(ref ai_path) = effective_export_ai_ignore {
                 println!(
                     "{} Exported AI ignore mask to: {}",
                     "✔".green().bold(),
@@ -1939,18 +2332,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(1);
             }
 
-            if fail_on_new_deadcode {
-                if let Some(ref delta) = report.pr_delta {
-                    if !delta.newly_introduced.is_empty() || !delta.newly_orphaned.is_empty() {
-                        eprintln!(
-                            "{} CI Quality Gate Failed: PR introduces {} newly authored and {} newly orphaned dead symbols.",
-                            "FAIL:".red().bold(),
-                            delta.newly_introduced.len(),
-                            delta.newly_orphaned.len()
-                        );
-                        std::process::exit(1);
-                    }
-                }
+            if fail_on_new_deadcode
+                && let Some(ref delta) = report.pr_delta
+                && (!delta.newly_introduced.is_empty() || !delta.newly_orphaned.is_empty())
+            {
+                eprintln!(
+                    "{} CI Quality Gate Failed: PR introduces {} newly authored and {} newly orphaned dead symbols.",
+                    "FAIL:".red().bold(),
+                    delta.newly_introduced.len(),
+                    delta.newly_orphaned.len()
+                );
+                std::process::exit(1);
             }
         }
     }

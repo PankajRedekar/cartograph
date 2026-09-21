@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use cartograph_core::model::{ArchitecturalCouplingSmell, ImpactRoot, ImpactedNode};
+use std::collections::HashSet;
 
 pub struct CouplingDetector;
 
@@ -8,10 +8,8 @@ impl CouplingDetector {
     pub fn extract_subsystem(filepath: &str) -> String {
         let parts: Vec<&str> = filepath.split(['/', '\\']).collect();
         if parts.len() >= 2 {
-            if parts[0] == "crates" || parts[0] == "packages" {
-                if parts.len() >= 3 {
-                    return format!("{}/{}", parts[0], parts[1]);
-                }
+            if (parts[0] == "crates" || parts[0] == "packages") && parts.len() >= 3 {
+                return format!("{}/{}", parts[0], parts[1]);
             }
             parts[0].to_string()
         } else {
@@ -82,8 +80,14 @@ mod tests {
 
     #[test]
     fn test_extract_subsystem() {
-        assert_eq!(CouplingDetector::extract_subsystem("crates/cartograph-core/src/model.rs"), "crates/cartograph-core");
-        assert_eq!(CouplingDetector::extract_subsystem("src/billing/service.rs"), "src");
+        assert_eq!(
+            CouplingDetector::extract_subsystem("crates/cartograph-core/src/model.rs"),
+            "crates/cartograph-core"
+        );
+        assert_eq!(
+            CouplingDetector::extract_subsystem("src/billing/service.rs"),
+            "src"
+        );
     }
 
     #[test]
@@ -115,7 +119,12 @@ mod tests {
         };
 
         let mut callers = Vec::new();
-        let paths = ["crates/reporting/a.rs", "crates/billing/b.rs", "crates/compliance/c.rs", "crates/analytics/d.rs"];
+        let paths = [
+            "crates/reporting/a.rs",
+            "crates/billing/b.rs",
+            "crates/compliance/c.rs",
+            "crates/analytics/d.rs",
+        ];
         for (i, p) in paths.iter().enumerate() {
             callers.push(ImpactedNode {
                 node: Node {

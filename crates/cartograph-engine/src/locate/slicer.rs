@@ -50,7 +50,11 @@ impl CodeSlicer {
         let total_lines = lines.len() as u32;
 
         let start_line = node.start_line.unwrap_or(1).max(1);
-        let end_line = node.end_line.unwrap_or(start_line).min(total_lines).max(start_line);
+        let end_line = node
+            .end_line
+            .unwrap_or(start_line)
+            .min(total_lines)
+            .max(start_line);
 
         let context_start_line = start_line.saturating_sub(self.context_lines as u32).max(1);
         let context_end_line = (end_line + self.context_lines as u32).min(total_lines);

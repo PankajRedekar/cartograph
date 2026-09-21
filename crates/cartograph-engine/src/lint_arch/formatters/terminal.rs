@@ -9,8 +9,12 @@ impl TerminalFormatter {
     pub fn format(report: &LintArchReport) -> String {
         let mut out = String::new();
 
-        out.push_str("\n");
-        out.push_str(&"=== ARCHITECTURAL LINTER & BOUNDARY REPORT ===".bold().to_string());
+        out.push('\n');
+        out.push_str(
+            &"=== ARCHITECTURAL LINTER & BOUNDARY REPORT ==="
+                .bold()
+                .to_string(),
+        );
         out.push_str("\n\n");
 
         // Status Banner
@@ -20,7 +24,10 @@ impl TerminalFormatter {
             "  FAIL  ".bold().on_red().white()
         };
 
-        out.push_str(&format!("{status_badge} Architectural Check Complete in {:.2}ms\n\n", report.summary.duration_micros as f64 / 1000.0));
+        out.push_str(&format!(
+            "{status_badge} Architectural Check Complete in {:.2}ms\n\n",
+            report.summary.duration_micros as f64 / 1000.0
+        ));
 
         // Scorecard Table
         out.push_str(&"--- SCORECARD ---\n".dimmed().to_string());
@@ -45,7 +52,11 @@ impl TerminalFormatter {
             } else {
                 "0".dimmed()
             },
-            report.summary.baseline_suppressed_count.to_string().dimmed()
+            report
+                .summary
+                .baseline_suppressed_count
+                .to_string()
+                .dimmed()
         ));
         out.push_str(&format!(
             "  • Circular Dependencies: {} ({} runtime, {} type-only)\n",
@@ -61,14 +72,19 @@ impl TerminalFormatter {
                 "0".dimmed()
             }
         ));
-        out.push_str("\n");
+        out.push('\n');
 
         // Section: Cycles
         if !report.cycles.is_empty() {
-            out.push_str(&"--- CIRCULAR DEPENDENCIES ---\n".yellow().bold().to_string());
+            out.push_str(
+                &"--- CIRCULAR DEPENDENCIES ---\n"
+                    .yellow()
+                    .bold()
+                    .to_string(),
+            );
             for (idx, cycle) in report.cycles.iter().enumerate() {
                 out.push_str(&Self::format_cycle(idx + 1, cycle));
-                out.push_str("\n");
+                out.push('\n');
             }
         }
 
@@ -87,25 +103,44 @@ impl TerminalFormatter {
                     None => v.source_file.clone(),
                 };
 
-                out.push_str(&format!("  [{}] {} ({})\n", badge, v.rule_name.bold(), v.category.dimmed()));
-                out.push_str(&format!("    Path:   {} -> {}\n", loc.cyan(), v.target_file.cyan()));
+                out.push_str(&format!(
+                    "  [{}] {} ({})\n",
+                    badge,
+                    v.rule_name.bold(),
+                    v.category.dimmed()
+                ));
+                out.push_str(&format!(
+                    "    Path:   {} -> {}\n",
+                    loc.cyan(),
+                    v.target_file.cyan()
+                ));
                 out.push_str(&format!("    Reason: {}\n", v.message));
 
                 if let Some(ref hint) = v.remediation_hint {
                     out.push_str(&format!("    💡 Remediation: {}\n", hint.green()));
                 }
-                out.push_str("\n");
+                out.push('\n');
             }
         }
 
         // Footer
         if report.summary.passed {
-            out.push_str(&"✔ All architectural boundaries preserved. No cyclic dependencies.\n\n".green().bold().to_string());
+            out.push_str(
+                &"✔ All architectural boundaries preserved. No cyclic dependencies.\n\n"
+                    .green()
+                    .bold()
+                    .to_string(),
+            );
         } else {
-            out.push_str(&format!(
-                "✖ Found {} architectural error(s). Please fix or baseline before merging.\n\n",
-                report.summary.active_errors_count
-            ).red().bold().to_string());
+            out.push_str(
+                &format!(
+                    "✖ Found {} architectural error(s). Please fix or baseline before merging.\n\n",
+                    report.summary.active_errors_count
+                )
+                .red()
+                .bold()
+                .to_string(),
+            );
         }
 
         out
@@ -136,7 +171,13 @@ impl TerminalFormatter {
             };
             s.push_str(&format!(
                 "      {} [{}] {} {}\n",
-                if i == 0 { "┌" } else if i == n - 1 { "└" } else { "├" },
+                if i == 0 {
+                    "┌"
+                } else if i == n - 1 {
+                    "└"
+                } else {
+                    "├"
+                },
                 hop.name.cyan(),
                 arrow.dimmed(),
                 cycle.hops[next_idx].name.cyan()
@@ -150,7 +191,11 @@ impl TerminalFormatter {
                 cut.source_file.cyan(),
                 cut.target_file.cyan(),
                 cut.cycles_broken_count,
-                if cut.cycles_broken_count == 1 { "" } else { "s" }
+                if cut.cycles_broken_count == 1 {
+                    ""
+                } else {
+                    "s"
+                }
             ));
             s.push_str(&format!("      💡 {}\n", cut.remediation_advice.green()));
         }

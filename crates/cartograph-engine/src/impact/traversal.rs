@@ -1,7 +1,7 @@
-use std::collections::{HashMap, HashSet};
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::error::Result;
 use cartograph_core::model::{EdgeKind, ImpactedNode, NodeKind, PropagationPath};
+use std::collections::{HashMap, HashSet};
 
 pub struct BlastRadiusTraverser {
     pub max_depth: usize,
@@ -47,7 +47,8 @@ impl BlastRadiusTraverser {
                 continue;
             }
 
-            let path_segments: Vec<String> = record.path_str.split("->").map(|s| s.to_string()).collect();
+            let path_segments: Vec<String> =
+                record.path_str.split("->").map(|s| s.to_string()).collect();
             let is_entrypoint = record.node.kind == NodeKind::Route
                 || record.node.kind == NodeKind::Other("endpoint".to_string())
                 || record.node.scope.contains("router");
@@ -64,8 +65,9 @@ impl BlastRadiusTraverser {
 
             let attenuation = 0.8f64.powi(record.depth as i32);
 
-            let entry = node_map.entry(record.node.id.clone()).or_insert_with(|| {
-                ImpactedNode {
+            let entry = node_map
+                .entry(record.node.id.clone())
+                .or_insert_with(|| ImpactedNode {
                     node: record.node.clone(),
                     min_hop_distance: record.depth,
                     impact_probability: attenuation,
@@ -73,8 +75,7 @@ impl BlastRadiusTraverser {
                     edge_kinds_to_root: HashSet::new(),
                     call_sites: Vec::new(),
                     is_tested: false,
-                }
-            });
+                });
 
             if record.depth < entry.min_hop_distance {
                 entry.min_hop_distance = record.depth;
@@ -89,24 +90,30 @@ impl BlastRadiusTraverser {
 
         // Query tests verifying any impacted nodes
         let all_impacted_ids: Vec<String> = node_map.keys().cloned().collect();
-        if !all_impacted_ids.is_empty() {
-            if let Ok(edges) = backend.get_edges_for_nodes(&all_impacted_ids, self.min_confidence).await {
-                let test_targets: HashSet<String> = edges
-                    .iter()
-                    .filter(|e| e.kind == EdgeKind::Tests)
-                    .map(|e| e.target_id.clone())
-                    .collect();
+        if !all_impacted_ids.is_empty()
+            && let Ok(edges) = backend
+                .get_edges_for_nodes(&all_impacted_ids, self.min_confidence)
+                .await
+        {
+            let test_targets: HashSet<String> = edges
+                .iter()
+                .filter(|e| e.kind == EdgeKind::Tests)
+                .map(|e| e.target_id.clone())
+                .collect();
 
-                for (id, node) in node_map.iter_mut() {
-                    if test_targets.contains(id) {
-                        node.is_tested = true;
-                    }
+            for (id, node) in node_map.iter_mut() {
+                if test_targets.contains(id) {
+                    node.is_tested = true;
                 }
             }
         }
 
         let mut impacted_list: Vec<ImpactedNode> = node_map.into_values().collect();
-        impacted_list.sort_by(|a, b| a.min_hop_distance.cmp(&b.min_hop_distance).then_with(|| a.node.id.cmp(&b.node.id)));
+        impacted_list.sort_by(|a, b| {
+            a.min_hop_distance
+                .cmp(&b.min_hop_distance)
+                .then_with(|| a.node.id.cmp(&b.node.id))
+        });
 
         Ok((impacted_list, paths))
     }

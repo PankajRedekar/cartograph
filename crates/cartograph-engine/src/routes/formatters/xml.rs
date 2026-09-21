@@ -66,7 +66,10 @@ impl XmlFormatter {
         if !trace.models_touched.is_empty() {
             xml.push_str("    <models>\n");
             for m in &trace.models_touched {
-                xml.push_str(&format!("      <model name=\"{}\" file=\"{}\" />\n", m.name, m.filepath));
+                xml.push_str(&format!(
+                    "      <model name=\"{}\" file=\"{}\" />\n",
+                    m.name, m.filepath
+                ));
             }
             xml.push_str("    </models>\n");
         }

@@ -5,9 +5,7 @@ use cartograph_core::config::ComplexityConfig;
 use cartograph_core::model::ComplexityGranularity;
 use cartograph_db::memory::MemoryBackend;
 use cartograph_engine::complexity::formatters::*;
-use cartograph_engine::complexity::{
-    BaselineManager, ComplexityAnalysisOptions, ComplexityEngine,
-};
+use cartograph_engine::complexity::{BaselineManager, ComplexityAnalysisOptions, ComplexityEngine};
 
 #[tokio::test]
 async fn test_end_to_end_complexity_engine_and_hotspot_matrix() {
@@ -92,7 +90,10 @@ pub fn execute_dispatch(queue_len: usize, active: bool) -> bool {
         .await
         .expect("Complexity analysis failed");
 
-    assert!(report.total_analyzed >= 4, "Expected at least 4 symbols/classes analyzed");
+    assert!(
+        report.total_analyzed >= 4,
+        "Expected at least 4 symbols/classes analyzed"
+    );
 
     // 3. Verify OrderEngine LCOM4 decomposition clusters
     let order_engine = report
@@ -103,11 +104,18 @@ pub fn execute_dispatch(queue_len: usize, active: bool) -> bool {
         .expect("OrderEngine struct record not found");
 
     if let Some(cohesion) = &order_engine.class_cohesion {
-        assert!(cohesion.lcom4 >= 2, "Expected LCOM4 >= 2 for disconnected methods, got {}", cohesion.lcom4);
+        assert!(
+            cohesion.lcom4 >= 2,
+            "Expected LCOM4 >= 2 for disconnected methods, got {}",
+            cohesion.lcom4
+        );
     }
 
     if let Some(god_eval) = &order_engine.god_class {
-        assert!(!god_eval.candidate_extractions.is_empty(), "Expected candidate extractions");
+        assert!(
+            !god_eval.candidate_extractions.is_empty(),
+            "Expected candidate extractions"
+        );
     }
 
     // 4. Verify execute_dispatch function metrics
@@ -151,7 +159,8 @@ pub fn execute_dispatch(queue_len: usize, active: bool) -> bool {
     BaselineManager::save_baseline(&baseline_p, &report.top_hotspots, None).unwrap();
     assert!(baseline_p.exists());
 
-    let loaded = BaselineManager::load_baseline(&baseline_p).expect("Failed to load saved baseline");
+    let loaded =
+        BaselineManager::load_baseline(&baseline_p).expect("Failed to load saved baseline");
     assert_eq!(loaded.hotspots.len(), report.top_hotspots.len());
 
     let mut filtered_records = report.top_hotspots.clone();
@@ -198,7 +207,11 @@ pub fn process_payment(amount: f64) -> bool {
         .expect("File analysis failed");
 
     assert!(!file_report.top_hotspots.is_empty());
-    assert!(file_report.top_hotspots[0].filepath.ends_with("processor.rs"));
+    assert!(
+        file_report.top_hotspots[0]
+            .filepath
+            .ends_with("processor.rs")
+    );
 
     // 2. Module Granularity
     let mod_opts = ComplexityAnalysisOptions {
@@ -277,4 +290,3 @@ async fn test_baseline_ratchet_pruning_workflow() {
     assert_eq!(updated_baseline.hotspots.len(), 1);
     assert_eq!(updated_baseline.hotspots[0].symbol_name, "func_a");
 }
-
