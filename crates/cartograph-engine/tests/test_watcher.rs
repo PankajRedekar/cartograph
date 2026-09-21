@@ -29,6 +29,7 @@ async fn test_watcher_handle_file_save_and_noop() {
         cst_cache_capacity: 100,
         track_blast_radius: true,
         lint_arch: None,
+        deadcode: None,
     };
 
     let watcher = FileWatcher::new(backend.clone(), settings);
@@ -98,6 +99,7 @@ fn handle() {
         cst_cache_capacity: 100,
         track_blast_radius: true,
         lint_arch: None,
+        deadcode: None,
     };
     let watcher = FileWatcher::new(backend.clone(), settings);
 
@@ -150,6 +152,7 @@ async fn test_watcher_background_loop_and_channel_dispatch() {
         cst_cache_capacity: 50,
         track_blast_radius: false,
         lint_arch: None,
+        deadcode: None,
     };
     let watcher = Arc::new(FileWatcher::new(backend.clone(), settings));
 

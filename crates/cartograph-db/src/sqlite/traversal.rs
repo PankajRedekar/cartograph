@@ -2,9 +2,9 @@ use rusqlite::Connection;
 
 use cartograph_core::error::{CartographError, Result};
 use cartograph_core::model::{
-    EdgeKind, Node, NodeKind, RawClassMemberRecord, RawFrontendCallerRecord, RawImpactRecord,
-    RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord, RawSymbolCouplingRecord,
-    RawTestRecord,
+    EdgeKind, Node, NodeKind, RawClassMemberRecord, RawDeadSymbolRecord, RawFrontendCallerRecord,
+    RawImpactRecord, RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord,
+    RawSymbolCouplingRecord, RawTestRecord,
 };
 
 pub(crate) fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<Node> {
@@ -1087,6 +1087,236 @@ pub fn get_class_member_graph(
         results.push(r.map_err(|e| CartographError::Database(format!("Failed to map class member record: {e}")))?);
     }
 
+    Ok(results)
+}
+
+fn map_dead_symbol_row(row: &rusqlite::Row) -> rusqlite::Result<RawDeadSymbolRecord> {
+    let id: String = row.get(0)?;
+    let name: String = row.get(1)?;
+    let kind: String = row.get(2)?;
+    let filepath: String = row.get(3)?;
+    let scope: String = row.get(4)?;
+    let start_line: Option<u32> = row.get(5)?;
+    let end_line: Option<u32> = row.get(6)?;
+    let signature: Option<String> = row.get(7)?;
+    let docstring: Option<String> = row.get(8)?;
+    let checksum: Option<String> = row.get(9)?;
+    let metadata_str: Option<String> = row.get(10)?;
+    let in_degree: usize = row.get::<_, i64>(11)? as usize;
+    let out_degree: usize = row.get::<_, i64>(12)? as usize;
+    let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
+
+    Ok(RawDeadSymbolRecord {
+        id,
+        name,
+        kind,
+        filepath,
+        scope,
+        start_line,
+        end_line,
+        signature,
+        docstring,
+        checksum,
+        metadata,
+        in_degree,
+        out_degree,
+    })
+}
+
+pub fn get_unreachable_subgraph(
+    conn: &Connection,
+    living_root_ids: &[String],
+    min_confidence: f64,
+) -> Result<Vec<RawDeadSymbolRecord>> {
+    if living_root_ids.is_empty() {
+        let sql = r#"
+            SELECT 
+                n.id, n.name, n.kind, n.filepath, n.scope,
+                n.start_line, n.end_line, n.signature, n.docstring, n.checksum, n.metadata,
+                COALESCE(incoming.in_degree, 0) AS in_degree,
+                COALESCE(outgoing.out_degree, 0) AS out_degree
+            FROM nodes n
+            LEFT JOIN (
+                SELECT target_id, COUNT(*) AS in_degree
+                FROM edges
+                WHERE kind IN ('calls', 'imports', 'references', 'extends', 'implements', 'maps_to')
+                  AND coalesce(confidence, 1.0) >= ?1
+                GROUP BY target_id
+            ) incoming ON n.id = incoming.target_id
+            LEFT JOIN (
+                SELECT source_id, COUNT(*) AS out_degree
+                FROM edges
+                WHERE kind IN ('calls', 'imports', 'references', 'extends', 'implements', 'maps_to')
+                  AND coalesce(confidence, 1.0) >= ?1
+                GROUP BY source_id
+            ) outgoing ON n.id = outgoing.source_id
+            WHERE n.kind NOT IN ('module', 'file')
+            ORDER BY n.filepath ASC, n.start_line ASC;
+        "#;
+        let mut stmt = conn
+            .prepare(sql)
+            .map_err(|e| CartographError::Database(format!("Failed to prepare get_unreachable_subgraph: {e}")))?;
+        let rows = stmt
+            .query_map([min_confidence], map_dead_symbol_row)
+            .map_err(|e| CartographError::Database(format!("Failed to execute get_unreachable_subgraph: {e}")))?;
+        let mut results = Vec::new();
+        for r in rows {
+            results.push(r.map_err(|e| CartographError::Database(format!("Failed to read dead symbol record: {e}")))?);
+        }
+        return Ok(results);
+    }
+
+    conn.execute(
+        "CREATE TEMP TABLE IF NOT EXISTS _temp_deadcode_roots (id TEXT PRIMARY KEY);",
+        [],
+    )
+    .map_err(|e| CartographError::Database(format!("Failed to create temp roots table: {e}")))?;
+    conn.execute("DELETE FROM _temp_deadcode_roots;", [])
+        .map_err(|e| CartographError::Database(format!("Failed to clear temp roots table: {e}")))?;
+
+    {
+        let mut insert_stmt = conn
+            .prepare("INSERT OR IGNORE INTO _temp_deadcode_roots (id) VALUES (?1);")
+            .map_err(|e| CartographError::Database(format!("Failed to prepare temp root insert: {e}")))?;
+        for root_id in living_root_ids {
+            insert_stmt
+                .execute([root_id])
+                .map_err(|e| CartographError::Database(format!("Failed to insert temp root: {e}")))?;
+        }
+    }
+
+    let sql = r#"
+        WITH RECURSIVE reachable(node_id) AS (
+            SELECT id FROM _temp_deadcode_roots
+            UNION
+            SELECT e.target_id
+            FROM reachable r
+            JOIN edges e ON r.node_id = e.source_id
+            WHERE coalesce(e.confidence, 1.0) >= ?1
+              AND e.kind IN ('calls', 'imports', 'references', 'extends', 'implements', 'maps_to', 'contains')
+        )
+        SELECT 
+            n.id, n.name, n.kind, n.filepath, n.scope,
+            n.start_line, n.end_line, n.signature, n.docstring, n.checksum, n.metadata,
+            COALESCE(incoming.in_degree, 0) AS in_degree,
+            COALESCE(outgoing.out_degree, 0) AS out_degree
+        FROM nodes n
+        LEFT JOIN (
+            SELECT target_id, COUNT(*) AS in_degree
+            FROM edges
+            WHERE kind IN ('calls', 'imports', 'references', 'extends', 'implements', 'maps_to')
+              AND coalesce(confidence, 1.0) >= ?1
+            GROUP BY target_id
+        ) incoming ON n.id = incoming.target_id
+        LEFT JOIN (
+            SELECT source_id, COUNT(*) AS out_degree
+            FROM edges
+            WHERE kind IN ('calls', 'imports', 'references', 'extends', 'implements', 'maps_to')
+              AND coalesce(confidence, 1.0) >= ?1
+            GROUP BY source_id
+        ) outgoing ON n.id = outgoing.source_id
+        WHERE n.id NOT IN (SELECT node_id FROM reachable)
+          AND n.kind NOT IN ('module', 'file')
+        ORDER BY n.filepath ASC, n.start_line ASC;
+    "#;
+
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| CartographError::Database(format!("Failed to prepare get_unreachable_subgraph CTE: {e}")))?;
+
+    let rows = stmt
+        .query_map([min_confidence], map_dead_symbol_row)
+        .map_err(|e| CartographError::Database(format!("Failed to execute get_unreachable_subgraph CTE: {e}")))?;
+
+    let mut results = Vec::new();
+    for r in rows {
+        results.push(r.map_err(|e| CartographError::Database(format!("Failed to map dead symbol record: {e}")))?);
+    }
+
+    let _ = conn.execute("DELETE FROM _temp_deadcode_roots;", []);
+
+    Ok(results)
+}
+
+pub fn get_ghost_dependencies(conn: &Connection) -> Result<Vec<String>> {
+    let sql = r#"
+        SELECT DISTINCT e.target_id
+        FROM edges e
+        WHERE e.kind = 'imports'
+        ORDER BY e.target_id ASC;
+    "#;
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| CartographError::Database(format!("Failed to prepare get_ghost_dependencies: {e}")))?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| CartographError::Database(format!("Failed to execute get_ghost_dependencies: {e}")))?;
+    let mut results = Vec::new();
+    for r in rows {
+        results.push(r.map_err(|e| CartographError::Database(format!("Failed to read import target: {e}")))?);
+    }
+    Ok(results)
+}
+
+pub fn get_test_only_reachable_symbols(
+    conn: &Connection,
+    prod_root_ids: &[String],
+) -> Result<Vec<String>> {
+    conn.execute(
+        "CREATE TEMP TABLE IF NOT EXISTS _temp_deadcode_roots (id TEXT PRIMARY KEY);",
+        [],
+    )
+    .map_err(|e| CartographError::Database(format!("Failed to create temp roots table: {e}")))?;
+    conn.execute("DELETE FROM _temp_deadcode_roots;", [])
+        .map_err(|e| CartographError::Database(format!("Failed to clear temp roots table: {e}")))?;
+
+    {
+        let mut insert_stmt = conn
+            .prepare("INSERT OR IGNORE INTO _temp_deadcode_roots (id) VALUES (?1);")
+            .map_err(|e| CartographError::Database(format!("Failed to prepare temp root insert: {e}")))?;
+        for root_id in prod_root_ids {
+            insert_stmt
+                .execute([root_id])
+                .map_err(|e| CartographError::Database(format!("Failed to insert temp root: {e}")))?;
+        }
+    }
+
+    let sql = r#"
+        WITH RECURSIVE prod_reachable(node_id) AS (
+            SELECT id FROM _temp_deadcode_roots
+            UNION
+            SELECT e.target_id
+            FROM prod_reachable pr
+            JOIN edges e ON pr.node_id = e.source_id
+            WHERE e.kind IN ('calls', 'imports', 'references', 'extends', 'implements', 'maps_to')
+        ),
+        test_reachable(node_id) AS (
+            SELECT id FROM nodes WHERE kind = 'test' OR filepath LIKE '%test%' OR filepath LIKE '%spec%'
+            UNION
+            SELECT e.target_id
+            FROM test_reachable tr
+            JOIN edges e ON tr.node_id = e.source_id
+            WHERE e.kind IN ('calls', 'imports', 'references', 'extends', 'implements', 'maps_to', 'tests')
+        )
+        SELECT DISTINCT n.id
+        FROM nodes n
+        WHERE n.id IN (SELECT node_id FROM test_reachable)
+          AND n.id NOT IN (SELECT node_id FROM prod_reachable)
+          AND n.kind NOT IN ('test', 'module', 'file')
+        ORDER BY n.id ASC;
+    "#;
+
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| CartographError::Database(format!("Failed to prepare get_test_only_reachable_symbols: {e}")))?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| CartographError::Database(format!("Failed to execute get_test_only_reachable_symbols: {e}")))?;
+    let mut results = Vec::new();
+    for r in rows {
+        results.push(r.map_err(|e| CartographError::Database(format!("Failed to read test-only reachable node id: {e}")))?);
+    }
+    let _ = conn.execute("DELETE FROM _temp_deadcode_roots;", []);
     Ok(results)
 }
 

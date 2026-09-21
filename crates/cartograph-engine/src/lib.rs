@@ -1,4 +1,5 @@
 pub mod complexity;
+pub mod deadcode;
 pub mod discovery;
 pub mod error;
 pub mod hasher;
@@ -16,6 +17,9 @@ pub mod watcher;
 // Re-export core abstractions
 pub use complexity::{
     ComplexityAnalysisOptions, ComplexityEngine,
+};
+pub use deadcode::{
+    export_ai_ignore_mask, BaselineManager, DeadCodeEngine, DeadCodeRunOptions, PruneAdvisor,
 };
 pub use discovery::{DiscoveryConfig, FileWalker, ZeroCopyBuffer};
 pub use error::{EngineError, Result};

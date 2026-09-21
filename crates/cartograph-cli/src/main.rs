@@ -23,6 +23,9 @@ use cartograph_engine::watcher::{FileWatcher, WatchEvent, WatcherSettings};
 use cartograph_engine::{
     ArchBaselineManager, ArchLinter, ArchOutputFormat, GitDiffScope, RouteEngine,
 };
+use cartograph_core::config::{DeadCodeCategoryFilter, DeadCodeConfig};
+use cartograph_engine::deadcode::{DeadCodeEngine, DeadCodeRunOptions, PruneAdvisor};
+mod deadcode_formatters;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -96,6 +99,10 @@ enum Commands {
         /// Enable real-time architectural boundary and cycle linting on file save (<500µs)
         #[arg(long)]
         lint_arch: bool,
+
+        /// Enable real-time accidental orphan alerts on file save (<1ms)
+        #[arg(long)]
+        deadcode: bool,
     },
 
     /// Display code graph statistics and database health
@@ -584,6 +591,126 @@ enum Commands {
         #[arg(short, long)]
         interactive: bool,
     },
+
+    /// Detect dead code, zombie functions, abandoned UI components, and ghost dependencies (<20ms)
+    #[command(name = "deadcode", alias = "dead", alias = "orphan", alias = "dead-code")]
+    DeadCode {
+        /// Root directory of repository
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Database profile or SQLite file path
+        #[arg(short, long, default_value = "default")]
+        db: String,
+
+        /// Inspect only abandoned UI components (React, Vue, Svelte)
+        #[arg(long)]
+        components_only: bool,
+
+        /// Inspect only dangling or unmounted API routes and dead parameters
+        #[arg(long)]
+        routes_only: bool,
+
+        /// Inspect only abandoned database models & SQL tables
+        #[arg(long)]
+        models_only: bool,
+
+        /// Inspect only dead islands (mutual-reference cyclic clusters)
+        #[arg(long)]
+        islands_only: bool,
+
+        /// Inspect only 100% dead zombie files
+        #[arg(long)]
+        files_only: bool,
+
+        /// Highlight production code kept alive solely by unit tests (Test-Only Zombies)
+        #[arg(long)]
+        test_orphans: bool,
+
+        /// Inspect unread struct/class fields
+        #[arg(long)]
+        unread_fields: bool,
+
+        /// Inspect unused enum variants
+        #[arg(long)]
+        unused_variants: bool,
+
+        /// Inspect unused third-party manifest dependencies (npm, Cargo, PyPI)
+        #[arg(long)]
+        ghost_deps: bool,
+
+        /// Inspect @deprecated symbols ready for cremation or track migration progress
+        #[arg(long)]
+        deprecated_only: bool,
+
+        /// Minimum physical lines of code for reported symbols (default: 5)
+        #[arg(long)]
+        min_lines: Option<usize>,
+
+        /// Minimum confidence threshold (0.0 to 1.0, default: 0.75)
+        #[arg(long)]
+        min_confidence: Option<f64>,
+
+        /// Generate .contextignore to shield AI coding agents from dead code ingestion
+        #[arg(long)]
+        export_ai_ignore: Option<PathBuf>,
+
+        /// Zero-risk blast-radius simulation of pruning a symbol
+        #[arg(long)]
+        simulate_prune: Option<String>,
+
+        /// Generate self-contained AI refactoring prompt to safely prune a symbol or island
+        #[arg(long)]
+        prompt_prune: Option<String>,
+
+        /// Scope analysis to git diff range (e.g. "origin/main...HEAD")
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Scope analysis to uncommitted git staged changes
+        #[arg(long)]
+        staged: bool,
+
+        /// CI/CD Gate: fail with exit code 1 if any dead code is detected
+        #[arg(long)]
+        fail_on_deadcode: bool,
+
+        /// CI/CD Gate: fail with exit code 1 if newly introduced dead code or accidental orphans exist
+        #[arg(long)]
+        fail_on_new_deadcode: bool,
+
+        /// Record current dead code to baseline technical debt file
+        #[arg(long)]
+        record_baseline: Option<PathBuf>,
+
+        /// Path to technical debt baseline file
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+
+        /// Automatically prune resolved items from baseline (ratchet improvements)
+        #[arg(long)]
+        ratchet: bool,
+
+        /// Presentation output format: terminal, html, markdown, sarif, json, xml (default: terminal)
+        #[arg(short, long)]
+        format: Option<String>,
+
+        /// Output results formatted as JSON (shorthand for --format json)
+        #[arg(long)]
+        json: bool,
+
+        /// Output results formatted as HTML dashboard (shorthand for --format html)
+        #[arg(long)]
+        html: bool,
+
+        /// Output results formatted as SARIF 2.1.0 (shorthand for --format sarif)
+        #[arg(long)]
+        sarif: bool,
+
+        /// Interactive terminal mode (split-pane TUI explorer)
+        #[arg(short = 'i', long)]
+        interactive: bool,
+    },
 }
 
 /// Resolve storage config and ensure database parent directories exist
@@ -706,6 +833,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             debounce,
             verbose,
             lint_arch,
+            deadcode,
         } => {
             let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
             let (storage_cfg, db_path) = resolve_storage_config(&canonical_root, &db);
@@ -717,12 +845,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None
             };
 
+            let deadcode_cfg = if deadcode {
+                Some(DeadCodeConfig::default())
+            } else {
+                None
+            };
+
             let settings = WatcherSettings {
                 root_path: canonical_root.clone(),
                 debounce_duration: Duration::from_millis(debounce),
                 cst_cache_capacity: 500,
                 track_blast_radius: true,
                 lint_arch: arch_cfg,
+                deadcode: deadcode_cfg,
             };
 
             let watcher = FileWatcher::new(backend, settings);
@@ -821,6 +956,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     cycles_count.to_string().yellow().bold(),
                                     duration_ms
                                 );
+                            }
+                        }
+                        WatchEvent::AccidentalOrphanDetected {
+                            severed_by_file,
+                            orphaned_symbols,
+                            duration_us,
+                        } => {
+                            let duration_ms = duration_us as f64 / 1000.0;
+                            println!(
+                                "[{}] {} Accidental Orphan: Editing {} severed caller to {} symbol(s) in {:.2}ms",
+                                now.dimmed(),
+                                "DEAD-CODE".bold().yellow(),
+                                severed_by_file.bold(),
+                                orphaned_symbols.len().to_string().bold().red(),
+                                duration_ms
+                            );
+                            for orphan in orphaned_symbols.iter().take(3) {
+                                println!(
+                                    "           └── {} ({}:{}) [Conf: {:.2}]",
+                                    orphan.name.bold(),
+                                    orphan.filepath.dimmed(),
+                                    orphan.start_line,
+                                    orphan.confidence
+                                );
+                            }
+                            if orphaned_symbols.len() > 3 {
+                                println!("           ... and {} more", orphaned_symbols.len() - 3);
                             }
                         }
                         WatchEvent::Error { message } => {
@@ -1617,6 +1779,177 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         max_h
                     );
                     std::process::exit(1);
+                }
+            }
+        }
+
+        Commands::DeadCode {
+            path,
+            db,
+            components_only,
+            routes_only,
+            models_only,
+            islands_only,
+            files_only,
+            test_orphans,
+            unread_fields,
+            unused_variants,
+            ghost_deps,
+            deprecated_only,
+            min_lines,
+            min_confidence,
+            export_ai_ignore,
+            simulate_prune,
+            prompt_prune,
+            branch,
+            staged,
+            fail_on_deadcode,
+            fail_on_new_deadcode,
+            record_baseline,
+            baseline,
+            ratchet,
+            format,
+            json,
+            html,
+            sarif,
+            interactive,
+        } => {
+            let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
+            let (storage_cfg, _db_path) = resolve_storage_config(&canonical_root, &db);
+            let backend: std::sync::Arc<dyn cartograph_core::backend::GraphStoreBackend> = std::sync::Arc::from(create_backend(&storage_cfg)?);
+
+            // Handle simulate_prune if requested
+            if let Some(target) = simulate_prune {
+                let advisor = PruneAdvisor::new(backend.clone(), canonical_root.clone());
+                let report = advisor.simulate_prune(&target).await?;
+                println!("{}", "🔮 Speculative Prune Blast-Radius Simulation".bold().cyan());
+                println!("Target Symbol: {}", target.bold());
+                println!("Affected Files: {}", report.total_affected_files);
+                println!("Affected Nodes: {}", report.total_affected_nodes);
+                println!("Blast Radius Risk: {:?}", report.risk.level);
+                if report.risk.level == RiskLevel::Low {
+                    println!("{}", "✔ Safe to prune: No living roots or callers depend on this symbol!".green().bold());
+                } else {
+                    println!("{}", "⚠️ Warning: Pruning this symbol may cause downstream breakage:".yellow().bold());
+                    for path in &report.paths_to_entrypoints {
+                        println!("  └── {} ──► {} ({} hops)", path.root_id.dimmed(), path.target_id.bold(), path.hops);
+                    }
+                }
+                return Ok(());
+            }
+
+            // Determine category filter
+            let category_filter = if components_only {
+                DeadCodeCategoryFilter::Components
+            } else if routes_only {
+                DeadCodeCategoryFilter::Routes
+            } else if models_only {
+                DeadCodeCategoryFilter::Models
+            } else if islands_only {
+                DeadCodeCategoryFilter::Islands
+            } else if files_only {
+                DeadCodeCategoryFilter::Files
+            } else if test_orphans {
+                DeadCodeCategoryFilter::TestOrphans
+            } else if unread_fields {
+                DeadCodeCategoryFilter::UnreadFields
+            } else if unused_variants {
+                DeadCodeCategoryFilter::UnusedVariants
+            } else if ghost_deps {
+                DeadCodeCategoryFilter::GhostDependencies
+            } else if deprecated_only {
+                DeadCodeCategoryFilter::Deprecated
+            } else {
+                DeadCodeCategoryFilter::All
+            };
+
+            let config = DeadCodeConfig::default();
+            let engine = DeadCodeEngine::new(backend.clone(), config, canonical_root.clone());
+
+            let options = DeadCodeRunOptions {
+                category_filter,
+                min_confidence,
+                min_lines,
+                baseline_path: baseline,
+                record_baseline_path: record_baseline,
+                ratchet,
+                git_branch: branch,
+                git_staged: staged,
+                export_ai_ignore: export_ai_ignore.clone(),
+            };
+
+            let report = engine.run(options).await?;
+
+            // Handle prompt_prune if requested
+            if let Some(target) = prompt_prune {
+                let advisor = PruneAdvisor::new(backend.clone(), canonical_root.clone());
+                if let Some(sym) = report.dead_symbols.iter().find(|s| s.name == target || s.name.contains(&target)) {
+                    let island = sym.island_id.as_ref().and_then(|iid| report.dead_islands.iter().find(|isl| isl.id == *iid));
+                    let prompt = advisor.generate_ai_prune_prompt(sym, island);
+                    println!("{prompt}");
+                } else {
+                    eprintln!("{} Symbol '{}' not found in dead code report.", "Error:".red().bold(), target);
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+
+            // Presentation Output
+            let output_str = if json {
+                deadcode_formatters::JsonFormatter::format(&report)
+            } else if html {
+                deadcode_formatters::HtmlFormatter::format(&report)
+            } else if sarif {
+                deadcode_formatters::SarifFormatter::format(&report)
+            } else if interactive {
+                deadcode_formatters::TuiFormatter::render(&report)
+            } else if let Some(ref f) = format {
+                match f.to_lowercase().as_str() {
+                    "json" => deadcode_formatters::JsonFormatter::format(&report),
+                    "html" => deadcode_formatters::HtmlFormatter::format(&report),
+                    "sarif" => deadcode_formatters::SarifFormatter::format(&report),
+                    "markdown" | "md" => deadcode_formatters::MarkdownFormatter::format(&report),
+                    "xml" | "agent-xml" => deadcode_formatters::AgentXmlFormatter::format(&report),
+                    "tui" => deadcode_formatters::TuiFormatter::render(&report),
+                    _ => deadcode_formatters::TerminalFormatter::format(&report),
+                }
+            } else if !io::stdout().is_terminal() {
+                deadcode_formatters::JsonFormatter::format(&report)
+            } else {
+                deadcode_formatters::TerminalFormatter::format(&report)
+            };
+
+            print!("{output_str}");
+
+            if let Some(ref ai_path) = export_ai_ignore {
+                println!(
+                    "{} Exported AI ignore mask to: {}",
+                    "✔".green().bold(),
+                    ai_path.display().to_string().cyan()
+                );
+            }
+
+            // CI Quality Gates
+            if fail_on_deadcode && !report.dead_symbols.is_empty() {
+                eprintln!(
+                    "{} CI Quality Gate Failed: {} dead code symbols detected.",
+                    "FAIL:".red().bold(),
+                    report.dead_symbols.len()
+                );
+                std::process::exit(1);
+            }
+
+            if fail_on_new_deadcode {
+                if let Some(ref delta) = report.pr_delta {
+                    if !delta.newly_introduced.is_empty() || !delta.newly_orphaned.is_empty() {
+                        eprintln!(
+                            "{} CI Quality Gate Failed: PR introduces {} newly authored and {} newly orphaned dead symbols.",
+                            "FAIL:".red().bold(),
+                            delta.newly_introduced.len(),
+                            delta.newly_orphaned.len()
+                        );
+                        std::process::exit(1);
+                    }
                 }
             }
         }
