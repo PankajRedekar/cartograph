@@ -1,0 +1,41 @@
+# 🗺️ Cartograph Project Configuration (cartograph.toml)
+
+[project]
+name = "cartograph"
+version = "0.2.0"
+profile = "monorepo"
+
+[storage]
+backend = "sqlite"
+
+[storage.sqlite]
+path = ".cartograph/cartograph.db"
+mmap_size = 268435456 # 256MB
+busy_timeout_ms = 5000
+journal_mode = "WAL"
+synchronous = "NORMAL"
+
+[lint_arch]
+detect_cycles = true
+cycle_granularity = "file"
+coupling = "all"
+strict = true
+fail_on = "error"
+
+[lint_arch.package_encapsulation]
+enabled = true
+package_roots = ["crates/*"]
+internal_patterns = ["**/internal/**", "**/private/**"]
+entrypoints = ["lib.rs", "mod.rs", "main.rs"]
+severity = "error"
+
+[complexity]
+max_cyclomatic = 25
+max_cognitive = 20
+max_loc = 1500
+hotspot_threshold = 0.70
+
+[deadcode]
+min_confidence = 0.80
+include_ghost_deps = true
+fail_on_new_deadcode = false

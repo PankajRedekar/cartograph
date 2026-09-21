@@ -48,19 +48,24 @@ impl PackageGuard {
         // 1. Explicit internal pattern breach (e.g. **/internal/**, **/private/**)
         let is_internal = self.internal_globset.is_match(&target_norm);
 
-        // 2. Check if target is a designated public entrypoint
-        let target_filename = std::path::Path::new(&target_norm)
-            .file_name()
-            .and_then(|f| f.to_str())
-            .unwrap_or("");
+        // 2. Check if target is a designated public entrypoint (only applies to direct imports)
+        let is_entrypoint_breach =
+            if self.config.entrypoints.is_empty() || record.edge_kind != "imports" {
+                false
+            } else {
+                let target_filename = std::path::Path::new(&target_norm)
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or("");
 
-        let is_public_entrypoint = self
-            .config
-            .entrypoints
-            .iter()
-            .any(|ep| ep.eq_ignore_ascii_case(target_filename));
+                !self
+                    .config
+                    .entrypoints
+                    .iter()
+                    .any(|ep| ep.eq_ignore_ascii_case(target_filename))
+            };
 
-        if is_internal || !is_public_entrypoint {
+        if is_internal || is_entrypoint_breach {
             let fingerprint = Self::compute_fingerprint(
                 "package-encapsulation",
                 &record.source_file,
