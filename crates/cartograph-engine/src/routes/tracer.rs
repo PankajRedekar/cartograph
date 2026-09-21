@@ -1,13 +1,12 @@
+use super::normalizer::{extract_route_parameters, normalize_route_path};
+use crate::error::Result;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::model::{
-    ApiClientCallSite, ApiClientKind, FullStackRouteTrace, HttpMethod, MiddlewareNode,
-    Node, NodeKind, RouteAuthKind,
-    RouteFilterOptions, RouteHealthIssue, TraceLayer, TraceStep,
+    ApiClientCallSite, ApiClientKind, FullStackRouteTrace, HttpMethod, MiddlewareNode, Node,
+    NodeKind, RouteAuthKind, RouteFilterOptions, RouteHealthIssue, TraceLayer, TraceStep,
 };
-use crate::error::Result;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
-use super::normalizer::{extract_route_parameters, normalize_route_path};
 
 /// Architectural layer classifier for full-stack trace nodes
 pub fn classify_trace_layer(node: &Node) -> TraceLayer {
@@ -20,21 +19,47 @@ pub fn classify_trace_layer(node: &Node) -> TraceLayer {
             let scope_lower = node.scope.to_lowercase();
             let file_lower = node.filepath.to_lowercase();
 
-            if file_lower.ends_with(".tsx") || file_lower.ends_with(".jsx") || file_lower.contains("/components/") {
+            if file_lower.ends_with(".tsx")
+                || file_lower.ends_with(".jsx")
+                || file_lower.contains("/components/")
+            {
                 TraceLayer::FrontendComponent
-            } else if name_lower.contains("middleware") || scope_lower.contains("middleware") || name_lower.contains("guard") {
+            } else if name_lower.contains("middleware")
+                || scope_lower.contains("middleware")
+                || name_lower.contains("guard")
+            {
                 TraceLayer::Middleware
-            } else if name_lower.contains("controller") || scope_lower.contains("controller") || name_lower.contains("handler") || name_lower.contains("view") {
+            } else if name_lower.contains("controller")
+                || scope_lower.contains("controller")
+                || name_lower.contains("handler")
+                || name_lower.contains("view")
+            {
                 TraceLayer::Controller
-            } else if name_lower.contains("service") || scope_lower.contains("service") || name_lower.contains("usecase") {
+            } else if name_lower.contains("service")
+                || scope_lower.contains("service")
+                || name_lower.contains("usecase")
+            {
                 TraceLayer::Service
-            } else if name_lower.contains("repository") || scope_lower.contains("repository") || name_lower.contains("dao") || name_lower.contains("store") {
+            } else if name_lower.contains("repository")
+                || scope_lower.contains("repository")
+                || name_lower.contains("dao")
+                || name_lower.contains("store")
+            {
                 TraceLayer::Repository
-            } else if name_lower.contains("model") || scope_lower.contains("model") || name_lower.contains("entity") {
+            } else if name_lower.contains("model")
+                || scope_lower.contains("model")
+                || name_lower.contains("entity")
+            {
                 TraceLayer::Model
-            } else if name_lower.contains("table") || scope_lower.contains("table") || file_lower.ends_with(".sql") {
+            } else if name_lower.contains("table")
+                || scope_lower.contains("table")
+                || file_lower.ends_with(".sql")
+            {
                 TraceLayer::DatabaseTable
-            } else if name_lower.contains("task") || scope_lower.contains("task") || name_lower.contains("worker") {
+            } else if name_lower.contains("task")
+                || scope_lower.contains("task")
+                || name_lower.contains("worker")
+            {
                 TraceLayer::Worker
             } else {
                 TraceLayer::Utility
@@ -103,11 +128,15 @@ impl<'a> RouteTracer<'a> {
         let parameters = extract_route_parameters(&normalized_path);
 
         // Fetch downstream call graph
-        let max_depth = if options.max_depth == 0 { 5 } else { options.max_depth };
+        let max_depth = if options.max_depth == 0 {
+            5
+        } else {
+            options.max_depth
+        };
         let raw_traces = self
             .backend
             .get_route_downstream_traces(
-                &[route_node.id.clone()],
+                std::slice::from_ref(&route_node.id),
                 max_depth,
                 options.min_confidence,
             )
@@ -165,7 +194,7 @@ impl<'a> RouteTracer<'a> {
         // Fetch frontend UI callers
         let frontend_records = self
             .backend
-            .get_frontend_callers_for_routes(&[route_node.id.clone()])
+            .get_frontend_callers_for_routes(std::slice::from_ref(&route_node.id))
             .await
             .unwrap_or_default();
 
@@ -231,7 +260,11 @@ impl<'a> RouteTracer<'a> {
         model_names: &[String],
         options: &RouteFilterOptions,
     ) -> Result<Vec<FullStackRouteTrace>> {
-        let max_depth = if options.max_depth == 0 { 5 } else { options.max_depth };
+        let max_depth = if options.max_depth == 0 {
+            5
+        } else {
+            options.max_depth
+        };
         let route_records = self
             .backend
             .get_routes_for_models(model_names, max_depth, options.min_confidence)
@@ -262,9 +295,19 @@ mod tests {
             kind: NodeKind::Component,
             filepath: "UserCard.tsx".into(),
             scope: "".into(),
-            start_line: None, start_col: None, end_line: None, end_col: None, signature: None, docstring: None, checksum: None, metadata: None,
+            start_line: None,
+            start_col: None,
+            end_line: None,
+            end_col: None,
+            signature: None,
+            docstring: None,
+            checksum: None,
+            metadata: None,
         };
-        assert_eq!(classify_trace_layer(&component), TraceLayer::FrontendComponent);
+        assert_eq!(
+            classify_trace_layer(&component),
+            TraceLayer::FrontendComponent
+        );
 
         let service = Node {
             id: "2".into(),
@@ -272,7 +315,14 @@ mod tests {
             kind: NodeKind::Class,
             filepath: "payment_service.py".into(),
             scope: "".into(),
-            start_line: None, start_col: None, end_line: None, end_col: None, signature: None, docstring: None, checksum: None, metadata: None,
+            start_line: None,
+            start_col: None,
+            end_line: None,
+            end_col: None,
+            signature: None,
+            docstring: None,
+            checksum: None,
+            metadata: None,
         };
         assert_eq!(classify_trace_layer(&service), TraceLayer::Service);
 
@@ -282,7 +332,14 @@ mod tests {
             kind: NodeKind::Model,
             filepath: "user.rb".into(),
             scope: "".into(),
-            start_line: None, start_col: None, end_line: None, end_col: None, signature: None, docstring: None, checksum: None, metadata: None,
+            start_line: None,
+            start_col: None,
+            end_line: None,
+            end_col: None,
+            signature: None,
+            docstring: None,
+            checksum: None,
+            metadata: None,
         };
         assert_eq!(classify_trace_layer(&model), TraceLayer::Model);
     }

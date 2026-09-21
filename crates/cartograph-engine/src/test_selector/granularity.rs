@@ -1,6 +1,6 @@
+use cartograph_core::model::{SelectedTest, TestGranularity};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use cartograph_core::model::{SelectedTest, TestGranularity};
 
 pub struct GranularityAggregator;
 
@@ -28,7 +28,10 @@ impl GranularityAggregator {
             TestGranularity::Suite => {
                 let mut groups: HashMap<(String, String), Vec<SelectedTest>> = HashMap::new();
                 for test in tests {
-                    let key = (test.test_node.filepath.clone(), test.test_node.scope.clone());
+                    let key = (
+                        test.test_node.filepath.clone(),
+                        test.test_node.scope.clone(),
+                    );
                     groups.entry(key).or_default().push(test);
                 }
 
@@ -41,7 +44,10 @@ impl GranularityAggregator {
             TestGranularity::File => {
                 let mut groups: HashMap<String, Vec<SelectedTest>> = HashMap::new();
                 for test in tests {
-                    groups.entry(test.test_node.filepath.clone()).or_default().push(test);
+                    groups
+                        .entry(test.test_node.filepath.clone())
+                        .or_default()
+                        .push(test);
                 }
 
                 for (_filepath, group_tests) in groups {
@@ -104,7 +110,10 @@ impl GranularityAggregator {
         }
     }
 
-    fn merge_group(mut group: Vec<SelectedTest>, granularity: TestGranularity) -> Option<SelectedTest> {
+    fn merge_group(
+        mut group: Vec<SelectedTest>,
+        granularity: TestGranularity,
+    ) -> Option<SelectedTest> {
         if group.is_empty() {
             return None;
         }

@@ -1,5 +1,5 @@
-use colored::Colorize;
 use cartograph_core::model::ComplexityReport;
+use colored::Colorize;
 
 pub struct TuiFormatter;
 
@@ -11,8 +11,12 @@ impl TuiFormatter {
         let left_width = 45;
         let right_width = term_width - left_width - 3;
 
-        out.push_str("\n");
-        out.push_str(&format!("┌{}┬{}┐\n", "─".repeat(left_width), "─".repeat(right_width)));
+        out.push('\n');
+        out.push_str(&format!(
+            "┌{}┬{}┐\n",
+            "─".repeat(left_width),
+            "─".repeat(right_width)
+        ));
         out.push_str(&format!(
             "│ {:<left_w$} │ {:<right_w$} │\n",
             "REFACTORING HOTSPOTS (LEFT PANE)".bold(),
@@ -20,7 +24,11 @@ impl TuiFormatter {
             left_w = left_width - 1,
             right_w = right_width - 1
         ));
-        out.push_str(&format!("├{}┼{}┤\n", "─".repeat(left_width), "─".repeat(right_width)));
+        out.push_str(&format!(
+            "├{}┼{}┤\n",
+            "─".repeat(left_width),
+            "─".repeat(right_width)
+        ));
 
         let left_items = &report.top_hotspots;
         let selected_item = left_items.first();
@@ -35,7 +43,13 @@ impl TuiFormatter {
                 } else {
                     item.name.clone()
                 };
-                format!("{prefix}#{:<2} {:<22} CC:{:<2} Ch:{:.1}", idx + 1, short_name, item.complexity.cyclomatic, item.churn.churn_velocity_score)
+                format!(
+                    "{prefix}#{:<2} {:<22} CC:{:<2} Ch:{:.1}",
+                    idx + 1,
+                    short_name,
+                    item.complexity.cyclomatic,
+                    item.churn.churn_velocity_score
+                )
             } else {
                 "".to_string()
             };
@@ -44,21 +58,46 @@ impl TuiFormatter {
                 match idx {
                     0 => format!("Symbol: {}", sel.name.bold().cyan()),
                     1 => format!("File:   {}", sel.filepath.dimmed()),
-                    2 => format!("Quadrant: {:?} | Score: {:.1}/100", sel.quadrant, sel.hotspot_score),
-                    3 => format!("Cyclomatic: {} | Cognitive: {} | LOC: {}", sel.complexity.cyclomatic, sel.complexity.cognitive, sel.complexity.loc),
-                    4 => format!("Coupling: Ca: {}, Ce: {}, Instability: {:.2}", sel.coupling.in_degree, sel.coupling.out_degree, sel.coupling.instability),
-                    5 => format!("Tests Linked: {} | Deficit: {:.2}x", sel.test_deficit.associated_test_count, sel.test_deficit.test_deficit_ratio),
-                    6 => format!("AI Reasoning Ceiling: ~{} tokens (CCR: {:.3})", sel.ai_friction.estimated_tokens, sel.ai_friction.context_complexity_ratio),
-                    7 => if sel.ai_friction.is_high_hallucination_risk {
-                        "⚠️ High AI Hallucination Risk: Decompose!".yellow().bold().to_string()
-                    } else {
-                        "AI Context: Healthy within single turn".green().to_string()
-                    },
-                    8 => if let Some(gc) = &sel.god_class {
-                        format!("God-Class Index: {:.1} (Severity: {:?})", gc.god_class_index, gc.severity)
-                    } else {
-                        "".to_string()
-                    },
+                    2 => format!(
+                        "Quadrant: {:?} | Score: {:.1}/100",
+                        sel.quadrant, sel.hotspot_score
+                    ),
+                    3 => format!(
+                        "Cyclomatic: {} | Cognitive: {} | LOC: {}",
+                        sel.complexity.cyclomatic, sel.complexity.cognitive, sel.complexity.loc
+                    ),
+                    4 => format!(
+                        "Coupling: Ca: {}, Ce: {}, Instability: {:.2}",
+                        sel.coupling.in_degree, sel.coupling.out_degree, sel.coupling.instability
+                    ),
+                    5 => format!(
+                        "Tests Linked: {} | Deficit: {:.2}x",
+                        sel.test_deficit.associated_test_count, sel.test_deficit.test_deficit_ratio
+                    ),
+                    6 => format!(
+                        "AI Reasoning Ceiling: ~{} tokens (CCR: {:.3})",
+                        sel.ai_friction.estimated_tokens, sel.ai_friction.context_complexity_ratio
+                    ),
+                    7 => {
+                        if sel.ai_friction.is_high_hallucination_risk {
+                            "⚠️ High AI Hallucination Risk: Decompose!"
+                                .yellow()
+                                .bold()
+                                .to_string()
+                        } else {
+                            "AI Context: Healthy within single turn".green().to_string()
+                        }
+                    }
+                    8 => {
+                        if let Some(gc) = &sel.god_class {
+                            format!(
+                                "God-Class Index: {:.1} (Severity: {:?})",
+                                gc.god_class_index, gc.severity
+                            )
+                        } else {
+                            "".to_string()
+                        }
+                    }
                     _ => "".to_string(),
                 }
             } else {
@@ -74,7 +113,11 @@ impl TuiFormatter {
             ));
         }
 
-        out.push_str(&format!("└{}┴{}┘\n", "─".repeat(left_width), "─".repeat(right_width)));
+        out.push_str(&format!(
+            "└{}┴{}┘\n",
+            "─".repeat(left_width),
+            "─".repeat(right_width)
+        ));
         out.push_str(&"Tip: Use `cartograph complexity --prompt-refactor <symbol>` to generate full decomposition blueprint.\n".dimmed().to_string());
 
         out

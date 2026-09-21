@@ -10,7 +10,9 @@ impl TriviaBinder {
             && trimmed.len() >= 6
         {
             &trimmed[3..trimmed.len() - 3]
-        } else if (trimmed.starts_with('"') && trimmed.ends_with('"')) || (trimmed.starts_with('\'') && trimmed.ends_with('\'')) {
+        } else if (trimmed.starts_with('"') && trimmed.ends_with('"'))
+            || (trimmed.starts_with('\'') && trimmed.ends_with('\''))
+        {
             if trimmed.len() >= 2 {
                 &trimmed[1..trimmed.len() - 1]
             } else {

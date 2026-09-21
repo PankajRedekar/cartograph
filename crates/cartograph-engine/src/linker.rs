@@ -43,13 +43,14 @@ impl<'a> ReferenceResolver<'a> {
 
     /// Resolve an unresolved reference into a concrete Edge
     pub fn resolve(&self, reference: &UnresolvedReference) -> Option<Edge> {
-        let caller_file = if let Some(summary) = self.symbol_table.get_by_id(&reference.source_node_id) {
-            summary.filepath.clone()
-        } else if let Ok(parsed_uri) = cartograph_core::parse_uri(&reference.source_node_id) {
-            parsed_uri.filepath
-        } else {
-            String::new()
-        };
+        let caller_file =
+            if let Some(summary) = self.symbol_table.get_by_id(&reference.source_node_id) {
+                summary.filepath.clone()
+            } else if let Ok(parsed_uri) = cartograph_core::parse_uri(&reference.source_node_id) {
+                parsed_uri.filepath
+            } else {
+                String::new()
+            };
         let caller_file = caller_file.as_str();
 
         // Tier 1: Explicit Import Source Resolution
@@ -61,45 +62,51 @@ impl<'a> ReferenceResolver<'a> {
                 .replace('\\', "/");
 
             for (module_path, exports) in &self.symbol_table.exports_by_module {
-                if module_path.ends_with(&clean_import) || clean_import.ends_with(module_path) {
-                    if let Some(target_id) = exports.get(&reference.target_symbol) {
-                        let mut edge = Edge::new(&reference.source_node_id, target_id, reference.kind.clone());
-                        edge.metadata = Some(json!({
-                            "fidelity": "definite",
-                            "resolution": "import_source",
-                            "import_path": import_source
-                        }));
-                        return Some(edge);
-                    }
+                if (module_path.ends_with(&clean_import) || clean_import.ends_with(module_path))
+                    && let Some(target_id) = exports.get(&reference.target_symbol)
+                {
+                    let mut edge =
+                        Edge::new(&reference.source_node_id, target_id, reference.kind.clone());
+                    edge.metadata = Some(json!({
+                        "fidelity": "definite",
+                        "resolution": "import_source",
+                        "import_path": import_source
+                    }));
+                    return Some(edge);
                 }
             }
         }
 
         // Tier 2: Type-Assisted Receiver Call
-        if let Some(ref type_hint) = reference.receiver_type_hint {
-            if let Some(target) = self
+        if let Some(ref type_hint) = reference.receiver_type_hint
+            && let Some(target) = self
                 .symbol_table
                 .find_method_in_type(type_hint, &reference.target_symbol)
-            {
-                let mut edge = Edge::new(&reference.source_node_id, &target.id, reference.kind.clone());
-                edge.metadata = Some(json!({
-                    "fidelity": "definite",
-                    "resolution": "type_assisted",
-                    "receiver_type": type_hint
-                }));
-                return Some(edge);
-            }
+        {
+            let mut edge = Edge::new(
+                &reference.source_node_id,
+                &target.id,
+                reference.kind.clone(),
+            );
+            edge.metadata = Some(json!({
+                "fidelity": "definite",
+                "resolution": "type_assisted",
+                "receiver_type": type_hint
+            }));
+            return Some(edge);
         }
 
         // Tier 3: Trait / Interface Implementation Resolution
         if reference.kind == EdgeKind::Implements {
-            let candidates = self
-                .symbol_table
-                .find_by_name(&reference.target_symbol);
+            let candidates = self.symbol_table.find_by_name(&reference.target_symbol);
 
             for candidate in candidates {
                 if matches!(candidate.kind, NodeKind::Interface | NodeKind::Other(_)) {
-                    let mut edge = Edge::new(&reference.source_node_id, &candidate.id, EdgeKind::Implements);
+                    let mut edge = Edge::new(
+                        &reference.source_node_id,
+                        &candidate.id,
+                        EdgeKind::Implements,
+                    );
                     edge.metadata = Some(json!({
                         "fidelity": "definite",
                         "resolution": "trait_implementation"
@@ -144,13 +151,15 @@ impl<'a> ReferenceResolver<'a> {
             }
 
             if let Some(target) = best_candidate {
-                let kind = if Self::is_test_file(caller_file) && !Self::is_test_file(&target.filepath) {
-                    EdgeKind::Tests
-                } else {
-                    reference.kind.clone()
-                };
+                let kind =
+                    if Self::is_test_file(caller_file) && !Self::is_test_file(&target.filepath) {
+                        EdgeKind::Tests
+                    } else {
+                        reference.kind.clone()
+                    };
 
-                let all_candidate_ids: Vec<String> = candidates.iter().map(|c| c.id.clone()).collect();
+                let all_candidate_ids: Vec<String> =
+                    candidates.iter().map(|c| c.id.clone()).collect();
                 let conf_val = 1.0 / (candidates.len() as f64);
                 let mut edge = Edge::new(&reference.source_node_id, &target.id, kind);
                 edge.confidence = Some(conf_val);
@@ -166,21 +175,19 @@ impl<'a> ReferenceResolver<'a> {
         }
 
         // Tier 6: Domain-Specific Fallback (Database Tables & Models)
-        if reference.kind == EdgeKind::References {
-            if let Some(models) = self
+        if reference.kind == EdgeKind::References
+            && let Some(models) = self
                 .symbol_table
                 .db_tables
                 .get(&reference.target_symbol.to_lowercase())
-            {
-                if let Some(target) = models.first() {
-                    let mut edge = Edge::new(&reference.source_node_id, &target.id, EdgeKind::References);
-                    edge.metadata = Some(json!({
-                        "fidelity": "definite",
-                        "resolution": "db_model_reference"
-                    }));
-                    return Some(edge);
-                }
-            }
+            && let Some(target) = models.first()
+        {
+            let mut edge = Edge::new(&reference.source_node_id, &target.id, EdgeKind::References);
+            edge.metadata = Some(json!({
+                "fidelity": "definite",
+                "resolution": "db_model_reference"
+            }));
+            return Some(edge);
         }
 
         // Tier 7: Clientside Frontend API Call to Route Linking
@@ -191,7 +198,10 @@ impl<'a> ReferenceResolver<'a> {
                 || reference.target_symbol.starts_with('/'))
         {
             for route in &self.symbol_table.routes {
-                if crate::routes::frontend_linker::matches_route_pattern(&reference.target_symbol, &route.name) {
+                if crate::routes::frontend_linker::matches_route_pattern(
+                    &reference.target_symbol,
+                    &route.name,
+                ) {
                     let mut edge = Edge::new(&reference.source_node_id, &route.id, EdgeKind::Calls);
                     edge.metadata = Some(json!({
                         "fidelity": "definite",
@@ -208,10 +218,7 @@ impl<'a> ReferenceResolver<'a> {
 
     /// Resolve all references from a slice into concrete Edges
     pub fn resolve_all(&self, references: &[UnresolvedReference]) -> Vec<Edge> {
-        references
-            .iter()
-            .filter_map(|r| self.resolve(r))
-            .collect()
+        references.iter().filter_map(|r| self.resolve(r)).collect()
     }
 }
 
@@ -253,7 +260,9 @@ mod tests {
             arg_count: None,
         };
 
-        let edge = resolver.resolve(&reference).expect("Should resolve via import");
+        let edge = resolver
+            .resolve(&reference)
+            .expect("Should resolve via import");
         assert_eq!(edge.target_id, auth_node.id);
         assert_eq!(edge.kind, EdgeKind::Calls);
     }
@@ -291,7 +300,9 @@ mod tests {
             arg_count: None,
         };
 
-        let edge = resolver.resolve(&reference).expect("Should resolve via type hint");
+        let edge = resolver
+            .resolve(&reference)
+            .expect("Should resolve via type hint");
         assert_eq!(edge.target_id, user_save.id);
     }
 
@@ -328,7 +339,9 @@ mod tests {
             arg_count: None,
         };
 
-        let edge = resolver.resolve(&reference).expect("Should resolve test edge");
+        let edge = resolver
+            .resolve(&reference)
+            .expect("Should resolve test edge");
         assert_eq!(edge.target_id, target_fn.id);
         assert_eq!(edge.kind, EdgeKind::Tests); // EdgeKind upgraded to Tests!
     }

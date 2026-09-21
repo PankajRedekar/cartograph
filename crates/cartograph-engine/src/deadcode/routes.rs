@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::error::Result;
-use cartograph_core::model::{ConfidenceTier, DeadCodeCategory, DeadSymbolItem, NodeKind, RawDeadSymbolRecord};
+use cartograph_core::model::{
+    ConfidenceTier, DeadCodeCategory, DeadSymbolItem, NodeKind, RawDeadSymbolRecord,
+};
 
 /// Classifies Dangling API Routes, Dead Route Parameters, and Unused GraphQL/RPC Operations.
 pub async fn classify_dangling_routes_and_rpc(
@@ -20,7 +22,11 @@ pub async fn classify_dangling_routes_and_rpc(
             || node.name.starts_with("PATCH ");
 
         if is_route_kind || is_http_method {
-            let loc = node.end_line.unwrap_or(1).saturating_sub(node.start_line.unwrap_or(1)) as usize + 1;
+            let loc = node
+                .end_line
+                .unwrap_or(1)
+                .saturating_sub(node.start_line.unwrap_or(1)) as usize
+                + 1;
             items.push(DeadSymbolItem {
                 id: node.id.clone(),
                 name: node.name.clone(),
@@ -36,7 +42,8 @@ pub async fn classify_dangling_routes_and_rpc(
                 confidence: 0.88,
                 tier: ConfidenceTier::Medium,
                 confidence_factors: vec![cartograph_core::model::ConfidenceFactor {
-                    description: "API Route has zero frontend call-sites and zero active callers".to_string(),
+                    description: "API Route has zero frontend call-sites and zero active callers"
+                        .to_string(),
                     delta: 0.08,
                 }],
                 island_id: None,
@@ -53,7 +60,11 @@ pub async fn classify_dangling_routes_and_rpc(
             || node.filepath.ends_with(".proto");
 
         if is_rpc_kind && node.in_degree == 0 {
-            let loc = node.end_line.unwrap_or(1).saturating_sub(node.start_line.unwrap_or(1)) as usize + 1;
+            let loc = node
+                .end_line
+                .unwrap_or(1)
+                .saturating_sub(node.start_line.unwrap_or(1)) as usize
+                + 1;
             items.push(DeadSymbolItem {
                 id: node.id.clone(),
                 name: node.name.clone(),

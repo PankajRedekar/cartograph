@@ -1,4 +1,6 @@
-use cartograph_core::model::{ConfidenceTier, DeadCodeCategory, DeadSymbolItem, NodeKind, RawDeadSymbolRecord};
+use cartograph_core::model::{
+    ConfidenceTier, DeadCodeCategory, DeadSymbolItem, NodeKind, RawDeadSymbolRecord,
+};
 
 /// Evaluates unreachable symbols to identify Abandoned UI Components (React/Vue/Svelte).
 pub fn classify_abandoned_components(
@@ -13,10 +15,19 @@ pub fn classify_abandoned_components(
             || node.filepath.ends_with(".vue")
             || node.filepath.ends_with(".svelte");
 
-        let is_capitalized = node.name.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false);
+        let is_capitalized = node
+            .name
+            .chars()
+            .next()
+            .map(|c| c.is_ascii_uppercase())
+            .unwrap_or(false);
 
         if (is_component_kind || (is_ui_file && is_capitalized)) && node.in_degree == 0 {
-            let loc = node.end_line.unwrap_or(1).saturating_sub(node.start_line.unwrap_or(1)) as usize + 1;
+            let loc = node
+                .end_line
+                .unwrap_or(1)
+                .saturating_sub(node.start_line.unwrap_or(1)) as usize
+                + 1;
             components.push(DeadSymbolItem {
                 id: node.id.clone(),
                 name: node.name.clone(),
@@ -32,7 +43,9 @@ pub fn classify_abandoned_components(
                 confidence: 0.96,
                 tier: ConfidenceTier::High,
                 confidence_factors: vec![cartograph_core::model::ConfidenceFactor {
-                    description: "UI Component has zero JSX/TSX rendering sites across entire codebase".to_string(),
+                    description:
+                        "UI Component has zero JSX/TSX rendering sites across entire codebase"
+                            .to_string(),
                     delta: 0.16,
                 }],
                 island_id: None,

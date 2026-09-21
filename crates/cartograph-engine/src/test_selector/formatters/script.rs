@@ -27,7 +27,12 @@ impl ScriptFormatter {
         ));
 
         for (idx, inv) in report.runner_invocations.iter().enumerate() {
-            out.push_str(&format!("echo \"▶ [{}/{}] {}\"\n", idx + 1, report.runner_invocations.len(), inv.display_command));
+            out.push_str(&format!(
+                "echo \"▶ [{}/{}] {}\"\n",
+                idx + 1,
+                report.runner_invocations.len(),
+                inv.display_command
+            ));
             out.push_str(&format!("{}\n\n", inv.display_command));
         }
 

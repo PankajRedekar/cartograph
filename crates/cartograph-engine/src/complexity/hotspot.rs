@@ -1,5 +1,5 @@
 use cartograph_core::config::ComplexityConfig;
-use cartograph_core::model::{ComplexityMetric, CouplingMetric, ChurnMetric, HotspotQuadrant};
+use cartograph_core::model::{ChurnMetric, ComplexityMetric, CouplingMetric, HotspotQuadrant};
 
 pub struct HotspotClassifier;
 
@@ -39,10 +39,10 @@ impl HotspotClassifier {
         let is_high_churn = churn.churn_velocity_score >= 0.35 || churn.commit_count >= 5;
 
         match (is_high_complexity, is_high_churn) {
-            (true, true) => HotspotQuadrant::CriticalHotspot,       // Q1 🚨
-            (false, true) => HotspotQuadrant::ChurnHotspot,         // Q2 ⚠️
-            (false, false) => HotspotQuadrant::Healthy,             // Q3 ✅
-            (true, false) => HotspotQuadrant::StableTechnicalDebt,  // Q4 ⏳
+            (true, true) => HotspotQuadrant::CriticalHotspot, // Q1 🚨
+            (false, true) => HotspotQuadrant::ChurnHotspot,   // Q2 ⚠️
+            (false, false) => HotspotQuadrant::Healthy,       // Q3 ✅
+            (true, false) => HotspotQuadrant::StableTechnicalDebt, // Q4 ⏳
         }
     }
 }

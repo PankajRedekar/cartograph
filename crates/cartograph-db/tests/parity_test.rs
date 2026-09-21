@@ -33,7 +33,10 @@ async fn test_sqlite_and_memory_parity() {
     for backend in &backends {
         // 1. File hashing parity
         backend.set_file_hash("file1.rs", "h1").await.unwrap();
-        assert_eq!(backend.get_file_hash("file1.rs").await.unwrap(), Some("h1".to_string()));
+        assert_eq!(
+            backend.get_file_hash("file1.rs").await.unwrap(),
+            Some("h1".to_string())
+        );
 
         // 2. Nodes and edges
         let n1 = make_node("node:1", "parse_ast", "file1.rs");
@@ -43,7 +46,10 @@ async fn test_sqlite_and_memory_parity() {
         let e1 = Edge::new("node:1", "node:2", EdgeKind::Calls);
         let e2 = Edge::new("node:2", "node:3", EdgeKind::Calls);
 
-        backend.insert_batch(&[n1.clone(), n2.clone(), n3.clone()], &[e1, e2]).await.unwrap();
+        backend
+            .insert_batch(&[n1.clone(), n2.clone(), n3.clone()], &[e1, e2])
+            .await
+            .unwrap();
 
         // Check stats
         let stats = backend.stats().await.unwrap();
@@ -52,30 +58,65 @@ async fn test_sqlite_and_memory_parity() {
         assert_eq!(stats.total_files, 2);
 
         // Point lookups
-        assert_eq!(backend.get_node("node:1").await.unwrap().unwrap().name, "parse_ast");
-        assert_eq!(backend.get_nodes_by_name("build_graph").await.unwrap().len(), 1);
-        assert_eq!(backend.get_nodes_by_filepath("file1.rs").await.unwrap().len(), 2);
+        assert_eq!(
+            backend.get_node("node:1").await.unwrap().unwrap().name,
+            "parse_ast"
+        );
+        assert_eq!(
+            backend
+                .get_nodes_by_name("build_graph")
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            backend
+                .get_nodes_by_filepath("file1.rs")
+                .await
+                .unwrap()
+                .len(),
+            2
+        );
 
         // Downstream traversal
-        let downstream = backend.get_downstream_dependencies("node:1", 5).await.unwrap();
+        let downstream = backend
+            .get_downstream_dependencies("node:1", 5)
+            .await
+            .unwrap();
         let down_ids: HashSet<String> = downstream.into_iter().map(|n| n.id).collect();
-        assert_eq!(down_ids, HashSet::from(["node:2".to_string(), "node:3".to_string()]));
+        assert_eq!(
+            down_ids,
+            HashSet::from(["node:2".to_string(), "node:3".to_string()])
+        );
 
         // Upstream traversal
         let upstream = backend.get_upstream_impact("node:3", 5).await.unwrap();
         let up_ids: HashSet<String> = upstream.into_iter().map(|n| n.id).collect();
-        assert_eq!(up_ids, HashSet::from(["node:1".to_string(), "node:2".to_string()]));
+        assert_eq!(
+            up_ids,
+            HashSet::from(["node:1".to_string(), "node:2".to_string()])
+        );
 
         // Shortest path
-        let path = backend.find_shortest_path("node:1", "node:3").await.unwrap();
+        let path = backend
+            .find_shortest_path("node:1", "node:3")
+            .await
+            .unwrap();
         assert_eq!(path, vec!["node:1", "node:2", "node:3"]);
 
         // Batch edge retrieval and confidence filtering
-        let node2_edges = backend.get_edges_for_nodes(&["node:2".to_string()], 0.5).await.unwrap();
+        let node2_edges = backend
+            .get_edges_for_nodes(&["node:2".to_string()], 0.5)
+            .await
+            .unwrap();
         assert_eq!(node2_edges.len(), 2); // e1 (node:1 -> node:2) and e2 (node:2 -> node:3)
 
         // Confidence filter test
-        let high_conf_edges = backend.get_edges_for_nodes(&["node:2".to_string()], 1.5).await.unwrap();
+        let high_conf_edges = backend
+            .get_edges_for_nodes(&["node:2".to_string()], 1.5)
+            .await
+            .unwrap();
         assert_eq!(high_conf_edges.len(), 0);
 
         // Search

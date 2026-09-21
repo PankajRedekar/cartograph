@@ -1,10 +1,10 @@
+use cartograph_core::error::{CartographError, Result};
+use cartograph_core::model::{BaselineHotspotEntry, ComplexityBaseline, ComplexityRecord};
+use chrono::Utc;
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
-use chrono::Utc;
-use sha2::{Digest, Sha256};
-use cartograph_core::error::{CartographError, Result};
-use cartograph_core::model::{BaselineHotspotEntry, ComplexityBaseline, ComplexityRecord};
 
 pub struct BaselineManager;
 
@@ -38,7 +38,11 @@ impl BaselineManager {
                 filepath: r.filepath.clone(),
                 cyclomatic: r.complexity.cyclomatic,
                 cognitive: r.complexity.cognitive,
-                is_god_class: r.god_class.as_ref().map(|g| g.is_god_class).unwrap_or(false),
+                is_god_class: r
+                    .god_class
+                    .as_ref()
+                    .map(|g| g.is_god_class)
+                    .unwrap_or(false),
             })
             .collect();
 
@@ -49,10 +53,9 @@ impl BaselineManager {
             hotspots: entries,
         };
 
-        let json = serde_json::to_string_pretty(&baseline)
-            .map_err(CartographError::Serialization)?;
-        fs::write(path, json)
-            .map_err(CartographError::Io)?;
+        let json =
+            serde_json::to_string_pretty(&baseline).map_err(CartographError::Serialization)?;
+        fs::write(path, json).map_err(CartographError::Io)?;
 
         Ok(())
     }
@@ -80,17 +83,21 @@ impl BaselineManager {
             None => return Ok(0),
         };
 
-        let active_fps: HashSet<String> = active_records.iter().map(|r| r.fingerprint.clone()).collect();
+        let active_fps: HashSet<String> = active_records
+            .iter()
+            .map(|r| r.fingerprint.clone())
+            .collect();
         let initial_count = baseline.hotspots.len();
 
         // Keep only entries that are still present in active records
-        baseline.hotspots.retain(|h| active_fps.contains(&h.fingerprint));
+        baseline
+            .hotspots
+            .retain(|h| active_fps.contains(&h.fingerprint));
         let pruned_count = initial_count - baseline.hotspots.len();
 
-        let json = serde_json::to_string_pretty(&baseline)
-            .map_err(CartographError::Serialization)?;
-        fs::write(path, json)
-            .map_err(CartographError::Io)?;
+        let json =
+            serde_json::to_string_pretty(&baseline).map_err(CartographError::Serialization)?;
+        fs::write(path, json).map_err(CartographError::Io)?;
 
         Ok(pruned_count)
     }

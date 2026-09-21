@@ -30,7 +30,10 @@ impl OpenApiSynthesizer {
                         format!(
                             "{}_{}",
                             method_key,
-                            path_key.trim_matches('/').replace('/', "_").replace(['{', '}'], "")
+                            path_key
+                                .trim_matches('/')
+                                .replace('/', "_")
+                                .replace(['{', '}'], "")
                         )
                     });
 
@@ -48,7 +51,11 @@ impl OpenApiSynthesizer {
                 }
 
                 let mut responses_obj = serde_json::Map::new();
-                let status_code = if trace.method == HttpMethod::Post { "201" } else { "200" };
+                let status_code = if trace.method == HttpMethod::Post {
+                    "201"
+                } else {
+                    "200"
+                };
 
                 // Response schema references models touched if available
                 let response_content = if let Some(first_model) = trace.models_touched.first() {

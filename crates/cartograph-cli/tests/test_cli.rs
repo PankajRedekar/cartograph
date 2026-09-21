@@ -33,11 +33,7 @@ fn test_cli_index_and_status_json_pipeline() {
         "pub fn add(a: i32, b: i32) -> i32 { a + b }",
     )
     .unwrap();
-    fs::write(
-        root.join("src/main.rs"),
-        "fn main() { let x = 1; }",
-    )
-    .unwrap();
+    fs::write(root.join("src/main.rs"), "fn main() { let x = 1; }").unwrap();
 
     // 1. Cold index with --json output
     let output = Command::new(cartograph_bin())
@@ -47,7 +43,11 @@ fn test_cli_index_and_status_json_pipeline() {
         .output()
         .expect("Failed to execute cartograph index");
 
-    assert!(output.status.success(), "Index failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Index failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let json_val: serde_json::Value = serde_json::from_str(&stdout)
         .unwrap_or_else(|e| panic!("Failed to parse JSON output: {e}\nRaw output: {stdout}"));
@@ -148,7 +148,11 @@ fn test_cli_impact_help_and_simulation() {
         .output()
         .expect("Failed to execute cartograph impact");
 
-    assert!(impact_output.status.success(), "Impact failed: {}", String::from_utf8_lossy(&impact_output.stderr));
+    assert!(
+        impact_output.status.success(),
+        "Impact failed: {}",
+        String::from_utf8_lossy(&impact_output.stderr)
+    );
     let impact_stdout = String::from_utf8_lossy(&impact_output.stdout);
     let impact_json: serde_json::Value = serde_json::from_str(&impact_stdout)
         .unwrap_or_else(|e| panic!("Failed to parse impact JSON: {e}\nRaw: {impact_stdout}"));
@@ -158,3 +162,80 @@ fn test_cli_impact_help_and_simulation() {
     assert!(impact_json["total_affected_nodes"].as_u64().unwrap() >= 1);
 }
 
+#[test]
+fn test_cli_config_init_validate_show() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    // 1. Initialize hexagonal preset
+    let init_output = Command::new(cartograph_bin())
+        .arg("config")
+        .arg("init")
+        .arg("--preset")
+        .arg("hexagonal")
+        .arg("--path")
+        .arg(root.to_str().unwrap())
+        .output()
+        .expect("Failed to run config init");
+
+    assert!(init_output.status.success());
+    let init_stdout = String::from_utf8_lossy(&init_output.stdout);
+    assert!(init_stdout.contains("Initialized hexagonal configuration"));
+    assert!(root.join("cartograph.toml").exists());
+
+    // 2. Validate configuration
+    let validate_output = Command::new(cartograph_bin())
+        .arg("config")
+        .arg("validate")
+        .arg("--path")
+        .arg(root.join("cartograph.toml").to_str().unwrap())
+        .output()
+        .expect("Failed to run config validate");
+
+    assert!(validate_output.status.success());
+    let val_stdout = String::from_utf8_lossy(&validate_output.stdout);
+    assert!(val_stdout.contains("is valid!"));
+    assert!(val_stdout.contains("Arch Layers: 3"));
+
+    // 3. Show configuration in JSON
+    let show_output = Command::new(cartograph_bin())
+        .arg("config")
+        .arg("show")
+        .arg("--path")
+        .arg(root.to_str().unwrap())
+        .arg("--json")
+        .output()
+        .expect("Failed to run config show");
+
+    assert!(show_output.status.success());
+    let show_stdout = String::from_utf8_lossy(&show_output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&show_stdout).unwrap();
+    assert_eq!(parsed["storage"]["backend"], "sqlite");
+    assert_eq!(parsed["lint_arch"]["layers"].as_array().unwrap().len(), 3);
+
+    // 4. Overwrite conflict without --force fails
+    let conflict_output = Command::new(cartograph_bin())
+        .arg("config")
+        .arg("init")
+        .arg("--path")
+        .arg(root.to_str().unwrap())
+        .output()
+        .expect("Failed to run config init conflict");
+
+    assert!(!conflict_output.status.success());
+
+    // 5. Overwrite with --force succeeds
+    let force_output = Command::new(cartograph_bin())
+        .arg("config")
+        .arg("init")
+        .arg("--path")
+        .arg(root.to_str().unwrap())
+        .arg("--force")
+        .arg("--minimal")
+        .output()
+        .expect("Failed to run config init force");
+
+    assert!(force_output.status.success());
+    let force_stdout = String::from_utf8_lossy(&force_output.stdout);
+    assert!(force_stdout.contains("Initialized minimal configuration"));
+}

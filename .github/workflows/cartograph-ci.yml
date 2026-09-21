@@ -1,0 +1,76 @@
+name: Cartograph Structural Quality Gate
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 1. Fast Cargo Test & Parity Verification
+  test:
+    name: Automated Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run all workspace unit and integration tests
+        run: cargo test --workspace --all-targets
+
+  # 2. Linter & Formatting Checks
+  lint:
+    name: Clippy & Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Check code formatting
+        run: cargo fmt -- --check
+      - name: Run Clippy with zero warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  # 3. Cartograph Code Graph Intelligence Quality Gates
+  cartograph-gates:
+    name: Cartograph Structural CI Gates
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git diff branch analysis
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build and install Cartograph CLI
+        run: cargo install --path crates/cartograph-cli
+
+      - name: Index Repository Code Graph
+        run: cartograph index . --json
+
+      - name: Architectural Boundary & Cycle Gate
+        run: cartograph lint-arch --strict --fail-on error
+
+      - name: PR Dead Code & Accidental Orphan Gate
+        if: github.event_name == 'pull_request'
+        run: cartograph deadcode --branch "origin/${{ github.base_ref }}...HEAD" --fail-on-new-deadcode
+
+      - name: Complexity Delta & God-Class Hotspot Gate
+        if: github.event_name == 'pull_request'
+        run: cartograph complexity --branch "origin/${{ github.base_ref }}...HEAD" --fail-on-hotspots
+
+      - name: Predictive Test Selection & Fail-Fast Execution
+        if: github.event_name == 'pull_request'
+        run: cartograph test-selector --branch "origin/${{ github.base_ref }}...HEAD" --run --bail
+
+      - name: API Route Contract Drift Gate
+        if: github.event_name == 'pull_request'
+        run: cartograph routes --verify-contracts --branch "origin/${{ github.base_ref }}...HEAD" --fail-on-breaking

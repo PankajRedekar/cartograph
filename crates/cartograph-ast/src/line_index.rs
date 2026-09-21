@@ -53,7 +53,9 @@ impl LineIndex {
         let (start_line, start_col) = self.line_col(start_byte, source);
         let (end_line, end_col) = self.line_col(end_byte, source);
 
-        Span::new(start_byte, end_byte, start_line, start_col, end_line, end_col)
+        Span::new(
+            start_byte, end_byte, start_line, start_col, end_line, end_col,
+        )
     }
 
     /// Convert a Tree-Sitter node directly into a `Span`.

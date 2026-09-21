@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::SqliteConfig;
@@ -55,17 +55,23 @@ impl GraphStoreBackend for SqliteBackend {
         let conn = self.conn.lock();
         let mut stmt = conn
             .prepare("SELECT filepath, hash FROM file_hashes")
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_all_file_hashes: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to prepare get_all_file_hashes: {e}"))
+            })?;
 
         let rows = stmt
             .query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
             })
-            .map_err(|e| CartographError::Database(format!("Failed to query get_all_file_hashes: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to query get_all_file_hashes: {e}"))
+            })?;
 
         let mut map = HashMap::new();
         for item in rows {
-            let (path, hash) = item.map_err(|e| CartographError::Database(format!("Failed to read file hash row: {e}")))?;
+            let (path, hash) = item.map_err(|e| {
+                CartographError::Database(format!("Failed to read file hash row: {e}"))
+            })?;
             map.insert(path, hash);
         }
         Ok(map)
@@ -75,7 +81,9 @@ impl GraphStoreBackend for SqliteBackend {
         let conn = self.conn.lock();
         let mut stmt = conn
             .prepare("SELECT hash FROM file_hashes WHERE filepath = ?1")
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_file_hash: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to prepare get_file_hash: {e}"))
+            })?;
 
         let mut rows = stmt
             .query(params![filepath])
@@ -85,9 +93,9 @@ impl GraphStoreBackend for SqliteBackend {
             .next()
             .map_err(|e| CartographError::Database(format!("Failed to read file_hash: {e}")))?
         {
-            let hash: String = row
-                .get(0)
-                .map_err(|e| CartographError::Database(format!("Failed to get hash column: {e}")))?;
+            let hash: String = row.get(0).map_err(|e| {
+                CartographError::Database(format!("Failed to get hash column: {e}"))
+            })?;
             Ok(Some(hash))
         } else {
             Ok(None)
@@ -110,9 +118,9 @@ impl GraphStoreBackend for SqliteBackend {
 
     async fn delete_file_data(&self, filepath: &str) -> Result<()> {
         let mut conn = self.conn.lock();
-        let tx = conn
-            .transaction()
-            .map_err(|e| CartographError::Transaction(format!("Failed to begin delete transaction: {e}")))?;
+        let tx = conn.transaction().map_err(|e| {
+            CartographError::Transaction(format!("Failed to begin delete transaction: {e}"))
+        })?;
 
         // Delete connected edges for any nodes in this file
         tx.execute(
@@ -127,27 +135,34 @@ impl GraphStoreBackend for SqliteBackend {
 
         // Delete nodes (triggers will automatically clean up nodes_fts)
         tx.execute("DELETE FROM nodes WHERE filepath = ?1", params![filepath])
-            .map_err(|e| CartographError::Database(format!("Failed to delete nodes for file: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to delete nodes for file: {e}"))
+            })?;
 
         // Delete file hash
-        tx.execute("DELETE FROM file_hashes WHERE filepath = ?1", params![filepath])
-            .map_err(|e| CartographError::Database(format!("Failed to delete file hash: {e}")))?;
+        tx.execute(
+            "DELETE FROM file_hashes WHERE filepath = ?1",
+            params![filepath],
+        )
+        .map_err(|e| CartographError::Database(format!("Failed to delete file hash: {e}")))?;
 
-        tx.commit()
-            .map_err(|e| CartographError::Transaction(format!("Failed to commit delete transaction: {e}")))?;
+        tx.commit().map_err(|e| {
+            CartographError::Transaction(format!("Failed to commit delete transaction: {e}"))
+        })?;
 
         Ok(())
     }
 
     async fn insert_batch(&self, nodes: &[Node], edges: &[Edge]) -> Result<()> {
         let mut conn = self.conn.lock();
-        let tx = conn
-            .transaction()
-            .map_err(|e| CartographError::Transaction(format!("Failed to begin insert_batch transaction: {e}")))?;
+        let tx = conn.transaction().map_err(|e| {
+            CartographError::Transaction(format!("Failed to begin insert_batch transaction: {e}"))
+        })?;
 
         {
-            let mut node_stmt = tx.prepare_cached(
-                r#"
+            let mut node_stmt = tx
+                .prepare_cached(
+                    r#"
                 INSERT INTO nodes (
                     id, name, kind, filepath, scope,
                     start_line, start_col, end_line, end_col,
@@ -167,27 +182,32 @@ impl GraphStoreBackend for SqliteBackend {
                     checksum = excluded.checksum,
                     metadata = excluded.metadata
                 "#,
-            )
-            .map_err(|e| CartographError::Database(format!("Failed to prepare node insert: {e}")))?;
+                )
+                .map_err(|e| {
+                    CartographError::Database(format!("Failed to prepare node insert: {e}"))
+                })?;
 
             for node in nodes {
                 let metadata_json = node.metadata.as_ref().map(|m| m.to_string());
-                node_stmt.execute(params![
-                    node.id,
-                    node.name,
-                    node.kind.as_str(),
-                    node.filepath,
-                    node.scope,
-                    node.start_line,
-                    node.start_col,
-                    node.end_line,
-                    node.end_col,
-                    node.signature,
-                    node.docstring,
-                    node.checksum,
-                    metadata_json,
-                ])
-                .map_err(|e| CartographError::Database(format!("Failed to insert node {}: {e}", node.id)))?;
+                node_stmt
+                    .execute(params![
+                        node.id,
+                        node.name,
+                        node.kind.as_str(),
+                        node.filepath,
+                        node.scope,
+                        node.start_line,
+                        node.start_col,
+                        node.end_line,
+                        node.end_col,
+                        node.signature,
+                        node.docstring,
+                        node.checksum,
+                        metadata_json,
+                    ])
+                    .map_err(|e| {
+                        CartographError::Database(format!("Failed to insert node {}: {e}", node.id))
+                    })?;
             }
         }
 
@@ -202,20 +222,24 @@ impl GraphStoreBackend for SqliteBackend {
 
             for edge in edges {
                 let metadata_json = edge.metadata.as_ref().map(|m| m.to_string());
-                edge_stmt.execute(params![
-                    edge.source_id,
-                    edge.target_id,
-                    edge.kind.as_str(),
-                    metadata_json,
-                    edge.confidence.unwrap_or(1.0),
-                    edge.weight.unwrap_or(1.0),
-                ])
-                .map_err(|e| CartographError::Database(format!("Failed to insert edge: {e}")))?;
+                edge_stmt
+                    .execute(params![
+                        edge.source_id,
+                        edge.target_id,
+                        edge.kind.as_str(),
+                        metadata_json,
+                        edge.confidence.unwrap_or(1.0),
+                        edge.weight.unwrap_or(1.0),
+                    ])
+                    .map_err(|e| {
+                        CartographError::Database(format!("Failed to insert edge: {e}"))
+                    })?;
             }
         }
 
-        tx.commit()
-            .map_err(|e| CartographError::Transaction(format!("Failed to commit insert_batch: {e}")))?;
+        tx.commit().map_err(|e| {
+            CartographError::Transaction(format!("Failed to commit insert_batch: {e}"))
+        })?;
 
         Ok(())
     }
@@ -228,9 +252,11 @@ impl GraphStoreBackend for SqliteBackend {
         edges: &[Edge],
     ) -> Result<()> {
         let mut conn = self.conn.lock();
-        let tx = conn
-            .transaction()
-            .map_err(|e| CartographError::Transaction(format!("Failed to begin update_file_graph transaction: {e}")))?;
+        let tx = conn.transaction().map_err(|e| {
+            CartographError::Transaction(format!(
+                "Failed to begin update_file_graph transaction: {e}"
+            ))
+        })?;
 
         // 1. Delete all outgoing edges originating from nodes in this file
         tx.execute(
@@ -240,31 +266,48 @@ impl GraphStoreBackend for SqliteBackend {
             "#,
             params![filepath],
         )
-        .map_err(|e| CartographError::Database(format!("Failed to delete existing outgoing edges: {e}")))?;
+        .map_err(|e| {
+            CartographError::Database(format!("Failed to delete existing outgoing edges: {e}"))
+        })?;
 
         // 2. Delete removed nodes and their incoming edges
         let new_ids: HashSet<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
         {
-            let mut old_nodes_stmt = tx.prepare("SELECT id FROM nodes WHERE filepath = ?1")
-                .map_err(|e| CartographError::Database(format!("Failed to prepare select old nodes: {e}")))?;
-            let old_node_rows = old_nodes_stmt.query_map(params![filepath], |row| row.get::<_, String>(0))
-                .map_err(|e| CartographError::Database(format!("Failed to query old nodes: {e}")))?;
+            let mut old_nodes_stmt = tx
+                .prepare("SELECT id FROM nodes WHERE filepath = ?1")
+                .map_err(|e| {
+                    CartographError::Database(format!("Failed to prepare select old nodes: {e}"))
+                })?;
+            let old_node_rows = old_nodes_stmt
+                .query_map(params![filepath], |row| row.get::<_, String>(0))
+                .map_err(|e| {
+                    CartographError::Database(format!("Failed to query old nodes: {e}"))
+                })?;
 
             for old_id_res in old_node_rows {
-                let old_id = old_id_res.map_err(|e| CartographError::Database(format!("Failed to read old node id: {e}")))?;
+                let old_id = old_id_res.map_err(|e| {
+                    CartographError::Database(format!("Failed to read old node id: {e}"))
+                })?;
                 if !new_ids.contains(old_id.as_str()) {
                     tx.execute("DELETE FROM edges WHERE target_id = ?1", params![old_id])
-                        .map_err(|e| CartographError::Database(format!("Failed to delete incoming edges for removed node: {e}")))?;
+                        .map_err(|e| {
+                            CartographError::Database(format!(
+                                "Failed to delete incoming edges for removed node: {e}"
+                            ))
+                        })?;
                     tx.execute("DELETE FROM nodes WHERE id = ?1", params![old_id])
-                        .map_err(|e| CartographError::Database(format!("Failed to delete removed node: {e}")))?;
+                        .map_err(|e| {
+                            CartographError::Database(format!("Failed to delete removed node: {e}"))
+                        })?;
                 }
             }
         }
 
         // 3. Upsert new nodes
         {
-            let mut node_stmt = tx.prepare_cached(
-                r#"
+            let mut node_stmt = tx
+                .prepare_cached(
+                    r#"
                 INSERT INTO nodes (
                     id, name, kind, filepath, scope,
                     start_line, start_col, end_line, end_col,
@@ -284,27 +327,32 @@ impl GraphStoreBackend for SqliteBackend {
                     checksum = excluded.checksum,
                     metadata = excluded.metadata
                 "#,
-            )
-            .map_err(|e| CartographError::Database(format!("Failed to prepare node insert: {e}")))?;
+                )
+                .map_err(|e| {
+                    CartographError::Database(format!("Failed to prepare node insert: {e}"))
+                })?;
 
             for node in nodes {
                 let metadata_json = node.metadata.as_ref().map(|m| m.to_string());
-                node_stmt.execute(params![
-                    node.id,
-                    node.name,
-                    node.kind.as_str(),
-                    node.filepath,
-                    node.scope,
-                    node.start_line,
-                    node.start_col,
-                    node.end_line,
-                    node.end_col,
-                    node.signature,
-                    node.docstring,
-                    node.checksum,
-                    metadata_json,
-                ])
-                .map_err(|e| CartographError::Database(format!("Failed to insert node {}: {e}", node.id)))?;
+                node_stmt
+                    .execute(params![
+                        node.id,
+                        node.name,
+                        node.kind.as_str(),
+                        node.filepath,
+                        node.scope,
+                        node.start_line,
+                        node.start_col,
+                        node.end_line,
+                        node.end_col,
+                        node.signature,
+                        node.docstring,
+                        node.checksum,
+                        metadata_json,
+                    ])
+                    .map_err(|e| {
+                        CartographError::Database(format!("Failed to insert node {}: {e}", node.id))
+                    })?;
             }
         }
 
@@ -320,15 +368,18 @@ impl GraphStoreBackend for SqliteBackend {
 
             for edge in edges {
                 let metadata_json = edge.metadata.as_ref().map(|m| m.to_string());
-                edge_stmt.execute(params![
-                    edge.source_id,
-                    edge.target_id,
-                    edge.kind.as_str(),
-                    metadata_json,
-                    edge.confidence.unwrap_or(1.0),
-                    edge.weight.unwrap_or(1.0),
-                ])
-                .map_err(|e| CartographError::Database(format!("Failed to insert edge: {e}")))?;
+                edge_stmt
+                    .execute(params![
+                        edge.source_id,
+                        edge.target_id,
+                        edge.kind.as_str(),
+                        metadata_json,
+                        edge.confidence.unwrap_or(1.0),
+                        edge.weight.unwrap_or(1.0),
+                    ])
+                    .map_err(|e| {
+                        CartographError::Database(format!("Failed to insert edge: {e}"))
+                    })?;
             }
         }
 
@@ -343,8 +394,9 @@ impl GraphStoreBackend for SqliteBackend {
         )
         .map_err(|e| CartographError::Database(format!("Failed to update file hash: {e}")))?;
 
-        tx.commit()
-            .map_err(|e| CartographError::Transaction(format!("Failed to commit update_file_graph: {e}")))?;
+        tx.commit().map_err(|e| {
+            CartographError::Transaction(format!("Failed to commit update_file_graph: {e}"))
+        })?;
 
         Ok(())
     }
@@ -366,7 +418,8 @@ impl GraphStoreBackend for SqliteBackend {
             .map_err(|e| CartographError::Database(format!("Failed to query get_node: {e}")))?;
 
         if let Some(row) = rows.next() {
-            let node = row.map_err(|e| CartographError::Database(format!("Failed to read node: {e}")))?;
+            let node =
+                row.map_err(|e| CartographError::Database(format!("Failed to read node: {e}")))?;
             Ok(Some(node))
         } else {
             Ok(None)
@@ -381,17 +434,19 @@ impl GraphStoreBackend for SqliteBackend {
                    signature, docstring, checksum, metadata
             FROM nodes WHERE name = ?1 ORDER BY filepath ASC, id ASC
         "#;
-        let mut stmt = conn
-            .prepare(sql)
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_nodes_by_name: {e}")))?;
+        let mut stmt = conn.prepare(sql).map_err(|e| {
+            CartographError::Database(format!("Failed to prepare get_nodes_by_name: {e}"))
+        })?;
 
-        let rows = stmt
-            .query_map(params![name], row_to_node)
-            .map_err(|e| CartographError::Database(format!("Failed to query get_nodes_by_name: {e}")))?;
+        let rows = stmt.query_map(params![name], row_to_node).map_err(|e| {
+            CartographError::Database(format!("Failed to query get_nodes_by_name: {e}"))
+        })?;
 
         let mut nodes = Vec::new();
         for row in rows {
-            nodes.push(row.map_err(|e| CartographError::Database(format!("Failed to read node: {e}")))?);
+            nodes.push(
+                row.map_err(|e| CartographError::Database(format!("Failed to read node: {e}")))?,
+            );
         }
         Ok(nodes)
     }
@@ -404,17 +459,21 @@ impl GraphStoreBackend for SqliteBackend {
                    signature, docstring, checksum, metadata
             FROM nodes WHERE filepath = ?1 ORDER BY coalesce(start_line, 0) ASC, id ASC
         "#;
-        let mut stmt = conn
-            .prepare(sql)
-            .map_err(|e| CartographError::Database(format!("Failed to prepare get_nodes_by_filepath: {e}")))?;
+        let mut stmt = conn.prepare(sql).map_err(|e| {
+            CartographError::Database(format!("Failed to prepare get_nodes_by_filepath: {e}"))
+        })?;
 
         let rows = stmt
             .query_map(params![filepath], row_to_node)
-            .map_err(|e| CartographError::Database(format!("Failed to query get_nodes_by_filepath: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to query get_nodes_by_filepath: {e}"))
+            })?;
 
         let mut nodes = Vec::new();
         for row in rows {
-            nodes.push(row.map_err(|e| CartographError::Database(format!("Failed to read node: {e}")))?);
+            nodes.push(
+                row.map_err(|e| CartographError::Database(format!("Failed to read node: {e}")))?,
+            );
         }
         Ok(nodes)
     }
@@ -478,9 +537,9 @@ impl GraphStoreBackend for SqliteBackend {
             ORDER BY id ASC
             LIMIT ?2
         "#;
-        let mut stmt = conn
-            .prepare(fallback_sql)
-            .map_err(|e| CartographError::Database(format!("Failed to prepare fallback search: {e}")))?;
+        let mut stmt = conn.prepare(fallback_sql).map_err(|e| {
+            CartographError::Database(format!("Failed to prepare fallback search: {e}"))
+        })?;
 
         let rows = stmt
             .query_map(params![pattern, limit as i64], |row| {
@@ -492,7 +551,9 @@ impl GraphStoreBackend for SqliteBackend {
                     snippet: None,
                 })
             })
-            .map_err(|e| CartographError::Database(format!("Failed to query fallback search: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to query fallback search: {e}"))
+            })?;
 
         let mut results = Vec::new();
         for r in rows.flatten() {
@@ -501,7 +562,11 @@ impl GraphStoreBackend for SqliteBackend {
         Ok(results)
     }
 
-    async fn get_downstream_dependencies(&self, root_id: &str, max_depth: usize) -> Result<Vec<Node>> {
+    async fn get_downstream_dependencies(
+        &self,
+        root_id: &str,
+        max_depth: usize,
+    ) -> Result<Vec<Node>> {
         let conn = self.conn.lock();
         traversal::get_downstream_dependencies(&conn, root_id, max_depth)
     }
@@ -516,7 +581,11 @@ impl GraphStoreBackend for SqliteBackend {
         traversal::find_shortest_path(&conn, source_id, target_id)
     }
 
-    async fn get_edges_for_nodes(&self, node_ids: &[String], min_confidence: f64) -> Result<Vec<Edge>> {
+    async fn get_edges_for_nodes(
+        &self,
+        node_ids: &[String],
+        min_confidence: f64,
+    ) -> Result<Vec<Edge>> {
         let conn = self.conn.lock();
         traversal::get_edges_for_nodes(&conn, node_ids, min_confidence)
     }
@@ -595,10 +664,7 @@ impl GraphStoreBackend for SqliteBackend {
         traversal::get_symbol_coupling_metrics(&conn, symbol_ids)
     }
 
-    async fn get_class_member_graph(
-        &self,
-        class_id: &str,
-    ) -> Result<Vec<RawClassMemberRecord>> {
+    async fn get_class_member_graph(&self, class_id: &str) -> Result<Vec<RawClassMemberRecord>> {
         let conn = self.conn.lock();
         traversal::get_class_member_graph(&conn, class_id)
     }
@@ -641,11 +707,13 @@ impl GraphStoreBackend for SqliteBackend {
                     (SELECT COUNT(DISTINCT filepath) FROM nodes)
                 "#,
             )
-            .map_err(|e| CartographError::Database(format!("Failed to prepare stats query: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to prepare stats query: {e}"))
+            })?;
 
-        let mut rows = stmt
-            .query([])
-            .map_err(|e| CartographError::Database(format!("Failed to execute stats query: {e}")))?;
+        let mut rows = stmt.query([]).map_err(|e| {
+            CartographError::Database(format!("Failed to execute stats query: {e}"))
+        })?;
 
         let (total_nodes, total_edges, total_files) = if let Some(row) = rows
             .next()
@@ -680,7 +748,9 @@ impl GraphStoreBackend for SqliteBackend {
         let conn = self.conn.lock();
         if self.config.path != ":memory:" {
             conn.query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |_| Ok(()))
-                .map_err(|e| CartographError::Database(format!("Failed to flush WAL checkpoint: {e}")))?;
+                .map_err(|e| {
+                    CartographError::Database(format!("Failed to flush WAL checkpoint: {e}"))
+                })?;
         }
         Ok(())
     }

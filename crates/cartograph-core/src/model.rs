@@ -285,7 +285,9 @@ impl std::str::FromStr for SemVerTarget {
             "patch" => Ok(SemVerTarget::Patch),
             "minor" => Ok(SemVerTarget::Minor),
             "major" => Ok(SemVerTarget::Major),
-            other => Err(format!("Unknown SemVer target '{other}', expected patch, minor, or major")),
+            other => Err(format!(
+                "Unknown SemVer target '{other}', expected patch, minor, or major"
+            )),
         }
     }
 }
@@ -351,7 +353,9 @@ impl std::str::FromStr for RiskLevel {
             "medium" => Ok(RiskLevel::Medium),
             "high" => Ok(RiskLevel::High),
             "critical" => Ok(RiskLevel::Critical),
-            other => Err(format!("Unknown risk level '{other}', expected low, medium, high, or critical")),
+            other => Err(format!(
+                "Unknown risk level '{other}', expected low, medium, high, or critical"
+            )),
         }
     }
 }
@@ -519,7 +523,9 @@ impl std::str::FromStr for TestGranularity {
             "suite" => Ok(TestGranularity::Suite),
             "file" => Ok(TestGranularity::File),
             "package" => Ok(TestGranularity::Package),
-            other => Err(format!("Unknown test granularity: '{other}'. Use auto, case, suite, file, or package.")),
+            other => Err(format!(
+                "Unknown test granularity: '{other}'. Use auto, case, suite, file, or package."
+            )),
         }
     }
 }
@@ -937,19 +943,32 @@ pub enum ContractChangeKind {
     /// A new route endpoint was added
     RouteAdded,
     /// An endpoint's HTTP method changed (e.g. GET -> POST)
-    MethodChanged { old_method: HttpMethod, new_method: HttpMethod },
+    MethodChanged {
+        old_method: HttpMethod,
+        new_method: HttpMethod,
+    },
     /// A newly mandatory path, query, or header parameter was added without a default
-    NewRequiredParam { name: String, location: ParamLocation },
+    NewRequiredParam {
+        name: String,
+        location: ParamLocation,
+    },
     /// A parameter was removed from an endpoint
     RemovedParam { name: String },
     /// A parameter's data type changed (e.g. integer -> string)
-    ParamTypeChanged { name: String, old_type: String, new_type: String },
+    ParamTypeChanged {
+        name: String,
+        old_type: String,
+        new_type: String,
+    },
     /// A required field was added to a request body DTO
     RequiredBodyFieldAdded { field: String },
     /// A field was deleted from a response payload or DTO model
     ResponseFieldRemoved { field: String },
     /// An endpoint previously Public was elevated to Protected
-    AuthElevated { old_auth: RouteAuthKind, new_auth: RouteAuthKind },
+    AuthElevated {
+        old_auth: RouteAuthKind,
+        new_auth: RouteAuthKind,
+    },
 }
 
 /// A concrete breaking change detected between two versions of the API contract
@@ -987,7 +1006,10 @@ pub enum RouteHealthIssue {
     /// Route is registered in router/urls but handler symbol cannot be found in codebase
     DanglingHandler { handler_name: String },
     /// Route is unreachable because a preceding pattern shadows it
-    ShadowedBy { shadowing_pattern: String, line: u32 },
+    ShadowedBy {
+        shadowing_pattern: String,
+        line: u32,
+    },
     /// Mutating route (POST/PUT/DELETE/PATCH) with no authentication guard
     UnauthenticatedMutation,
     /// Handler exceeds recommended complexity or touches too many models (God Controller)
@@ -1145,8 +1167,8 @@ pub struct RawFrontendCallerRecord {
     pub url_pattern: String,
 }
 
-use chrono::{DateTime, Utc};
 use crate::config::{ArchSeverity, CycleGranularity};
+use chrono::{DateTime, Utc};
 
 /// A single node hop within a circular dependency ring
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -2003,5 +2025,3 @@ pub struct RawDeadSymbolRecord {
     pub in_degree: usize,
     pub out_degree: usize,
 }
-
-

@@ -1,9 +1,9 @@
+use cartograph_core::config::ComplexityConfig;
+use cartograph_core::model::ChurnMetric;
+use chrono::Utc;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::process::Command;
-use chrono::Utc;
-use cartograph_core::config::ComplexityConfig;
-use cartograph_core::model::ChurnMetric;
 
 pub struct GitChurnMiner;
 

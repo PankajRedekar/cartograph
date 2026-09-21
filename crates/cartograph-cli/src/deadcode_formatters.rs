@@ -1,5 +1,5 @@
-use colored::Colorize;
 use cartograph_core::model::{ConfidenceTier, DeadCodeReport};
+use colored::Colorize;
 
 pub struct TerminalFormatter;
 
@@ -27,7 +27,12 @@ impl TerminalFormatter {
         out.push_str(&"──────────────────────────────────────────────────────────────────────────────────────────────────\n".dimmed().to_string());
 
         if report.dead_symbols.is_empty() {
-            out.push_str(&format!("  {}\n", "✨ Zero dead code detected! All symbols are reachable from living roots.".green().bold()));
+            out.push_str(&format!(
+                "  {}\n",
+                "✨ Zero dead code detected! All symbols are reachable from living roots."
+                    .green()
+                    .bold()
+            ));
         } else {
             for item in report.dead_symbols.iter().take(30) {
                 let badge = match item.tier {
@@ -62,7 +67,14 @@ impl TerminalFormatter {
             }
 
             if report.dead_symbols.len() > 30 {
-                out.push_str(&format!("  ... and {} more dead symbols\n", report.dead_symbols.len() - 30).dimmed().to_string());
+                out.push_str(
+                    &format!(
+                        "  ... and {} more dead symbols\n",
+                        report.dead_symbols.len() - 30
+                    )
+                    .dimmed()
+                    .to_string(),
+                );
             }
         }
 
@@ -71,7 +83,12 @@ impl TerminalFormatter {
             out.push_str(&format!(
                 "\n⚰️  {} ({} Ready for Cremation):\n",
                 "@deprecated Symbols".bold(),
-                report.impact.ready_for_cremation_count.to_string().green().bold()
+                report
+                    .impact
+                    .ready_for_cremation_count
+                    .to_string()
+                    .green()
+                    .bold()
             ));
             for s in &report.deprecated_statuses {
                 if s.is_ready_for_cremation {
@@ -86,7 +103,9 @@ impl TerminalFormatter {
                 } else {
                     out.push_str(&format!(
                         "  • {} {} ({}:{}) ──► {} callers remaining\n",
-                        format!("[Migration: {:.0}%]", s.migration_progress_pct).yellow().bold(),
+                        format!("[Migration: {:.0}%]", s.migration_progress_pct)
+                            .yellow()
+                            .bold(),
                         s.name.bold(),
                         s.filepath.dimmed(),
                         s.start_line,
@@ -98,7 +117,11 @@ impl TerminalFormatter {
 
         // Ghost Dependencies
         if !report.ghost_dependencies.is_empty() {
-            out.push_str(&format!("\n📦 {} ({}):\n", "Ghost Dependencies (Unused Manifest Packages)".bold(), report.ghost_dependencies.len()));
+            out.push_str(&format!(
+                "\n📦 {} ({}):\n",
+                "Ghost Dependencies (Unused Manifest Packages)".bold(),
+                report.ghost_dependencies.len()
+            ));
             for g in &report.ghost_dependencies {
                 out.push_str(&format!(
                     "  • {} ({}) ──► Safe to remove: {} (Saves {:.1} MB disk, {:.1} KB bundle)\n",
@@ -113,7 +136,11 @@ impl TerminalFormatter {
 
         // Dead Islands
         if !report.dead_islands.is_empty() {
-            out.push_str(&format!("\n🏝️  {} ({} cyclic clusters):\n", "Dead Islands (Mutual-Reference Cycles)".bold(), report.dead_islands.len()));
+            out.push_str(&format!(
+                "\n🏝️  {} ({} cyclic clusters):\n",
+                "Dead Islands (Mutual-Reference Cycles)".bold(),
+                report.dead_islands.len()
+            ));
             for isl in report.dead_islands.iter().take(5) {
                 out.push_str(&format!(
                     "  • Island [{}] ({} symbols, {} LOC, ~{} tokens):\n",
@@ -123,8 +150,17 @@ impl TerminalFormatter {
                     isl.total_tokens
                 ));
                 if !isl.deletion_order.is_empty() {
-                    let order_str = isl.deletion_order.iter().take(4).cloned().collect::<Vec<_>>().join(" ──► ");
-                    out.push_str(&format!("    Clean Deletion Order: {}\n", order_str.dimmed()));
+                    let order_str = isl
+                        .deletion_order
+                        .iter()
+                        .take(4)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(" ──► ");
+                    out.push_str(&format!(
+                        "    Clean Deletion Order: {}\n",
+                        order_str.dimmed()
+                    ));
                 }
                 if !isl.cascading_package_savings.is_empty() {
                     out.push_str(&format!(
@@ -134,13 +170,24 @@ impl TerminalFormatter {
                 }
             }
             if report.dead_islands.len() > 5 {
-                out.push_str(&format!("    ... and {} more dead islands\n", report.dead_islands.len() - 5).dimmed().to_string());
+                out.push_str(
+                    &format!(
+                        "    ... and {} more dead islands\n",
+                        report.dead_islands.len() - 5
+                    )
+                    .dimmed()
+                    .to_string(),
+                );
             }
         }
 
         // Zombie Files
         if !report.zombie_files.is_empty() {
-            out.push_str(&format!("\n🧟 {} ({} files):\n", "100% Dead Zombie Files".bold(), report.zombie_files.len()));
+            out.push_str(&format!(
+                "\n🧟 {} ({} files):\n",
+                "100% Dead Zombie Files".bold(),
+                report.zombie_files.len()
+            ));
             for zf in report.zombie_files.iter().take(5) {
                 out.push_str(&format!(
                     "  • {} ({} symbols, {} LOC) ──► {}\n",
@@ -154,23 +201,44 @@ impl TerminalFormatter {
 
         // PR Delta
         if let Some(ref delta) = report.pr_delta {
-            out.push_str(&format!("\n🔄 {} (Net LOC Delta: {}):\n", "PR Git Diff Dead Code Delta".bold(), delta.net_dead_loc_delta));
+            out.push_str(&format!(
+                "\n🔄 {} (Net LOC Delta: {}):\n",
+                "PR Git Diff Dead Code Delta".bold(),
+                delta.net_dead_loc_delta
+            ));
             if !delta.newly_introduced.is_empty() {
-                out.push_str(&format!("  🚨 Newly Authored Dead Symbols: {}\n", delta.newly_introduced.len().to_string().red().bold()));
+                out.push_str(&format!(
+                    "  🚨 Newly Authored Dead Symbols: {}\n",
+                    delta.newly_introduced.len().to_string().red().bold()
+                ));
                 for sym in delta.newly_introduced.iter().take(3) {
-                    out.push_str(&format!("     • {} ({}:{})\n", sym.name.bold(), sym.filepath.dimmed(), sym.start_line));
+                    out.push_str(&format!(
+                        "     • {} ({}:{})\n",
+                        sym.name.bold(),
+                        sym.filepath.dimmed(),
+                        sym.start_line
+                    ));
                 }
             }
             if !delta.newly_orphaned.is_empty() {
-                out.push_str(&format!("  ⚠️ Newly Orphaned Symbols: {}\n", delta.newly_orphaned.len().to_string().yellow().bold()));
+                out.push_str(&format!(
+                    "  ⚠️ Newly Orphaned Symbols: {}\n",
+                    delta.newly_orphaned.len().to_string().yellow().bold()
+                ));
             }
             if !delta.resolved_symbols.is_empty() {
-                out.push_str(&format!("  ✅ Resolved / Pruned Symbols: {}\n", delta.resolved_symbols.len().to_string().green().bold()));
+                out.push_str(&format!(
+                    "  ✅ Resolved / Pruned Symbols: {}\n",
+                    delta.resolved_symbols.len().to_string().green().bold()
+                ));
             }
         }
 
         // Impact & Financial Waste
-        out.push_str(&format!("\n📊 {}:\n", "Financial & AI Context Token Waste".bold()));
+        out.push_str(&format!(
+            "\n📊 {}:\n",
+            "Financial & AI Context Token Waste".bold()
+        ));
         out.push_str(&format!(
             "  • Dead Physical LOC: {}  |  Dead SLOC: {}  |  Zombie Files: {}  |  Ghost Packages: {}\n",
             report.impact.total_dead_loc.to_string().yellow().bold(),
@@ -192,9 +260,15 @@ impl TerminalFormatter {
         ));
         out.push_str(&format!(
             "  • AI Context Shield: Run '{}' to protect AI agents.\n",
-            "cartograph deadcode --export-ai-ignore .contextignore".bold().cyan()
+            "cartograph deadcode --export-ai-ignore .contextignore"
+                .bold()
+                .cyan()
         ));
-        out.push_str(&format!("  • Scan completed in {:.2}ms.\n\n", report.duration_ms).dimmed().to_string());
+        out.push_str(
+            &format!("  • Scan completed in {:.2}ms.\n\n", report.duration_ms)
+                .dimmed()
+                .to_string(),
+        );
 
         out
     }
@@ -245,7 +319,10 @@ impl MarkdownFormatter {
                     if let Some(nxt) = next_step {
                         let safe_curr = step.replace('"', "");
                         let safe_nxt = nxt.replace('"', "");
-                        md.push_str(&format!("        node_{idx}[\"{safe_curr}\"] --> node_{}[\"{safe_nxt}\"]\n", idx + 1));
+                        md.push_str(&format!(
+                            "        node_{idx}[\"{safe_curr}\"] --> node_{}[\"{safe_nxt}\"]\n",
+                            idx + 1
+                        ));
                     }
                 }
                 md.push_str("    end\n");
@@ -365,7 +442,8 @@ pub struct HtmlFormatter;
 impl HtmlFormatter {
     pub fn format(report: &DeadCodeReport) -> String {
         let json_data = serde_json::to_string(report).unwrap_or_else(|_| "{}".to_string());
-        format!(r#"<!DOCTYPE html>
+        format!(
+            r#"<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">

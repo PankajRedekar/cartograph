@@ -76,9 +76,9 @@ pub fn parse_uri(uri: &str) -> Result<CanonicalUri, CartographError> {
         )));
     }
 
-    let kind: NodeKind = kind_part.parse().map_err(|_| {
-        CartographError::InvalidUri(format!("Invalid kind in URI: {kind_part}"))
-    })?;
+    let kind: NodeKind = kind_part
+        .parse()
+        .map_err(|_| CartographError::InvalidUri(format!("Invalid kind in URI: {kind_part}")))?;
 
     let parts: Vec<&str> = body.split("::").collect();
     if parts.len() != 3 {

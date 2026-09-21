@@ -16,21 +16,35 @@ impl MarkdownFormatter {
             "❌ **Failed** (Architectural Violations Detected)"
         };
         md.push_str(&format!("**Status**: {status}  \n"));
-        md.push_str(&format!("**Duration**: {:.2}ms  \n\n", report.summary.duration_micros as f64 / 1000.0));
+        md.push_str(&format!(
+            "**Duration**: {:.2}ms  \n\n",
+            report.summary.duration_micros as f64 / 1000.0
+        ));
 
         // Scorecard Table
         md.push_str("### Summary Scorecard\n\n");
         md.push_str("| Metric | Value |\n");
         md.push_str("| :--- | :--- |\n");
-        md.push_str(&format!("| **Files Analyzed** | `{}` |\n", report.summary.files_analyzed));
-        md.push_str(&format!("| **Dependency Edges Inspected** | `{}` |\n", report.summary.edges_inspected));
-        md.push_str(&format!("| **Active Boundary Violations** | `{}` ({} errors, {} warnings) |\n",
+        md.push_str(&format!(
+            "| **Files Analyzed** | `{}` |\n",
+            report.summary.files_analyzed
+        ));
+        md.push_str(&format!(
+            "| **Dependency Edges Inspected** | `{}` |\n",
+            report.summary.edges_inspected
+        ));
+        md.push_str(&format!(
+            "| **Active Boundary Violations** | `{}` ({} errors, {} warnings) |\n",
             report.summary.active_violations_count,
             report.summary.active_errors_count,
             report.summary.active_warnings_count
         ));
-        md.push_str(&format!("| **Baseline Suppressed Violations** | `{}` |\n", report.summary.baseline_suppressed_count));
-        md.push_str(&format!("| **Circular Dependencies** | `{}` ({} runtime, {} type-only) |\n\n",
+        md.push_str(&format!(
+            "| **Baseline Suppressed Violations** | `{}` |\n",
+            report.summary.baseline_suppressed_count
+        ));
+        md.push_str(&format!(
+            "| **Circular Dependencies** | `{}` ({} runtime, {} type-only) |\n\n",
             report.summary.cycles_count,
             report.summary.runtime_cycles_count,
             report.summary.type_cycles_count
@@ -68,7 +82,7 @@ impl MarkdownFormatter {
                     sev_icon, v.rule_name, src, v.target_file, v.message
                 ));
             }
-            md.push_str("\n");
+            md.push('\n');
 
             // Collapsible details with remediation
             md.push_str("<details>\n<summary><b>🔍 Remediation Details & Advice</b></summary>\n\n");
@@ -81,7 +95,7 @@ impl MarkdownFormatter {
                 if let Some(ref hint) = v.remediation_hint {
                     md.push_str(&format!("- **Remediation**: {}\n", hint));
                 }
-                md.push_str("\n");
+                md.push('\n');
             }
             md.push_str("</details>\n\n");
         }
@@ -107,9 +121,16 @@ impl MarkdownFormatter {
                 cut.source_file,
                 cut.target_file,
                 cut.cycles_broken_count,
-                if cut.cycles_broken_count == 1 { "" } else { "s" }
+                if cut.cycles_broken_count == 1 {
+                    ""
+                } else {
+                    "s"
+                }
             ));
-            s.push_str(&format!("- **Refactoring Advice**: {}\n\n", cut.remediation_advice));
+            s.push_str(&format!(
+                "- **Refactoring Advice**: {}\n\n",
+                cut.remediation_advice
+            ));
         }
 
         // Mermaid Graph LR
@@ -120,7 +141,10 @@ impl MarkdownFormatter {
             let src_clean = Self::sanitize_id(&hop.name);
             let tgt_clean = Self::sanitize_id(&cycle.hops[next_idx].name);
             let label = if hop.is_runtime { "calls" } else { "types" };
-            s.push_str(&format!("    {src_clean}[\"{}\"] -->|{label}| {tgt_clean}[\"{}\"]\n", hop.name, cycle.hops[next_idx].name));
+            s.push_str(&format!(
+                "    {src_clean}[\"{}\"] -->|{label}| {tgt_clean}[\"{}\"]\n",
+                hop.name, cycle.hops[next_idx].name
+            ));
         }
         s.push_str("```");
 

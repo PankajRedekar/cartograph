@@ -54,12 +54,12 @@ impl MemoryBackend {
         };
 
         for id in &node_ids {
-            if let Some(node) = state.nodes.remove(id) {
-                if let Some(name_set) = state.nodes_by_name.get_mut(&node.name) {
-                    name_set.remove(id);
-                    if name_set.is_empty() {
-                        state.nodes_by_name.remove(&node.name);
-                    }
+            if let Some(node) = state.nodes.remove(id)
+                && let Some(name_set) = state.nodes_by_name.get_mut(&node.name)
+            {
+                name_set.remove(id);
+                if name_set.is_empty() {
+                    state.nodes_by_name.remove(&node.name);
                 }
             }
 
@@ -98,7 +98,9 @@ impl GraphStoreBackend for MemoryBackend {
 
     async fn set_file_hash(&self, filepath: &str, hash: &str) -> Result<()> {
         let mut state = self.state.write();
-        state.file_hashes.insert(filepath.to_string(), hash.to_string());
+        state
+            .file_hashes
+            .insert(filepath.to_string(), hash.to_string());
         Ok(())
     }
 
@@ -118,15 +120,15 @@ impl GraphStoreBackend for MemoryBackend {
                 .map(|n| (n.name.clone(), n.filepath.clone()));
 
             if let Some((old_name, old_file)) = old_info {
-                if old_name != node.name {
-                    if let Some(names) = state.nodes_by_name.get_mut(&old_name) {
-                        names.remove(&node.id);
-                    }
+                if old_name != node.name
+                    && let Some(names) = state.nodes_by_name.get_mut(&old_name)
+                {
+                    names.remove(&node.id);
                 }
-                if old_file != node.filepath {
-                    if let Some(files) = state.nodes_by_file.get_mut(&old_file) {
-                        files.remove(&node.id);
-                    }
+                if old_file != node.filepath
+                    && let Some(files) = state.nodes_by_file.get_mut(&old_file)
+                {
+                    files.remove(&node.id);
                 }
             }
 
@@ -144,13 +146,25 @@ impl GraphStoreBackend for MemoryBackend {
         }
 
         for edge in edges {
-            let fwd_list = state.forward_edges.entry(edge.source_id.clone()).or_default();
-            if !fwd_list.iter().any(|e| e.target_id == edge.target_id && e.kind == edge.kind) {
+            let fwd_list = state
+                .forward_edges
+                .entry(edge.source_id.clone())
+                .or_default();
+            if !fwd_list
+                .iter()
+                .any(|e| e.target_id == edge.target_id && e.kind == edge.kind)
+            {
                 fwd_list.push(edge.clone());
             }
 
-            let back_list = state.backward_edges.entry(edge.target_id.clone()).or_default();
-            if !back_list.iter().any(|e| e.source_id == edge.source_id && e.kind == edge.kind) {
+            let back_list = state
+                .backward_edges
+                .entry(edge.target_id.clone())
+                .or_default();
+            if !back_list
+                .iter()
+                .any(|e| e.source_id == edge.source_id && e.kind == edge.kind)
+            {
                 back_list.push(edge.clone());
             }
         }
@@ -167,7 +181,9 @@ impl GraphStoreBackend for MemoryBackend {
     ) -> Result<()> {
         let mut state = self.state.write();
         Self::delete_file_internal(&mut state, filepath);
-        state.file_hashes.insert(filepath.to_string(), file_hash.to_string());
+        state
+            .file_hashes
+            .insert(filepath.to_string(), file_hash.to_string());
 
         for node in nodes {
             state.nodes.insert(node.id.clone(), node.clone());
@@ -184,13 +200,25 @@ impl GraphStoreBackend for MemoryBackend {
         }
 
         for edge in edges {
-            let fwd_list = state.forward_edges.entry(edge.source_id.clone()).or_default();
-            if !fwd_list.iter().any(|e| e.target_id == edge.target_id && e.kind == edge.kind) {
+            let fwd_list = state
+                .forward_edges
+                .entry(edge.source_id.clone())
+                .or_default();
+            if !fwd_list
+                .iter()
+                .any(|e| e.target_id == edge.target_id && e.kind == edge.kind)
+            {
                 fwd_list.push(edge.clone());
             }
 
-            let back_list = state.backward_edges.entry(edge.target_id.clone()).or_default();
-            if !back_list.iter().any(|e| e.source_id == edge.source_id && e.kind == edge.kind) {
+            let back_list = state
+                .backward_edges
+                .entry(edge.target_id.clone())
+                .or_default();
+            if !back_list
+                .iter()
+                .any(|e| e.source_id == edge.source_id && e.kind == edge.kind)
+            {
                 back_list.push(edge.clone());
             }
         }
@@ -228,7 +256,11 @@ impl GraphStoreBackend for MemoryBackend {
                     result.push(node.clone());
                 }
             }
-            result.sort_by(|a, b| a.start_line.cmp(&b.start_line).then_with(|| a.id.cmp(&b.id)));
+            result.sort_by(|a, b| {
+                a.start_line
+                    .cmp(&b.start_line)
+                    .then_with(|| a.id.cmp(&b.id))
+            });
             Ok(result)
         } else {
             Ok(Vec::new())
@@ -287,12 +319,20 @@ impl GraphStoreBackend for MemoryBackend {
             }
         }
 
-        matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        matches.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         matches.truncate(limit);
         Ok(matches)
     }
 
-    async fn get_downstream_dependencies(&self, root_id: &str, max_depth: usize) -> Result<Vec<Node>> {
+    async fn get_downstream_dependencies(
+        &self,
+        root_id: &str,
+        max_depth: usize,
+    ) -> Result<Vec<Node>> {
         let state = self.state.read();
         let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
@@ -388,7 +428,11 @@ impl GraphStoreBackend for MemoryBackend {
         Ok(Vec::new())
     }
 
-    async fn get_edges_for_nodes(&self, node_ids: &[String], min_confidence: f64) -> Result<Vec<Edge>> {
+    async fn get_edges_for_nodes(
+        &self,
+        node_ids: &[String],
+        min_confidence: f64,
+    ) -> Result<Vec<Edge>> {
         if node_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -407,15 +451,25 @@ impl GraphStoreBackend for MemoryBackend {
             }
             if let Some(b_edges) = state.backward_edges.get(*id) {
                 for edge in b_edges {
-                    if !id_set.contains(edge.source_id.as_str()) && edge.confidence.unwrap_or(1.0) >= min_confidence {
+                    if !id_set.contains(edge.source_id.as_str())
+                        && edge.confidence.unwrap_or(1.0) >= min_confidence
+                    {
                         edges.push(edge.clone());
                     }
                 }
             }
         }
 
-        edges.sort_by(|a, b| (&a.source_id, &a.target_id, a.kind.as_str()).cmp(&(&b.source_id, &b.target_id, b.kind.as_str())));
-        edges.dedup_by(|a, b| a.source_id == b.source_id && a.target_id == b.target_id && a.kind == b.kind);
+        edges.sort_by(|a, b| {
+            (&a.source_id, &a.target_id, a.kind.as_str()).cmp(&(
+                &b.source_id,
+                &b.target_id,
+                b.kind.as_str(),
+            ))
+        });
+        edges.dedup_by(|a, b| {
+            a.source_id == b.source_id && a.target_id == b.target_id && a.kind == b.kind
+        });
 
         Ok(edges)
     }
@@ -431,7 +485,8 @@ impl GraphStoreBackend for MemoryBackend {
             return Ok(Vec::new());
         }
 
-        let is_downstream = direction == "downstream" || direction == "dependencies" || direction == "callees";
+        let is_downstream =
+            direction == "downstream" || direction == "dependencies" || direction == "callees";
         let is_both = direction == "both";
 
         let state = self.state.read();
@@ -442,68 +497,90 @@ impl GraphStoreBackend for MemoryBackend {
 
         for root in root_ids {
             visited.insert(root.clone(), 0);
-            queue.push_back((root.clone(), root.clone(), 0, root.clone(), EdgeKind::Other("root".to_string())));
+            queue.push_back((
+                root.clone(),
+                root.clone(),
+                0,
+                root.clone(),
+                EdgeKind::Other("root".to_string()),
+            ));
         }
 
         while let Some((curr_id, root_id, depth, path_str, edge_kind)) = queue.pop_front() {
-            if depth > 0 {
-                if let Some(node) = state.nodes.get(&curr_id) {
-                    results.push(RawImpactRecord {
-                        node: node.clone(),
-                        root_id: root_id.clone(),
-                        depth,
-                        path_str: path_str.clone(),
-                        edge_kind,
-                    });
-                }
+            if depth > 0
+                && let Some(node) = state.nodes.get(&curr_id)
+            {
+                results.push(RawImpactRecord {
+                    node: node.clone(),
+                    root_id: root_id.clone(),
+                    depth,
+                    path_str: path_str.clone(),
+                    edge_kind,
+                });
             }
 
             if depth >= max_depth {
                 continue;
             }
 
-            if !is_downstream || is_both {
-                if let Some(b_edges) = state.backward_edges.get(&curr_id) {
-                    for edge in b_edges {
-                        if edge.confidence.unwrap_or(1.0) >= min_confidence {
-                            let next_id = &edge.source_id;
-                            let next_depth = depth + 1;
-                            let should_visit = match visited.get(next_id) {
-                                None => true,
-                                Some(&d) => next_depth < d,
-                            };
-                            if should_visit && !path_str.contains(next_id) {
-                                visited.insert(next_id.clone(), next_depth);
-                                let new_path = format!("{path_str}->{next_id}");
-                                queue.push_back((next_id.clone(), root_id.clone(), next_depth, new_path, edge.kind.clone()));
-                            }
+            if (!is_downstream || is_both)
+                && let Some(b_edges) = state.backward_edges.get(&curr_id)
+            {
+                for edge in b_edges {
+                    if edge.confidence.unwrap_or(1.0) >= min_confidence {
+                        let next_id = &edge.source_id;
+                        let next_depth = depth + 1;
+                        let should_visit = match visited.get(next_id) {
+                            None => true,
+                            Some(&d) => next_depth < d,
+                        };
+                        if should_visit && !path_str.contains(next_id) {
+                            visited.insert(next_id.clone(), next_depth);
+                            let new_path = format!("{path_str}->{next_id}");
+                            queue.push_back((
+                                next_id.clone(),
+                                root_id.clone(),
+                                next_depth,
+                                new_path,
+                                edge.kind.clone(),
+                            ));
                         }
                     }
                 }
             }
 
-            if is_downstream || is_both {
-                if let Some(f_edges) = state.forward_edges.get(&curr_id) {
-                    for edge in f_edges {
-                        if edge.confidence.unwrap_or(1.0) >= min_confidence {
-                            let next_id = &edge.target_id;
-                            let next_depth = depth + 1;
-                            let should_visit = match visited.get(next_id) {
-                                None => true,
-                                Some(&d) => next_depth < d,
-                            };
-                            if should_visit && !path_str.contains(next_id) {
-                                visited.insert(next_id.clone(), next_depth);
-                                let new_path = format!("{path_str}->{next_id}");
-                                queue.push_back((next_id.clone(), root_id.clone(), next_depth, new_path, edge.kind.clone()));
-                            }
+            if (is_downstream || is_both)
+                && let Some(f_edges) = state.forward_edges.get(&curr_id)
+            {
+                for edge in f_edges {
+                    if edge.confidence.unwrap_or(1.0) >= min_confidence {
+                        let next_id = &edge.target_id;
+                        let next_depth = depth + 1;
+                        let should_visit = match visited.get(next_id) {
+                            None => true,
+                            Some(&d) => next_depth < d,
+                        };
+                        if should_visit && !path_str.contains(next_id) {
+                            visited.insert(next_id.clone(), next_depth);
+                            let new_path = format!("{path_str}->{next_id}");
+                            queue.push_back((
+                                next_id.clone(),
+                                root_id.clone(),
+                                next_depth,
+                                new_path,
+                                edge.kind.clone(),
+                            ));
                         }
                     }
                 }
             }
         }
 
-        results.sort_by(|a, b| a.depth.cmp(&b.depth).then_with(|| a.node.id.cmp(&b.node.id)));
+        results.sort_by(|a, b| {
+            a.depth
+                .cmp(&b.depth)
+                .then_with(|| a.node.id.cmp(&b.node.id))
+        });
         Ok(results)
     }
 
@@ -565,18 +642,18 @@ impl GraphStoreBackend for MemoryBackend {
             if let Some(b_edges) = state.backward_edges.get(&curr_id) {
                 for edge in b_edges {
                     let conf = edge.confidence.unwrap_or(1.0);
-                    if conf >= min_confidence && edge.kind == EdgeKind::Tests {
-                        if let Some(test_node) = state.nodes.get(&edge.source_id) {
-                            if seen_test_nodes.insert((test_node.id.clone(), target_id.clone())) {
-                                results.push(RawTestRecord {
-                                    test_node: test_node.clone(),
-                                    target_symbol_id: target_id.clone(),
-                                    hop_distance: depth + 1,
-                                    path_str: format!("{path_str},{}", test_node.id),
-                                    confidence: current_conf * conf,
-                                });
-                            }
-                        }
+                    if conf >= min_confidence
+                        && edge.kind == EdgeKind::Tests
+                        && let Some(test_node) = state.nodes.get(&edge.source_id)
+                        && seen_test_nodes.insert((test_node.id.clone(), target_id.clone()))
+                    {
+                        results.push(RawTestRecord {
+                            test_node: test_node.clone(),
+                            target_symbol_id: target_id.clone(),
+                            hop_distance: depth + 1,
+                            path_str: format!("{path_str},{}", test_node.id),
+                            confidence: current_conf * conf,
+                        });
                     }
                 }
             }
@@ -622,7 +699,11 @@ impl GraphStoreBackend for MemoryBackend {
             }
         }
 
-        results.sort_by(|a, b| a.hop_distance.cmp(&b.hop_distance).then_with(|| a.test_node.id.cmp(&b.test_node.id)));
+        results.sort_by(|a, b| {
+            a.hop_distance
+                .cmp(&b.hop_distance)
+                .then_with(|| a.test_node.id.cmp(&b.test_node.id))
+        });
         Ok(results)
     }
 
@@ -642,10 +723,17 @@ impl GraphStoreBackend for MemoryBackend {
             if let Some(m) = method {
                 let upper = m.to_uppercase();
                 if upper != "ALL" && upper != "*" {
-                    let matches_name = node.name.to_uppercase().starts_with(&upper) || node.name.to_uppercase() == upper;
-                    let matches_meta = node.metadata.as_ref().and_then(|meta| {
-                        meta.get("method").and_then(|val| val.as_str()).map(|val_str| val_str.eq_ignore_ascii_case(&upper))
-                    }).unwrap_or(false);
+                    let matches_name = node.name.to_uppercase().starts_with(&upper)
+                        || node.name.to_uppercase() == upper;
+                    let matches_meta = node
+                        .metadata
+                        .as_ref()
+                        .and_then(|meta| {
+                            meta.get("method")
+                                .and_then(|val| val.as_str())
+                                .map(|val_str| val_str.eq_ignore_ascii_case(&upper))
+                        })
+                        .unwrap_or(false);
 
                     if !matches_name && !matches_meta {
                         continue;
@@ -655,11 +743,23 @@ impl GraphStoreBackend for MemoryBackend {
 
             if let Some(p) = path_pattern {
                 let matches_name = node.name.contains(p);
-                let matches_meta = node.metadata.as_ref().and_then(|meta| {
-                    let norm = meta.get("normalized_path").and_then(|v| v.as_str()).map(|s| s.contains(p)).unwrap_or(false);
-                    let raw = meta.get("route_pattern").and_then(|v| v.as_str()).map(|s| s.contains(p)).unwrap_or(false);
-                    Some(norm || raw)
-                }).unwrap_or(false);
+                let matches_meta = node
+                    .metadata
+                    .as_ref()
+                    .map(|meta| {
+                        let norm = meta
+                            .get("normalized_path")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.contains(p))
+                            .unwrap_or(false);
+                        let raw = meta
+                            .get("route_pattern")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.contains(p))
+                            .unwrap_or(false);
+                        norm || raw
+                    })
+                    .unwrap_or(false);
 
                 if !matches_name && !matches_meta {
                     continue;
@@ -669,7 +769,11 @@ impl GraphStoreBackend for MemoryBackend {
             routes.push(node.clone());
         }
 
-        routes.sort_by(|a, b| a.filepath.cmp(&b.filepath).then_with(|| a.start_line.cmp(&b.start_line)));
+        routes.sort_by(|a, b| {
+            a.filepath
+                .cmp(&b.filepath)
+                .then_with(|| a.start_line.cmp(&b.start_line))
+        });
         Ok(routes)
     }
 
@@ -689,33 +793,35 @@ impl GraphStoreBackend for MemoryBackend {
         let mut queue: VecDeque<(String, String, usize, String, String, f64)> = VecDeque::new();
 
         for route_id in route_ids {
-            if let Some(node) = state.nodes.get(route_id) {
-                if node.kind == NodeKind::Route {
-                    visited.insert(route_id.clone(), 0);
-                    queue.push_back((
-                        route_id.clone(),
-                        route_id.clone(),
-                        0,
-                        "root".to_string(),
-                        route_id.clone(),
-                        1.0,
-                    ));
-                }
+            if let Some(node) = state.nodes.get(route_id)
+                && node.kind == NodeKind::Route
+            {
+                visited.insert(route_id.clone(), 0);
+                queue.push_back((
+                    route_id.clone(),
+                    route_id.clone(),
+                    0,
+                    "root".to_string(),
+                    route_id.clone(),
+                    1.0,
+                ));
             }
         }
 
-        while let Some((curr_id, route_id, depth, hop_kind, path_str, current_conf)) = queue.pop_front() {
-            if depth > 0 {
-                if let Some(target_node) = state.nodes.get(&curr_id) {
-                    results.push(RawRouteTraceRecord {
-                        target_node: target_node.clone(),
-                        route_id: route_id.clone(),
-                        hop_distance: depth,
-                        hop_kind: hop_kind.clone(),
-                        path_str: path_str.clone(),
-                        confidence: current_conf,
-                    });
-                }
+        while let Some((curr_id, route_id, depth, hop_kind, path_str, current_conf)) =
+            queue.pop_front()
+        {
+            if depth > 0
+                && let Some(target_node) = state.nodes.get(&curr_id)
+            {
+                results.push(RawRouteTraceRecord {
+                    target_node: target_node.clone(),
+                    route_id: route_id.clone(),
+                    hop_distance: depth,
+                    hop_kind: hop_kind.clone(),
+                    path_str: path_str.clone(),
+                    confidence: current_conf,
+                });
             }
 
             if depth >= max_depth {
@@ -760,7 +866,11 @@ impl GraphStoreBackend for MemoryBackend {
             }
         }
 
-        results.sort_by(|a, b| a.route_id.cmp(&b.route_id).then_with(|| a.hop_distance.cmp(&b.hop_distance)));
+        results.sort_by(|a, b| {
+            a.route_id
+                .cmp(&b.route_id)
+                .then_with(|| a.hop_distance.cmp(&b.hop_distance))
+        });
         Ok(results)
     }
 
@@ -782,31 +892,30 @@ impl GraphStoreBackend for MemoryBackend {
         let model_id_set: HashSet<&str> = model_identifiers.iter().map(|s| s.as_str()).collect();
 
         for node in state.nodes.values() {
-            let is_match = model_id_set.contains(node.id.as_str()) || model_id_set.contains(node.name.as_str());
-            let is_model_like = matches!(node.kind, NodeKind::Model | NodeKind::Struct | NodeKind::Class | NodeKind::Other(_));
+            let is_match = model_id_set.contains(node.id.as_str())
+                || model_id_set.contains(node.name.as_str());
+            let is_model_like = matches!(
+                node.kind,
+                NodeKind::Model | NodeKind::Struct | NodeKind::Class | NodeKind::Other(_)
+            );
             if is_match && is_model_like {
                 visited.insert(node.id.clone(), 0);
-                queue.push_back((
-                    node.id.clone(),
-                    node.id.clone(),
-                    0,
-                    node.id.clone(),
-                    1.0,
-                ));
+                queue.push_back((node.id.clone(), node.id.clone(), 0, node.id.clone(), 1.0));
             }
         }
 
         while let Some((curr_id, model_id, depth, path_str, current_conf)) = queue.pop_front() {
-            if let Some(node) = state.nodes.get(&curr_id) {
-                if node.kind == NodeKind::Route && depth > 0 {
-                    results.push(RawRouteModelRecord {
-                        route_node: node.clone(),
-                        model_id: model_id.clone(),
-                        hop_distance: depth,
-                        path_str: path_str.clone(),
-                        confidence: current_conf,
-                    });
-                }
+            if let Some(node) = state.nodes.get(&curr_id)
+                && node.kind == NodeKind::Route
+                && depth > 0
+            {
+                results.push(RawRouteModelRecord {
+                    route_node: node.clone(),
+                    model_id: model_id.clone(),
+                    hop_distance: depth,
+                    path_str: path_str.clone(),
+                    confidence: current_conf,
+                });
             }
 
             if depth >= max_depth {
@@ -849,7 +958,11 @@ impl GraphStoreBackend for MemoryBackend {
             }
         }
 
-        results.sort_by(|a, b| a.hop_distance.cmp(&b.hop_distance).then_with(|| a.route_node.id.cmp(&b.route_node.id)));
+        results.sort_by(|a, b| {
+            a.hop_distance
+                .cmp(&b.hop_distance)
+                .then_with(|| a.route_node.id.cmp(&b.route_node.id))
+        });
         Ok(results)
     }
 
@@ -869,43 +982,72 @@ impl GraphStoreBackend for MemoryBackend {
             if let Some(b_edges) = state.backward_edges.get(route_id) {
                 for edge in b_edges {
                     let is_client_call = edge.kind == EdgeKind::Calls
-                        || edge.metadata.as_ref().and_then(|m| m.get("type")).and_then(|t| t.as_str()) == Some("api_client_call");
+                        || edge
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| m.get("type"))
+                            .and_then(|t| t.as_str())
+                            == Some("api_client_call");
 
-                    if is_client_call {
-                        if let Some(caller_node) = state.nodes.get(&edge.source_id) {
-                            let component_name = edge.metadata.as_ref().and_then(|m| {
-                                m.get("component").and_then(|c| c.as_str()).map(|s| s.to_string())
-                            }).or_else(|| Some(caller_node.name.clone()));
+                    if is_client_call && let Some(caller_node) = state.nodes.get(&edge.source_id) {
+                        let component_name = edge
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| {
+                                m.get("component")
+                                    .and_then(|c| c.as_str())
+                                    .map(|s| s.to_string())
+                            })
+                            .or_else(|| Some(caller_node.name.clone()));
 
-                            let client_kind = edge.metadata.as_ref().and_then(|m| {
-                                m.get("client").and_then(|c| c.as_str()).map(|s| s.to_string())
-                            }).unwrap_or_else(|| "fetch".to_string());
+                        let client_kind = edge
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| {
+                                m.get("client")
+                                    .and_then(|c| c.as_str())
+                                    .map(|s| s.to_string())
+                            })
+                            .unwrap_or_else(|| "fetch".to_string());
 
-                            let line = caller_node.start_line.unwrap_or(1);
-                            let method = edge.metadata.as_ref().and_then(|m| {
-                                m.get("method").and_then(|c| c.as_str()).map(|s| s.to_string())
-                            }).unwrap_or_else(|| "GET".to_string());
+                        let line = caller_node.start_line.unwrap_or(1);
+                        let method = edge
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| {
+                                m.get("method")
+                                    .and_then(|c| c.as_str())
+                                    .map(|s| s.to_string())
+                            })
+                            .unwrap_or_else(|| "GET".to_string());
 
-                            let url_pattern = edge.metadata.as_ref().and_then(|m| {
+                        let url_pattern = edge
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| {
                                 m.get("url").and_then(|c| c.as_str()).map(|s| s.to_string())
-                            }).unwrap_or_default();
+                            })
+                            .unwrap_or_default();
 
-                            results.push(RawFrontendCallerRecord {
-                                route_id: route_id.to_string(),
-                                caller_node: caller_node.clone(),
-                                component_name,
-                                client_kind,
-                                line,
-                                method,
-                                url_pattern,
-                            });
-                        }
+                        results.push(RawFrontendCallerRecord {
+                            route_id: route_id.to_string(),
+                            caller_node: caller_node.clone(),
+                            component_name,
+                            client_kind,
+                            line,
+                            method,
+                            url_pattern,
+                        });
                     }
                 }
             }
         }
 
-        results.sort_by(|a, b| a.route_id.cmp(&b.route_id).then_with(|| a.caller_node.id.cmp(&b.caller_node.id)));
+        results.sort_by(|a, b| {
+            a.route_id
+                .cmp(&b.route_id)
+                .then_with(|| a.caller_node.id.cmp(&b.caller_node.id))
+        });
         Ok(results)
     }
 
@@ -934,24 +1076,23 @@ impl GraphStoreBackend for MemoryBackend {
                 if let (Some(source_node), Some(target_node)) = (
                     state.nodes.get(&edge.source_id),
                     state.nodes.get(&edge.target_id),
-                ) {
-                    if source_node.filepath != target_node.filepath {
-                        results.push(RawInterFileEdgeRecord {
-                            source_id: source_node.id.clone(),
-                            source_name: source_node.name.clone(),
-                            source_kind: source_node.kind.as_str().to_string(),
-                            source_file: source_node.filepath.clone(),
-                            source_line: source_node.start_line.map(|l| l as usize),
-                            source_col: source_node.start_col.map(|c| c as usize),
-                            target_id: target_node.id.clone(),
-                            target_name: target_node.name.clone(),
-                            target_kind: target_node.kind.as_str().to_string(),
-                            target_file: target_node.filepath.clone(),
-                            edge_kind: kind_str.to_string(),
-                            confidence: edge.confidence,
-                            metadata: edge.metadata.clone(),
-                        });
-                    }
+                ) && source_node.filepath != target_node.filepath
+                {
+                    results.push(RawInterFileEdgeRecord {
+                        source_id: source_node.id.clone(),
+                        source_name: source_node.name.clone(),
+                        source_kind: source_node.kind.as_str().to_string(),
+                        source_file: source_node.filepath.clone(),
+                        source_line: source_node.start_line.map(|l| l as usize),
+                        source_col: source_node.start_col.map(|c| c as usize),
+                        target_id: target_node.id.clone(),
+                        target_name: target_node.name.clone(),
+                        target_kind: target_node.kind.as_str().to_string(),
+                        target_file: target_node.filepath.clone(),
+                        edge_kind: kind_str.to_string(),
+                        confidence: edge.confidence,
+                        metadata: edge.metadata.clone(),
+                    });
                 }
             }
         }
@@ -1023,10 +1164,7 @@ impl GraphStoreBackend for MemoryBackend {
         Ok(results)
     }
 
-    async fn get_class_member_graph(
-        &self,
-        class_id: &str,
-    ) -> Result<Vec<RawClassMemberRecord>> {
+    async fn get_class_member_graph(&self, class_id: &str) -> Result<Vec<RawClassMemberRecord>> {
         let state = self.state.read();
         let class_node = match state.nodes.get(class_id) {
             Some(node) => node,
@@ -1046,18 +1184,17 @@ impl GraphStoreBackend for MemoryBackend {
         }
 
         // 2. Members within filepath & start_line..=end_line
-        if let (Some(c_start), Some(c_end)) = (class_node.start_line, class_node.end_line) {
-            if let Some(file_node_ids) = state.nodes_by_file.get(&class_node.filepath) {
-                for node_id in file_node_ids {
-                    if node_id != class_id {
-                        if let Some(node) = state.nodes.get(node_id) {
-                            if let (Some(n_start), Some(n_end)) = (node.start_line, node.end_line) {
-                                if n_start >= c_start && n_end <= c_end {
-                                    member_ids.insert(node_id.clone());
-                                }
-                            }
-                        }
-                    }
+        if let (Some(c_start), Some(c_end)) = (class_node.start_line, class_node.end_line)
+            && let Some(file_node_ids) = state.nodes_by_file.get(&class_node.filepath)
+        {
+            for node_id in file_node_ids {
+                if node_id != class_id
+                    && let Some(node) = state.nodes.get(node_id)
+                    && let (Some(n_start), Some(n_end)) = (node.start_line, node.end_line)
+                    && n_start >= c_start
+                    && n_end <= c_end
+                {
+                    member_ids.insert(node_id.clone());
                 }
             }
         }
@@ -1076,7 +1213,11 @@ impl GraphStoreBackend for MemoryBackend {
             }
         }
 
-        results.sort_by(|a, b| a.start_line.cmp(&b.start_line).then_with(|| a.id.cmp(&b.id)));
+        results.sort_by(|a, b| {
+            a.start_line
+                .cmp(&b.start_line)
+                .then_with(|| a.id.cmp(&b.id))
+        });
         Ok(results)
     }
 
@@ -1123,11 +1264,11 @@ impl GraphStoreBackend for MemoryBackend {
                                     | EdgeKind::MapsTo
                                     | EdgeKind::Contains
                             )
+                            && !reachable.contains(&edge.target_id)
+                            && state.nodes.contains_key(&edge.target_id)
                         {
-                            if !reachable.contains(&edge.target_id) && state.nodes.contains_key(&edge.target_id) {
-                                reachable.insert(edge.target_id.clone());
-                                queue.push_back(edge.target_id.clone());
-                            }
+                            reachable.insert(edge.target_id.clone());
+                            queue.push_back(edge.target_id.clone());
                         }
                     }
                 }
@@ -1203,7 +1344,11 @@ impl GraphStoreBackend for MemoryBackend {
             }
         }
 
-        results.sort_by(|a, b| a.filepath.cmp(&b.filepath).then_with(|| a.start_line.cmp(&b.start_line)));
+        results.sort_by(|a, b| {
+            a.filepath
+                .cmp(&b.filepath)
+                .then_with(|| a.start_line.cmp(&b.start_line))
+        });
         Ok(results)
     }
 
@@ -1248,11 +1393,11 @@ impl GraphStoreBackend for MemoryBackend {
                             | EdgeKind::Extends
                             | EdgeKind::Implements
                             | EdgeKind::MapsTo
-                    ) {
-                        if !prod_reachable.contains(&edge.target_id) && state.nodes.contains_key(&edge.target_id) {
-                            prod_reachable.insert(edge.target_id.clone());
-                            queue.push_back(edge.target_id.clone());
-                        }
+                    ) && !prod_reachable.contains(&edge.target_id)
+                        && state.nodes.contains_key(&edge.target_id)
+                    {
+                        prod_reachable.insert(edge.target_id.clone());
+                        queue.push_back(edge.target_id.clone());
                     }
                 }
             }
@@ -1282,11 +1427,11 @@ impl GraphStoreBackend for MemoryBackend {
                             | EdgeKind::Implements
                             | EdgeKind::MapsTo
                             | EdgeKind::Tests
-                    ) {
-                        if !test_reachable.contains(&edge.target_id) && state.nodes.contains_key(&edge.target_id) {
-                            test_reachable.insert(edge.target_id.clone());
-                            test_queue.push_back(edge.target_id.clone());
-                        }
+                    ) && !test_reachable.contains(&edge.target_id)
+                        && state.nodes.contains_key(&edge.target_id)
+                    {
+                        test_reachable.insert(edge.target_id.clone());
+                        test_queue.push_back(edge.target_id.clone());
                     }
                 }
             }
@@ -1295,16 +1440,14 @@ impl GraphStoreBackend for MemoryBackend {
         // 3. Difference
         let mut diff = Vec::new();
         for id in test_reachable {
-            if !prod_reachable.contains(&id) {
-                if let Some(node) = state.nodes.get(&id) {
-                    if !matches!(node.kind, NodeKind::Other(ref s) if s == "test")
-                        && !matches!(node.kind, NodeKind::Module | NodeKind::File)
-                        && !node.filepath.contains("test")
-                        && !node.filepath.contains("spec")
-                    {
-                        diff.push(id);
-                    }
-                }
+            if !prod_reachable.contains(&id)
+                && let Some(node) = state.nodes.get(&id)
+                && !matches!(node.kind, NodeKind::Other(ref s) if s == "test")
+                && !matches!(node.kind, NodeKind::Module | NodeKind::File)
+                && !node.filepath.contains("test")
+                && !node.filepath.contains("spec")
+            {
+                diff.push(id);
             }
         }
         diff.sort();

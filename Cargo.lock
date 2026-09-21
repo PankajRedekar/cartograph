@@ -138,7 +138,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cartograph-ast"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cartograph-core",
  "regex",
@@ -159,7 +159,7 @@ dependencies = [
 
 [[package]]
 name = "cartograph-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cartograph-ast",
  "cartograph-core",
@@ -179,7 +179,7 @@ dependencies = [
 
 [[package]]
 name = "cartograph-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -187,11 +187,12 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "toml",
 ]
 
 [[package]]
 name = "cartograph-db"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "cartograph-core",
@@ -206,7 +207,7 @@ dependencies = [
 
 [[package]]
 name = "cartograph-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cartograph-ast",
  "cartograph-core",

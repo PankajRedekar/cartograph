@@ -5,14 +5,13 @@ use tempfile::tempdir;
 
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::{DeadCodeConfig, ProjectProfile};
-use cartograph_core::model::{
-    ConfidenceTier, DeadCodeCategory, Edge, EdgeKind, Node, NodeKind,
-};
+use cartograph_core::model::{ConfidenceTier, DeadCodeCategory, Edge, EdgeKind, Node, NodeKind};
 use cartograph_db::memory::MemoryBackend;
 use cartograph_engine::deadcode::{
-    export_ai_ignore_mask, BaselineManager, DeadCodeEngine, DeadCodeRunOptions,
+    BaselineManager, DeadCodeEngine, DeadCodeRunOptions, export_ai_ignore_mask,
 };
 
+#[allow(clippy::too_many_arguments)]
 fn make_node(
     id: &str,
     name: &str,
@@ -145,18 +144,44 @@ async fn test_deadcode_forward_reachability_and_island_detection() {
 
     // Verify living symbols are NOT reported as dead
     assert!(!report.dead_symbols.iter().any(|s| s.name == "main"));
-    assert!(!report.dead_symbols.iter().any(|s| s.name == "process_orders"));
+    assert!(
+        !report
+            .dead_symbols
+            .iter()
+            .any(|s| s.name == "process_orders")
+    );
 
     // Verify dead symbols ARE reported
-    assert!(report.dead_symbols.iter().any(|s| s.name == "legacy_router"));
-    assert!(report.dead_symbols.iter().any(|s| s.name == "legacy_helper"));
-    assert!(report.dead_symbols.iter().any(|s| s.name == "legacy_transformer"));
+    assert!(
+        report
+            .dead_symbols
+            .iter()
+            .any(|s| s.name == "legacy_router")
+    );
+    assert!(
+        report
+            .dead_symbols
+            .iter()
+            .any(|s| s.name == "legacy_helper")
+    );
+    assert!(
+        report
+            .dead_symbols
+            .iter()
+            .any(|s| s.name == "legacy_transformer")
+    );
 
     // Verify Dead Island was discovered
-    assert!(!report.dead_islands.is_empty(), "Dead Island should be detected");
+    assert!(
+        !report.dead_islands.is_empty(),
+        "Dead Island should be detected"
+    );
     let island = &report.dead_islands[0];
     assert_eq!(island.member_symbol_ids.len(), 3);
-    assert!(!island.deletion_order.is_empty(), "Deletion order should be computed");
+    assert!(
+        !island.deletion_order.is_empty(),
+        "Deletion order should be computed"
+    );
 
     // Verify impact metrics
     assert_eq!(report.impact.total_dead_symbols, 3);
@@ -222,10 +247,18 @@ async fn test_fine_grained_ast_elements_and_components() {
         None,
     );
 
-    backend.insert_batch(
-        &[root_node, component_node, unread_field_node, unused_variant_node],
-        &[],
-    ).await.unwrap();
+    backend
+        .insert_batch(
+            &[
+                root_node,
+                component_node,
+                unread_field_node,
+                unused_variant_node,
+            ],
+            &[],
+        )
+        .await
+        .unwrap();
 
     let config = DeadCodeConfig {
         profile: ProjectProfile::Application,
@@ -237,7 +270,10 @@ async fn test_fine_grained_ast_elements_and_components() {
     let engine = DeadCodeEngine::new(backend.clone(), config, repo_root);
     let report = engine.run(DeadCodeRunOptions::default()).await.unwrap();
 
-    let comp = report.dead_symbols.iter().find(|s| s.name == "OldCheckoutModal");
+    let comp = report
+        .dead_symbols
+        .iter()
+        .find(|s| s.name == "OldCheckoutModal");
     assert!(comp.is_some(), "OldCheckoutModal should be flagged");
     assert_eq!(comp.unwrap().category, DeadCodeCategory::AbandonedComponent);
 
@@ -245,9 +281,15 @@ async fn test_fine_grained_ast_elements_and_components() {
     assert!(field.is_some(), "cache_ttl should be flagged");
     assert_eq!(field.unwrap().category, DeadCodeCategory::UnreadField);
 
-    let variant = report.dead_symbols.iter().find(|s| s.name == "ArchivedStatus");
+    let variant = report
+        .dead_symbols
+        .iter()
+        .find(|s| s.name == "ArchivedStatus");
     assert!(variant.is_some(), "ArchivedStatus should be flagged");
-    assert_eq!(variant.unwrap().category, DeadCodeCategory::UnusedEnumVariant);
+    assert_eq!(
+        variant.unwrap().category,
+        DeadCodeCategory::UnusedEnumVariant
+    );
 }
 
 #[tokio::test]
@@ -282,7 +324,10 @@ async fn test_ghost_dependencies_and_manifest_scan() {
 
     let import_edge = make_edge("main_func", "pkg:lodash", EdgeKind::Imports);
 
-    backend.insert_batch(&[main_node], &[import_edge]).await.unwrap();
+    backend
+        .insert_batch(&[main_node], &[import_edge])
+        .await
+        .unwrap();
 
     let config = DeadCodeConfig {
         profile: ProjectProfile::Application,
@@ -293,13 +338,30 @@ async fn test_ghost_dependencies_and_manifest_scan() {
     let report = engine.run(DeadCodeRunOptions::default()).await.unwrap();
 
     // accounting-js should be flagged as ghost dependency
-    assert!(!report.ghost_dependencies.is_empty(), "Ghost dependencies should be detected");
-    let ghost = report.ghost_dependencies.iter().find(|g| g.package_name == "accounting-js");
-    assert!(ghost.is_some(), "accounting-js should be a ghost dependency");
-    assert_eq!(ghost.unwrap().removal_command, "npm uninstall accounting-js");
+    assert!(
+        !report.ghost_dependencies.is_empty(),
+        "Ghost dependencies should be detected"
+    );
+    let ghost = report
+        .ghost_dependencies
+        .iter()
+        .find(|g| g.package_name == "accounting-js");
+    assert!(
+        ghost.is_some(),
+        "accounting-js should be a ghost dependency"
+    );
+    assert_eq!(
+        ghost.unwrap().removal_command,
+        "npm uninstall accounting-js"
+    );
 
     // lodash should NOT be flagged as ghost dependency
-    assert!(!report.ghost_dependencies.iter().any(|g| g.package_name == "lodash"));
+    assert!(
+        !report
+            .ghost_dependencies
+            .iter()
+            .any(|g| g.package_name == "lodash")
+    );
 }
 
 #[tokio::test]
@@ -322,7 +384,10 @@ async fn test_deprecated_lifecycle_automation() {
         Some("/** @deprecated use NewAuth */"),
     );
 
-    backend.insert_batch(&[deprecated_ready], &[]).await.unwrap();
+    backend
+        .insert_batch(&[deprecated_ready], &[])
+        .await
+        .unwrap();
 
     let config = DeadCodeConfig {
         profile: ProjectProfile::Application,
@@ -333,11 +398,17 @@ async fn test_deprecated_lifecycle_automation() {
     let engine = DeadCodeEngine::new(backend.clone(), config, repo_root);
     let report = engine.run(DeadCodeRunOptions::default()).await.unwrap();
 
-    assert!(!report.deprecated_statuses.is_empty(), "Deprecated statuses should be tracked");
+    assert!(
+        !report.deprecated_statuses.is_empty(),
+        "Deprecated statuses should be tracked"
+    );
     let status = &report.deprecated_statuses[0];
     assert_eq!(status.name, "OldAuthTokenHelper");
     assert_eq!(status.remaining_callers_count, 0);
-    assert!(status.is_ready_for_cremation, "Symbol with 0 callers should be ready for cremation");
+    assert!(
+        status.is_ready_for_cremation,
+        "Symbol with 0 callers should be ready for cremation"
+    );
     assert_eq!(status.migration_progress_pct, 100.0);
 }
 
@@ -368,20 +439,34 @@ async fn test_baseline_recording_suppression_and_ratchet() {
     };
 
     // 1. Record baseline
-    let baseline = BaselineManager::record_baseline(&baseline_path, &[dead_item.clone()], None).unwrap();
+    let baseline =
+        BaselineManager::record_baseline(&baseline_path, std::slice::from_ref(&dead_item), None)
+            .unwrap();
     assert_eq!(baseline.dead_items.len(), 1);
     assert!(baseline_path.exists());
 
     // 2. Filter against baseline
-    let (unsuppressed, suppressed_count) = BaselineManager::filter_with_baseline(vec![dead_item.clone()], &baseline);
+    let (unsuppressed, suppressed_count) =
+        BaselineManager::filter_with_baseline(vec![dead_item.clone()], &baseline);
     assert_eq!(suppressed_count, 1);
-    assert!(unsuppressed.is_empty(), "Item in baseline should be suppressed");
+    assert!(
+        unsuppressed.is_empty(),
+        "Item in baseline should be suppressed"
+    );
 
     // 3. Ratchet: symbol was fixed, current dead fingerprints empty
     let mut loaded_baseline = BaselineManager::load_baseline(&baseline_path).unwrap();
     let current_fingerprints = HashSet::new();
-    let removed_count = BaselineManager::ratchet_baseline(&baseline_path, &mut loaded_baseline, &current_fingerprints).unwrap();
-    assert_eq!(removed_count, 1, "Fixed item should be purged during ratchet");
+    let removed_count = BaselineManager::ratchet_baseline(
+        &baseline_path,
+        &mut loaded_baseline,
+        &current_fingerprints,
+    )
+    .unwrap();
+    assert_eq!(
+        removed_count, 1,
+        "Fixed item should be purged during ratchet"
+    );
     assert_eq!(loaded_baseline.dead_items.len(), 0);
 }
 

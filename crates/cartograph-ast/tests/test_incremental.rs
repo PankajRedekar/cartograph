@@ -1,6 +1,6 @@
+use cartograph_ast::ParseContext;
 use cartograph_ast::languages::python::PythonParser;
 use cartograph_ast::traits::LanguageParser;
-use cartograph_ast::ParseContext;
 use std::time::Instant;
 
 #[test]
@@ -52,7 +52,11 @@ class Calculator:
     assert_eq!(parsed_with_edit.nodes[0].name, "Calculator");
     assert_eq!(parsed_with_edit.nodes[1].name, "add");
     assert_eq!(parsed_with_edit.nodes[2].name, "multiply");
-    assert!(elapsed.as_millis() < 50, "Incremental parse took too long: {:?}", elapsed);
+    assert!(
+        elapsed.as_millis() < 50,
+        "Incremental parse took too long: {:?}",
+        elapsed
+    );
 
     // 2. Test fallback without edit
     let (parsed_fallback, _) = parser

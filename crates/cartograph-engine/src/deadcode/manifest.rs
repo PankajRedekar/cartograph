@@ -20,88 +20,94 @@ pub async fn discover_ghost_dependencies(
 
     // 1. Check package.json (Node.js / TypeScript)
     let package_json_path = root_path.join("package.json");
-    if package_json_path.exists() {
-        if let Ok(content) = fs::read_to_string(&package_json_path) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(deps) = json.get("dependencies").and_then(|d| d.as_object()) {
-                    for (pkg, ver) in deps {
-                        let is_imported = import_target_set.iter().any(|target| {
-                            target == pkg || target.starts_with(&format!("{pkg}/")) || target.contains(pkg)
-                        });
+    if package_json_path.exists()
+        && let Ok(content) = fs::read_to_string(&package_json_path)
+        && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+        && let Some(deps) = json.get("dependencies").and_then(|d| d.as_object())
+    {
+        for (pkg, ver) in deps {
+            let is_imported = import_target_set.iter().any(|target| {
+                target == pkg || target.starts_with(&format!("{pkg}/")) || target.contains(pkg)
+            });
 
-                        if !is_imported {
-                            ghost_deps.push(GhostDependencyReport {
-                                package_name: pkg.clone(),
-                                manifest_file: "package.json".to_string(),
-                                version: ver.as_str().unwrap_or("").to_string(),
-                                estimated_disk_saved_mb: 1.5,
-                                estimated_bundle_saved_kb: 45.0,
-                                removal_command: format!("npm uninstall {pkg}"),
-                            });
-                        }
-                    }
-                }
+            if !is_imported {
+                ghost_deps.push(GhostDependencyReport {
+                    package_name: pkg.clone(),
+                    manifest_file: "package.json".to_string(),
+                    version: ver.as_str().unwrap_or("").to_string(),
+                    estimated_disk_saved_mb: 1.5,
+                    estimated_bundle_saved_kb: 45.0,
+                    removal_command: format!("npm uninstall {pkg}"),
+                });
             }
         }
     }
 
     // 2. Check Cargo.toml (Rust)
     let cargo_toml_path = root_path.join("Cargo.toml");
-    if cargo_toml_path.exists() {
-        if let Ok(content) = fs::read_to_string(&cargo_toml_path) {
-            if let Ok(val) = toml::from_str::<toml::Value>(&content) {
-                if let Some(deps) = val.get("dependencies").and_then(|d| d.as_table()) {
-                    for (pkg, ver_val) in deps {
-                        let normalized_pkg = pkg.replace('-', "_");
-                        let is_imported = import_target_set.iter().any(|target| {
-                            target == pkg || target == &normalized_pkg || target.contains(pkg) || target.contains(&normalized_pkg)
-                        });
+    if cargo_toml_path.exists()
+        && let Ok(content) = fs::read_to_string(&cargo_toml_path)
+        && let Ok(val) = toml::from_str::<toml::Value>(&content)
+        && let Some(deps) = val.get("dependencies").and_then(|d| d.as_table())
+    {
+        for (pkg, ver_val) in deps {
+            let normalized_pkg = pkg.replace('-', "_");
+            let is_imported = import_target_set.iter().any(|target| {
+                target == pkg
+                    || target == &normalized_pkg
+                    || target.contains(pkg)
+                    || target.contains(&normalized_pkg)
+            });
 
-                        if !is_imported {
-                            let ver_str = ver_val.as_str().unwrap_or_else(|| {
-                                ver_val.get("version").and_then(|v| v.as_str()).unwrap_or("*")
-                            });
-                            ghost_deps.push(GhostDependencyReport {
-                                package_name: pkg.clone(),
-                                manifest_file: "Cargo.toml".to_string(),
-                                version: ver_str.to_string(),
-                                estimated_disk_saved_mb: 3.2,
-                                estimated_bundle_saved_kb: 0.0,
-                                removal_command: format!("cargo remove {pkg}"),
-                            });
-                        }
-                    }
-                }
+            if !is_imported {
+                let ver_str = ver_val.as_str().unwrap_or_else(|| {
+                    ver_val
+                        .get("version")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("*")
+                });
+                ghost_deps.push(GhostDependencyReport {
+                    package_name: pkg.clone(),
+                    manifest_file: "Cargo.toml".to_string(),
+                    version: ver_str.to_string(),
+                    estimated_disk_saved_mb: 3.2,
+                    estimated_bundle_saved_kb: 0.0,
+                    removal_command: format!("cargo remove {pkg}"),
+                });
             }
         }
     }
 
     // 3. Check requirements.txt (Python)
     let req_path = root_path.join("requirements.txt");
-    if req_path.exists() {
-        if let Ok(content) = fs::read_to_string(&req_path) {
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if trimmed.is_empty() || trimmed.starts_with('#') {
-                    continue;
-                }
-                let pkg = trimmed.split(&['=', '>', '<', '~'][..]).next().unwrap_or("").trim();
-                if !pkg.is_empty() {
-                    let normalized = pkg.replace('-', "_");
-                    let is_imported = import_target_set.iter().any(|target| {
-                        target.eq_ignore_ascii_case(pkg) || target.eq_ignore_ascii_case(&normalized)
-                    });
+    if req_path.exists()
+        && let Ok(content) = fs::read_to_string(&req_path)
+    {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            let pkg = trimmed
+                .split(&['=', '>', '<', '~'][..])
+                .next()
+                .unwrap_or("")
+                .trim();
+            if !pkg.is_empty() {
+                let normalized = pkg.replace('-', "_");
+                let is_imported = import_target_set.iter().any(|target| {
+                    target.eq_ignore_ascii_case(pkg) || target.eq_ignore_ascii_case(&normalized)
+                });
 
-                    if !is_imported {
-                        ghost_deps.push(GhostDependencyReport {
-                            package_name: pkg.to_string(),
-                            manifest_file: "requirements.txt".to_string(),
-                            version: "".to_string(),
-                            estimated_disk_saved_mb: 2.0,
-                            estimated_bundle_saved_kb: 0.0,
-                            removal_command: format!("pip uninstall -y {pkg}"),
-                        });
-                    }
+                if !is_imported {
+                    ghost_deps.push(GhostDependencyReport {
+                        package_name: pkg.to_string(),
+                        manifest_file: "requirements.txt".to_string(),
+                        version: "".to_string(),
+                        estimated_disk_saved_mb: 2.0,
+                        estimated_bundle_saved_kb: 0.0,
+                        removal_command: format!("pip uninstall -y {pkg}"),
+                    });
                 }
             }
         }
@@ -130,7 +136,9 @@ pub async fn enrich_islands_with_cascading_packages(
                 let node_ids: Vec<String> = nodes.iter().map(|n| n.id.clone()).collect();
                 if let Ok(edges) = backend.get_edges_for_nodes(&node_ids, 0.5).await {
                     for edge in edges {
-                        if edge.kind == cartograph_core::model::EdgeKind::Imports && !edge.target_id.starts_with("cartograph://") {
+                        if edge.kind == cartograph_core::model::EdgeKind::Imports
+                            && !edge.target_id.starts_with("cartograph://")
+                        {
                             let pkg = edge.target_id.trim_start_matches("pkg:").to_string();
                             if island_files.contains(file) {
                                 packages_imported_in_island.insert(pkg);

@@ -1,6 +1,6 @@
+use cartograph_core::model::{CallSiteLocation, Node};
 use std::fs;
 use std::path::PathBuf;
-use cartograph_core::model::{CallSiteLocation, Node};
 
 pub struct CallSiteExtractor {
     repo_root: PathBuf,
@@ -28,22 +28,26 @@ impl CallSiteExtractor {
         let end_line = caller_node.end_line.unwrap_or(u32::MAX);
 
         let mut call_sites = Vec::new();
-        let target_ident = target_symbol_name.split("::").last().unwrap_or(target_symbol_name);
+        let target_ident = target_symbol_name
+            .split("::")
+            .last()
+            .unwrap_or(target_symbol_name);
 
         for (idx, line_str) in content.lines().enumerate() {
             let line_num = (idx + 1) as u32;
-            if line_num >= start_line && line_num <= end_line {
-                if let Some(col_idx) = line_str.find(target_ident) {
-                    let trimmed = line_str.trim();
-                    call_sites.push(CallSiteLocation {
-                        caller_node_id: caller_node.id.clone(),
-                        filepath: caller_node.filepath.clone(),
-                        line: line_num,
-                        column: (col_idx + 1) as u32,
-                        invocation_snippet: trimmed.to_string(),
-                        remediation_hint: remediation_hint.clone(),
-                    });
-                }
+            if line_num >= start_line
+                && line_num <= end_line
+                && let Some(col_idx) = line_str.find(target_ident)
+            {
+                let trimmed = line_str.trim();
+                call_sites.push(CallSiteLocation {
+                    caller_node_id: caller_node.id.clone(),
+                    filepath: caller_node.filepath.clone(),
+                    line: line_num,
+                    column: (col_idx + 1) as u32,
+                    invocation_snippet: trimmed.to_string(),
+                    remediation_hint: remediation_hint.clone(),
+                });
             }
         }
 
@@ -89,11 +93,16 @@ pub fn process_order() {
         };
 
         let extractor = CallSiteExtractor::new(dir.path().to_path_buf());
-        let sites = extractor.find_call_sites(&caller, "AccrualPeriod", Some("Add parameter".to_string()));
+        let sites =
+            extractor.find_call_sites(&caller, "AccrualPeriod", Some("Add parameter".to_string()));
 
         assert_eq!(sites.len(), 1);
         assert_eq!(sites[0].line, 3);
-        assert!(sites[0].invocation_snippet.contains("AccrualPeriod::from_date"));
+        assert!(
+            sites[0]
+                .invocation_snippet
+                .contains("AccrualPeriod::from_date")
+        );
         assert_eq!(sites[0].remediation_hint.as_deref(), Some("Add parameter"));
     }
 }

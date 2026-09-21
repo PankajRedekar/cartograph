@@ -7,8 +7,7 @@ use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::model::{Edge, EdgeKind, Node, NodeKind};
 use cartograph_db::sqlite::SqliteBackend;
 use cartograph_engine::locate::{
-    LocateCliOptions, QueryParser, SubgraphLocator,
-    TokenBudgetManager, TraversalMode,
+    LocateCliOptions, QueryParser, SubgraphLocator, TokenBudgetManager, TraversalMode,
 };
 
 fn make_node(id: &str, name: &str, kind: NodeKind, path: &str, sig: Option<&str>) -> Node {
@@ -44,15 +43,69 @@ async fn setup_test_backend() -> Arc<dyn GraphStoreBackend> {
     let backend = Arc::new(SqliteBackend::open_memory().unwrap());
 
     let nodes = vec![
-        make_node("n_auth", "handle_auth", NodeKind::Function, "src/auth.rs", Some("pub async fn handle_auth(req: Request) -> Result<User>")),
-        make_node("n_token", "verify_token", NodeKind::Function, "src/jwt.rs", Some("pub fn verify_token(token: &str) -> bool")),
-        make_node("n_mw", "auth_middleware", NodeKind::Function, "src/middleware.rs", Some("pub fn auth_middleware()")),
-        make_node("n_user_type", "User", NodeKind::Struct, "src/models.rs", Some("pub struct User { pub id: u64, pub name: String }")),
-        make_node("n_req_type", "Request", NodeKind::Struct, "src/http.rs", Some("pub struct Request { pub headers: Vec<String> }")),
-        make_node("n_test", "test_handle_auth_success", NodeKind::Function, "tests/test_auth.rs", Some("fn test_handle_auth_success()")),
-        make_node("n_low_conf", "heuristic_call", NodeKind::Function, "src/misc.rs", Some("fn heuristic_call()")),
-        make_node("n_ep", "POST /login", NodeKind::Other("Endpoint".to_string()), "src/routes.rs", Some("POST /api/v1/login")),
-        make_node("n_db", "find_user_by_email", NodeKind::Function, "src/db.rs", Some("pub async fn find_user_by_email(email: &str) -> Option<User>")),
+        make_node(
+            "n_auth",
+            "handle_auth",
+            NodeKind::Function,
+            "src/auth.rs",
+            Some("pub async fn handle_auth(req: Request) -> Result<User>"),
+        ),
+        make_node(
+            "n_token",
+            "verify_token",
+            NodeKind::Function,
+            "src/jwt.rs",
+            Some("pub fn verify_token(token: &str) -> bool"),
+        ),
+        make_node(
+            "n_mw",
+            "auth_middleware",
+            NodeKind::Function,
+            "src/middleware.rs",
+            Some("pub fn auth_middleware()"),
+        ),
+        make_node(
+            "n_user_type",
+            "User",
+            NodeKind::Struct,
+            "src/models.rs",
+            Some("pub struct User { pub id: u64, pub name: String }"),
+        ),
+        make_node(
+            "n_req_type",
+            "Request",
+            NodeKind::Struct,
+            "src/http.rs",
+            Some("pub struct Request { pub headers: Vec<String> }"),
+        ),
+        make_node(
+            "n_test",
+            "test_handle_auth_success",
+            NodeKind::Function,
+            "tests/test_auth.rs",
+            Some("fn test_handle_auth_success()"),
+        ),
+        make_node(
+            "n_low_conf",
+            "heuristic_call",
+            NodeKind::Function,
+            "src/misc.rs",
+            Some("fn heuristic_call()"),
+        ),
+        make_node(
+            "n_ep",
+            "POST /login",
+            NodeKind::Other("Endpoint".to_string()),
+            "src/routes.rs",
+            Some("POST /api/v1/login"),
+        ),
+        make_node(
+            "n_db",
+            "find_user_by_email",
+            NodeKind::Function,
+            "src/db.rs",
+            Some("pub async fn find_user_by_email(email: &str) -> Option<User>"),
+        ),
     ];
 
     let edges = vec![
@@ -135,8 +188,14 @@ async fn test_locate_type_contract_inlining() {
 
     // The signature `pub async fn handle_auth(req: Request) -> Result<User>` references Request and User
     assert!(
-        result.subgraph.inlined_type_contracts.contains_key("n_user_type")
-            || result.subgraph.inlined_type_contracts.contains_key("n_req_type"),
+        result
+            .subgraph
+            .inlined_type_contracts
+            .contains_key("n_user_type")
+            || result
+                .subgraph
+                .inlined_type_contracts
+                .contains_key("n_req_type"),
         "Expected Request or User to be inlined"
     );
 }
@@ -209,7 +268,8 @@ async fn test_locate_inline_directives_parsing() {
 async fn test_locate_token_budget_degradation() {
     let dir = tempdir().unwrap();
     let file_path = dir.path().join("service.rs");
-    let content = "fn handle_service() {\n    let a = 1;\n    let b = 2;\n    println!(\"{}\", a + b);\n}\n";
+    let content =
+        "fn handle_service() {\n    let a = 1;\n    let b = 2;\n    println!(\"{}\", a + b);\n}\n";
     fs::write(&file_path, content).unwrap();
 
     let node = Node {
@@ -228,9 +288,10 @@ async fn test_locate_token_budget_degradation() {
         metadata: None,
     };
 
-    let full_slice = cartograph_engine::locate::slicer::CodeSlicer::new(dir.path().to_path_buf(), 0)
-        .slice_node(&node)
-        .unwrap();
+    let full_slice =
+        cartograph_engine::locate::slicer::CodeSlicer::new(dir.path().to_path_buf(), 0)
+            .slice_node(&node)
+            .unwrap();
     let sig_slice = cartograph_engine::locate::slicer::CodeSlicer::slice_signature_only(&node);
 
     // Generous budget: should keep full slice

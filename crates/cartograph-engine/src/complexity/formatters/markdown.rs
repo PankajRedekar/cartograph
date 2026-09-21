@@ -13,25 +13,52 @@ impl MarkdownFormatter {
         out.push_str("### 📊 Scorecard\n\n");
         out.push_str("| Metric | Value | Status |\n");
         out.push_str("|---|---|---|\n");
-        out.push_str(&format!("| **Total Analyzed** | `{}` | {} |\n", report.total_analyzed, report.granularity.as_str()));
+        out.push_str(&format!(
+            "| **Total Analyzed** | `{}` | {} |\n",
+            report.total_analyzed,
+            report.granularity.as_str()
+        ));
         out.push_str(&format!(
             "| **Critical Hotspots (Q1)** | `{}` | {} |\n",
             report.critical_hotspots_count,
-            if report.critical_hotspots_count > 0 { "🚨 Needs Attention" } else { "✅ Clean" }
+            if report.critical_hotspots_count > 0 {
+                "🚨 Needs Attention"
+            } else {
+                "✅ Clean"
+            }
         ));
         out.push_str(&format!(
             "| **Danger Zone (0 Tests)** | `{}` | {} |\n",
             report.danger_zone_count,
-            if report.danger_zone_count > 0 { "⚠️ High Risk" } else { "✅ Covered" }
+            if report.danger_zone_count > 0 {
+                "⚠️ High Risk"
+            } else {
+                "✅ Covered"
+            }
         ));
         out.push_str(&format!(
             "| **God-Classes Detected** | `{}` | {} |\n",
             report.god_classes_detected,
-            if report.god_classes_detected > 0 { "🚨 Decompose" } else { "✅ Well Modularized" }
+            if report.god_classes_detected > 0 {
+                "🚨 Decompose"
+            } else {
+                "✅ Well Modularized"
+            }
         ));
-        out.push_str(&format!("| **Est. Technical Debt** | `{:.1} hours` | ⏳ Remediation Effort |\n", report.total_debt_hours));
-        out.push_str(&format!("| **Avg Maintainability** | `{:.1}/100` | {} |\n", report.avg_maintainability_index, if report.avg_maintainability_index >= 50.0 { "🟢 Good" } else { "🟡 Moderate" }));
-        out.push_str("\n");
+        out.push_str(&format!(
+            "| **Est. Technical Debt** | `{:.1} hours` | ⏳ Remediation Effort |\n",
+            report.total_debt_hours
+        ));
+        out.push_str(&format!(
+            "| **Avg Maintainability** | `{:.1}/100` | {} |\n",
+            report.avg_maintainability_index,
+            if report.avg_maintainability_index >= 50.0 {
+                "🟢 Good"
+            } else {
+                "🟡 Moderate"
+            }
+        ));
+        out.push('\n');
 
         // Mermaid Quadrant Chart
         out.push_str("### 🎯 4-Quadrant Hotspot Matrix\n\n");
@@ -45,7 +72,13 @@ impl MarkdownFormatter {
         out.push_str("    quadrant-3 Healthy Code (Q3)\n");
         out.push_str("    quadrant-4 Churn Hotspots (Q2)\n");
 
-        let max_cc = report.top_hotspots.iter().map(|r| r.complexity.cyclomatic).max().unwrap_or(30).max(30) as f64;
+        let max_cc = report
+            .top_hotspots
+            .iter()
+            .map(|r| r.complexity.cyclomatic)
+            .max()
+            .unwrap_or(30)
+            .max(30) as f64;
 
         for r in report.top_hotspots.iter().take(12) {
             let x = r.churn.churn_velocity_score.clamp(0.05, 0.95);
@@ -57,7 +90,9 @@ impl MarkdownFormatter {
 
         // Top Hotspots Table
         out.push_str("### 🚨 Top Refactoring Hotspots\n\n");
-        out.push_str("| Rank | Quadrant | Symbol / File | CC | Cog | LOC | Tests | Churn | Debt | Score |\n");
+        out.push_str(
+            "| Rank | Quadrant | Symbol / File | CC | Cog | LOC | Tests | Churn | Debt | Score |\n",
+        );
         out.push_str("|---|---|---|---|---|---|---|---|---|---|\n");
 
         for (idx, r) in report.top_hotspots.iter().enumerate() {
@@ -90,17 +125,14 @@ impl MarkdownFormatter {
                 r.hotspot_score
             ));
         }
-        out.push_str("\n");
+        out.push('\n');
 
         // God-Classes Detail (if any)
         if !report.god_classes.is_empty() {
             out.push_str("### 🏛️ God-Class Decomposition Advisory\n\n");
             for gc in report.god_classes.iter().take(5) {
                 if let Some(eval) = &gc.god_class {
-                    out.push_str(&format!(
-                        "#### `{}` in `{}`\n\n",
-                        gc.name, gc.filepath
-                    ));
+                    out.push_str(&format!("#### `{}` in `{}`\n\n", gc.name, gc.filepath));
                     out.push_str(&format!(
                         "- **LOC**: {} | **WMC**: {} | **LCOM4**: {} | **GCI**: {:.1}\n",
                         gc.complexity.loc,
@@ -120,38 +152,46 @@ impl MarkdownFormatter {
                                 ext.candidate_name,
                                 ext.methods.len(),
                                 ext.methods.join("`, `"),
-                                if ext.fields.is_empty() { "none".to_string() } else { ext.fields.join("`, `") }
+                                if ext.fields.is_empty() {
+                                    "none".to_string()
+                                } else {
+                                    ext.fields.join("`, `")
+                                }
                             ));
                         }
                     }
-                    out.push_str("\n");
+                    out.push('\n');
                 }
             }
         }
 
         // PR Git Diff Deltas (if present)
-        if let Some(deltas) = &report.diff_deltas {
-            if !deltas.is_empty() {
-                out.push_str("### 📈 PR Complexity Deltas\n\n");
-                out.push_str("| Symbol | File:Line | Δ Cyclomatic | Δ Cognitive | Status |\n");
-                out.push_str("|---|---|---|---|---|\n");
-                for d in deltas {
-                    let sign = if d.cyclomatic_delta > 0 { "+" } else { "" };
-                    out.push_str(&format!(
-                        "| `{}` | `{}:{}` | `{}{}` (now {}) | `{}` (now {}) | {} |\n",
-                        d.symbol_name,
-                        d.filepath,
-                        d.line_number,
-                        sign,
-                        d.cyclomatic_delta,
-                        d.new_cyclomatic,
-                        d.cognitive_delta,
-                        d.new_cognitive,
-                        if d.is_new_god_class { "🚨 **NEW GOD-CLASS**" } else { "Modified" }
-                    ));
-                }
-                out.push_str("\n");
+        if let Some(deltas) = &report.diff_deltas
+            && !deltas.is_empty()
+        {
+            out.push_str("### 📈 PR Complexity Deltas\n\n");
+            out.push_str("| Symbol | File:Line | Δ Cyclomatic | Δ Cognitive | Status |\n");
+            out.push_str("|---|---|---|---|---|\n");
+            for d in deltas {
+                let sign = if d.cyclomatic_delta > 0 { "+" } else { "" };
+                out.push_str(&format!(
+                    "| `{}` | `{}:{}` | `{}{}` (now {}) | `{}` (now {}) | {} |\n",
+                    d.symbol_name,
+                    d.filepath,
+                    d.line_number,
+                    sign,
+                    d.cyclomatic_delta,
+                    d.new_cyclomatic,
+                    d.cognitive_delta,
+                    d.new_cognitive,
+                    if d.is_new_god_class {
+                        "🚨 **NEW GOD-CLASS**"
+                    } else {
+                        "Modified"
+                    }
+                ));
             }
+            out.push('\n');
         }
 
         out

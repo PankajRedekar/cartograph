@@ -1,5 +1,5 @@
-use colored::Colorize;
 use cartograph_core::model::{ComplexityReport, HotspotQuadrant};
+use colored::Colorize;
 
 pub struct TerminalFormatter;
 
@@ -7,8 +7,12 @@ impl TerminalFormatter {
     pub fn format(report: &ComplexityReport) -> String {
         let mut out = String::new();
 
-        out.push_str("\n");
-        out.push_str(&"=== CARTOGRAPH CODE COMPLEXITY & HOTSPOT HEATMAP ===".bold().to_string());
+        out.push('\n');
+        out.push_str(
+            &"=== CARTOGRAPH CODE COMPLEXITY & HOTSPOT HEATMAP ==="
+                .bold()
+                .to_string(),
+        );
         out.push_str("\n\n");
 
         // Scorecard Header
@@ -60,14 +64,26 @@ impl TerminalFormatter {
                 "Debt Heavy".red()
             }
         ));
-        out.push_str("\n");
+        out.push('\n');
 
         // Top Hotspots Table
         out.push_str(&"--- TOP REFACTORING HOTSPOTS ---\n".dimmed().to_string());
-        out.push_str(&format!(
-            "{:<4} {:<8} {:<32} {:<6} {:<6} {:<8} {:<8} {:<12} {}\n",
-            "RANK", "QUADRANT", "SYMBOL / FILE", "CC", "COG", "CHURN", "DEBT", "RISK METER", "STATUS"
-        ).bold().to_string());
+        out.push_str(
+            &format!(
+                "{:<4} {:<8} {:<32} {:<6} {:<6} {:<8} {:<8} {:<12} {}\n",
+                "RANK",
+                "QUADRANT",
+                "SYMBOL / FILE",
+                "CC",
+                "COG",
+                "CHURN",
+                "DEBT",
+                "RISK METER",
+                "STATUS"
+            )
+            .bold()
+            .to_string(),
+        );
         out.push_str(&format!("{}\n", "-".repeat(95)).dimmed().to_string());
 
         for (idx, record) in report.top_hotspots.iter().enumerate() {
@@ -87,7 +103,12 @@ impl TerminalFormatter {
             let meter = render_meter(record.hotspot_score);
             let status = if record.test_deficit.is_danger_zone {
                 "⚠️ Danger Zone".yellow().bold().to_string()
-            } else if record.god_class.as_ref().map(|g| g.is_god_class).unwrap_or(false) {
+            } else if record
+                .god_class
+                .as_ref()
+                .map(|g| g.is_god_class)
+                .unwrap_or(false)
+            {
                 "🚨 God-Class".red().bold().to_string()
             } else {
                 record.trend.trend.emoji().to_string()
@@ -106,11 +127,15 @@ impl TerminalFormatter {
                 status,
             ));
         }
-        out.push_str("\n");
+        out.push('\n');
 
         // God-Classes Detail Section
         if !report.god_classes.is_empty() {
-            out.push_str(&"--- GOD-CLASS DECOMPOSITION ADVISORY ---\n".dimmed().to_string());
+            out.push_str(
+                &"--- GOD-CLASS DECOMPOSITION ADVISORY ---\n"
+                    .dimmed()
+                    .to_string(),
+            );
             for gc in report.god_classes.iter().take(5) {
                 if let Some(eval) = &gc.god_class {
                     out.push_str(&format!(
@@ -127,7 +152,11 @@ impl TerminalFormatter {
                     if !eval.candidate_extractions.is_empty() {
                         out.push_str("   Candidate Extractions:\n");
                         for ext in &eval.candidate_extractions {
-                            let fields_str = if ext.fields.is_empty() { "none".to_string() } else { ext.fields.join(", ") };
+                            let fields_str = if ext.fields.is_empty() {
+                                "none".to_string()
+                            } else {
+                                ext.fields.join(", ")
+                            };
                             out.push_str(&format!(
                                 "     - {} ({} methods, fields: {})\n",
                                 ext.candidate_name.green().bold(),
@@ -136,7 +165,7 @@ impl TerminalFormatter {
                             ));
                         }
                     }
-                    out.push_str("\n");
+                    out.push('\n');
                 }
             }
             if report.god_classes.len() > 5 {
@@ -149,24 +178,36 @@ impl TerminalFormatter {
         }
 
         // Git Diff Deltas (if present)
-        if let Some(deltas) = &report.diff_deltas {
-            if !deltas.is_empty() {
-                out.push_str(&"--- PR GIT DIFF COMPLEXITY DELTA ---\n".dimmed().to_string());
-                for d in deltas {
-                    let sign = if d.cyclomatic_delta > 0 { "+".red() } else { "-".green() };
-                    out.push_str(&format!(
-                        "  {} {}: ΔCC {}{} (now {}), ΔCog {} (now {})\n",
-                        if d.is_new_god_class { "🚨 NEW GOD-CLASS" } else { "•" },
-                        d.symbol_name.bold(),
-                        sign,
-                        d.cyclomatic_delta.abs(),
-                        d.new_cyclomatic,
-                        d.cognitive_delta,
-                        d.new_cognitive
-                    ));
-                }
-                out.push_str("\n");
+        if let Some(deltas) = &report.diff_deltas
+            && !deltas.is_empty()
+        {
+            out.push_str(
+                &"--- PR GIT DIFF COMPLEXITY DELTA ---\n"
+                    .dimmed()
+                    .to_string(),
+            );
+            for d in deltas {
+                let sign = if d.cyclomatic_delta > 0 {
+                    "+".red()
+                } else {
+                    "-".green()
+                };
+                out.push_str(&format!(
+                    "  {} {}: ΔCC {}{} (now {}), ΔCog {} (now {})\n",
+                    if d.is_new_god_class {
+                        "🚨 NEW GOD-CLASS"
+                    } else {
+                        "•"
+                    },
+                    d.symbol_name.bold(),
+                    sign,
+                    d.cyclomatic_delta.abs(),
+                    d.new_cyclomatic,
+                    d.cognitive_delta,
+                    d.new_cognitive
+                ));
             }
+            out.push('\n');
         }
 
         out

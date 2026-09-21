@@ -1,5 +1,5 @@
-use cartograph_core::model::{FullStackRouteTrace, HttpMethod, RouteAuthKind, RouteHealthIssue};
 use super::normalizer::normalize_route_path;
+use cartograph_core::model::{FullStackRouteTrace, HttpMethod, RouteAuthKind, RouteHealthIssue};
 
 pub struct RouteAuditor;
 
@@ -8,20 +8,20 @@ impl RouteAuditor {
     pub fn detect_shadowed_routes(traces: &[FullStackRouteTrace]) -> Vec<(String, String, u32)> {
         let mut shadowed = Vec::new();
 
-        for i in 0..traces.len() {
-            let earlier = &traces[i];
+        for (i, earlier) in traces.iter().enumerate() {
             let earlier_norm = normalize_route_path(&earlier.normalized_path);
-            let earlier_segs: Vec<&str> = earlier_norm.split('/').filter(|s| !s.is_empty()).collect();
+            let earlier_segs: Vec<&str> =
+                earlier_norm.split('/').filter(|s| !s.is_empty()).collect();
 
-            for j in (i + 1)..traces.len() {
-                let later = &traces[j];
+            for later in traces.iter().skip(i + 1) {
                 // Shadowing only occurs within identical HTTP methods
                 if earlier.method != later.method && earlier.method != HttpMethod::All {
                     continue;
                 }
 
                 let later_norm = normalize_route_path(&later.normalized_path);
-                let later_segs: Vec<&str> = later_norm.split('/').filter(|s| !s.is_empty()).collect();
+                let later_segs: Vec<&str> =
+                    later_norm.split('/').filter(|s| !s.is_empty()).collect();
 
                 if earlier_segs.len() != later_segs.len() {
                     continue;
@@ -67,29 +67,40 @@ impl RouteAuditor {
 
         for trace in traces.iter_mut() {
             // 1. Shadowing
-            if let Some((pattern, line)) = shadowed_map.get(&trace.id) {
-                if !trace.issues.iter().any(|i| matches!(i, RouteHealthIssue::ShadowedBy { .. })) {
-                    trace.issues.push(RouteHealthIssue::ShadowedBy {
-                        shadowing_pattern: pattern.clone(),
-                        line: *line,
-                    });
-                }
+            if let Some((pattern, line)) = shadowed_map.get(&trace.id)
+                && !trace
+                    .issues
+                    .iter()
+                    .any(|i| matches!(i, RouteHealthIssue::ShadowedBy { .. }))
+            {
+                trace.issues.push(RouteHealthIssue::ShadowedBy {
+                    shadowing_pattern: pattern.clone(),
+                    line: *line,
+                });
             }
 
             // 2. Unauthenticated Mutation
-            if trace.is_mutation && (trace.auth == RouteAuthKind::Public || trace.auth == RouteAuthKind::Unknown) {
-                if !trace.issues.iter().any(|i| matches!(i, RouteHealthIssue::UnauthenticatedMutation)) {
-                    trace.issues.push(RouteHealthIssue::UnauthenticatedMutation);
-                }
+            if trace.is_mutation
+                && (trace.auth == RouteAuthKind::Public || trace.auth == RouteAuthKind::Unknown)
+                && !trace
+                    .issues
+                    .iter()
+                    .any(|i| matches!(i, RouteHealthIssue::UnauthenticatedMutation))
+            {
+                trace.issues.push(RouteHealthIssue::UnauthenticatedMutation);
             }
 
             // 3. Dangling Handler
-            if trace.handler.is_none() && trace.call_chain.is_empty() {
-                if !trace.issues.iter().any(|i| matches!(i, RouteHealthIssue::DanglingHandler { .. })) {
-                    trace.issues.push(RouteHealthIssue::DanglingHandler {
-                        handler_name: "unresolved".to_string(),
-                    });
-                }
+            if trace.handler.is_none()
+                && trace.call_chain.is_empty()
+                && !trace
+                    .issues
+                    .iter()
+                    .any(|i| matches!(i, RouteHealthIssue::DanglingHandler { .. }))
+            {
+                trace.issues.push(RouteHealthIssue::DanglingHandler {
+                    handler_name: "unresolved".to_string(),
+                });
             }
         }
     }
@@ -152,7 +163,10 @@ mod tests {
             .find(|i| matches!(i, RouteHealthIssue::ShadowedBy { .. }))
             .expect("Expected ShadowedBy issue");
         match shadowed_issue {
-            RouteHealthIssue::ShadowedBy { shadowing_pattern, line } => {
+            RouteHealthIssue::ShadowedBy {
+                shadowing_pattern,
+                line,
+            } => {
                 assert_eq!(shadowing_pattern, "/users/:id");
                 assert_eq!(*line, 10);
             }

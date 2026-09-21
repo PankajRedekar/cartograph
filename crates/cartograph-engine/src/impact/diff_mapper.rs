@@ -1,8 +1,7 @@
-use std::path::Path;
-use std::process::Command;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::error::{CartographError, Result};
 use cartograph_core::model::{ChangeStatus, Node};
+use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GitDiffHunk {
@@ -25,33 +24,14 @@ pub struct MappedRootSymbol {
 pub struct GitDiffMapper;
 
 impl GitDiffMapper {
-    /// Execute git diff -U0 command based on range or staged mode
+    /// Execute git diff -U0 command based on range or staged mode across single repo or polyrepo workspace
     pub fn execute_git_diff(
         repo_root: &Path,
         branch_range: Option<&str>,
         staged: bool,
     ) -> Result<String> {
-        let mut cmd = Command::new("git");
-        cmd.current_dir(repo_root);
-
-        if staged {
-            cmd.args(["diff", "-U0", "--cached"]);
-        } else if let Some(range) = branch_range {
-            cmd.args(["diff", "-U0", range]);
-        } else {
-            cmd.args(["diff", "-U0"]);
-        }
-
-        let output = cmd.output().map_err(|e| {
-            CartographError::Other(format!("Failed to execute git diff: {e}"))
-        })?;
-
-        if !output.status.success() {
-            let err = String::from_utf8_lossy(&output.stderr);
-            return Err(CartographError::Other(format!("git diff failed: {err}")));
-        }
-
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        crate::discovery::GitWorkspaceResolver::execute_diff(repo_root, branch_range, staged)
+            .map_err(|e| CartographError::Other(e.to_string()))
     }
 
     /// Parse unified diff hunks from raw git diff -U0 output
@@ -79,12 +59,11 @@ impl GitDiffMapper {
                 let new_path = line.trim_start_matches("rename to ");
                 current_file = Some(new_path.to_string());
                 current_status = ChangeStatus::Renamed;
-            } else if line.starts_with("@@ ") {
-                if let Some(ref filepath) = current_file {
-                    if let Some(hunk) = Self::parse_hunk_header(filepath, current_status, line) {
-                        hunks.push(hunk);
-                    }
-                }
+            } else if line.starts_with("@@ ")
+                && let Some(ref filepath) = current_file
+                && let Some(hunk) = Self::parse_hunk_header(filepath, current_status, line)
+            {
+                hunks.push(hunk);
             }
         }
 
@@ -154,25 +133,26 @@ impl GitDiffMapper {
                 let mut smallest_span = u32::MAX;
 
                 for node in &file_nodes {
-                    if let (Some(start), Some(end)) = (node.start_line, node.end_line) {
-                        if line >= start && line <= end {
-                            let span = end.saturating_sub(start);
-                            if span < smallest_span {
-                                smallest_span = span;
-                                best_node = Some(node);
-                            }
+                    if let (Some(start), Some(end)) = (node.start_line, node.end_line)
+                        && line >= start
+                        && line <= end
+                    {
+                        let span = end.saturating_sub(start);
+                        if span < smallest_span {
+                            smallest_span = span;
+                            best_node = Some(node);
                         }
                     }
                 }
 
-                if let Some(target_node) = best_node {
-                    if seen_node_ids.insert(target_node.id.clone()) {
-                        mapped.push(MappedRootSymbol {
-                            node: target_node.clone(),
-                            status: hunk.status,
-                            modified_lines: hunk.modified_lines.clone(),
-                        });
-                    }
+                if let Some(target_node) = best_node
+                    && seen_node_ids.insert(target_node.id.clone())
+                {
+                    mapped.push(MappedRootSymbol {
+                        node: target_node.clone(),
+                        status: hunk.status,
+                        modified_lines: hunk.modified_lines.clone(),
+                    });
                 }
             }
         }

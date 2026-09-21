@@ -9,22 +9,27 @@ use super::schema;
 
 pub fn open_connection(config: &SqliteConfig) -> Result<Connection> {
     let conn = if config.path == ":memory:" {
-        Connection::open_in_memory()
-            .map_err(|e| CartographError::Database(format!("Failed to open in-memory SQLite: {e}")))?
+        Connection::open_in_memory().map_err(|e| {
+            CartographError::Database(format!("Failed to open in-memory SQLite: {e}"))
+        })?
     } else {
         let path = Path::new(&config.path);
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    CartographError::Io(std::io::Error::new(
-                        e.kind(),
-                        format!("Failed to create parent directory for {}: {e}", config.path),
-                    ))
-                })?;
-            }
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                CartographError::Io(std::io::Error::new(
+                    e.kind(),
+                    format!("Failed to create parent directory for {}: {e}", config.path),
+                ))
+            })?;
         }
-        Connection::open(path)
-            .map_err(|e| CartographError::Database(format!("Failed to open SQLite database at {}: {e}", config.path)))?
+        Connection::open(path).map_err(|e| {
+            CartographError::Database(format!(
+                "Failed to open SQLite database at {}: {e}",
+                config.path
+            ))
+        })?
     };
 
     configure_connection(&conn, config)?;
@@ -51,7 +56,9 @@ pub fn configure_connection(conn: &Connection, config: &SqliteConfig) -> Result<
 
         // synchronous doesn't return rows
         conn.pragma_update(None, "synchronous", &config.synchronous)
-            .map_err(|e| CartographError::Database(format!("Failed to set synchronous mode: {e}")))?;
+            .map_err(|e| {
+                CartographError::Database(format!("Failed to set synchronous mode: {e}"))
+            })?;
 
         // mmap_size returns a row with the resulting mmap limit
         let mmap_sql = format!("PRAGMA mmap_size = {}", config.mmap_size);

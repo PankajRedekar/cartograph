@@ -45,11 +45,11 @@ impl IncrementalDetector {
             let path_str = rel.to_string_lossy().replace('\\', "/");
             return path_str.trim_start_matches("./").to_string();
         }
-        if let (Ok(canon_path), Ok(canon_root)) = (path.canonicalize(), root_path.canonicalize()) {
-            if let Ok(rel) = canon_path.strip_prefix(&canon_root) {
-                let path_str = rel.to_string_lossy().replace('\\', "/");
-                return path_str.trim_start_matches("./").to_string();
-            }
+        if let (Ok(canon_path), Ok(canon_root)) = (path.canonicalize(), root_path.canonicalize())
+            && let Ok(rel) = canon_path.strip_prefix(&canon_root)
+        {
+            let path_str = rel.to_string_lossy().replace('\\', "/");
+            return path_str.trim_start_matches("./").to_string();
         }
         let path_str = path.to_string_lossy().replace('\\', "/");
         path_str.trim_start_matches("./").to_string()
@@ -162,20 +162,19 @@ mod tests {
 
         let discovered = vec![f1, f2, f3];
 
-        let changeset = IncrementalDetector::compute_changeset(
-            &discovered,
-            root,
-            &existing,
-            false,
-            64 * 1024,
-        )
-        .unwrap();
+        let changeset =
+            IncrementalDetector::compute_changeset(&discovered, root, &existing, false, 64 * 1024)
+                .unwrap();
 
         assert_eq!(changeset.unchanged_count, 1); // file1.py unchanged
-        assert_eq!(changeset.to_index.len(), 2);   // file2.ts (modified), file3.rs (new)
+        assert_eq!(changeset.to_index.len(), 2); // file2.ts (modified), file3.rs (new)
         assert_eq!(changeset.deleted_paths, vec!["file_deleted.py".to_string()]);
 
-        let rel_paths: Vec<String> = changeset.to_index.iter().map(|f| f.relative_path.clone()).collect();
+        let rel_paths: Vec<String> = changeset
+            .to_index
+            .iter()
+            .map(|f| f.relative_path.clone())
+            .collect();
         assert!(rel_paths.contains(&"file2.ts".to_string()));
         assert!(rel_paths.contains(&"file3.rs".to_string()));
     }

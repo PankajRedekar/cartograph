@@ -1,7 +1,7 @@
-use std::collections::{HashMap, HashSet};
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::error::Result;
 use cartograph_core::model::{Edge, EdgeKind, Node, NodeKind};
+use std::collections::{HashMap, HashSet};
 
 use super::query::{LocateQuery, TraversalDirection, TraversalMode};
 use super::search::ScoredNode;
@@ -79,20 +79,39 @@ impl SubgraphTraverser {
 
         if query.mode == TraversalMode::FlowChain {
             // Linear end-to-end execution flow chain
-            self.trace_flow_chain(backend, &roots, query, &mut neighbor_nodes, &mut edges, &mut visited).await?;
+            self.trace_flow_chain(
+                backend,
+                &roots,
+                query,
+                &mut neighbor_nodes,
+                &mut edges,
+                &mut visited,
+            )
+            .await?;
         } else {
             // Radial BFS neighborhood expansion
-            self.traverse_radial_bfs(backend, &roots, query, &mut neighbor_nodes, &mut edges, &mut visited).await?;
+            self.traverse_radial_bfs(
+                backend,
+                &roots,
+                query,
+                &mut neighbor_nodes,
+                &mut edges,
+                &mut visited,
+            )
+            .await?;
         }
 
         let mut inlined_type_contracts: HashMap<String, Node> = HashMap::new();
         if query.resolve_types {
-            self.resolve_type_contracts(backend, &roots, &mut inlined_type_contracts, &mut edges).await?;
+            self.resolve_type_contracts(backend, &roots, &mut inlined_type_contracts, &mut edges)
+                .await?;
         }
 
         // Deduplicate edges preserving traversal order
         let mut seen_edges = HashSet::new();
-        edges.retain(|e| seen_edges.insert((e.source_id.clone(), e.target_id.clone(), e.kind.clone())));
+        edges.retain(|e| {
+            seen_edges.insert((e.source_id.clone(), e.target_id.clone(), e.kind.clone()))
+        });
 
         let total_nodes = roots.len() + neighbor_nodes.len() + inlined_type_contracts.len();
         let total_edges = edges.len();
@@ -125,7 +144,9 @@ impl SubgraphTraverser {
                 break;
             }
 
-            let batch_edges = backend.get_edges_for_nodes(&current_frontier, query.min_confidence).await?;
+            let batch_edges = backend
+                .get_edges_for_nodes(&current_frontier, query.min_confidence)
+                .await?;
             let mut next_frontier = Vec::new();
             let mut fanout_counts: HashMap<String, usize> = HashMap::new();
 
@@ -137,19 +158,26 @@ impl SubgraphTraverser {
                 if is_outgoing && query.direction == TraversalDirection::UpstreamOnly {
                     continue;
                 }
-                if is_incoming && !is_outgoing && query.direction == TraversalDirection::DownstreamOnly {
+                if is_incoming
+                    && !is_outgoing
+                    && query.direction == TraversalDirection::DownstreamOnly
+                {
                     continue;
                 }
 
                 // Edge kind filter
-                if let Some(ref allowed) = query.edge_kinds {
-                    if !allowed.contains(&e.kind) {
-                        continue;
-                    }
+                if let Some(ref allowed) = query.edge_kinds
+                    && !allowed.contains(&e.kind)
+                {
+                    continue;
                 }
 
                 // Fanout guard per source/target node
-                let anchor_id = if is_outgoing { &e.source_id } else { &e.target_id };
+                let anchor_id = if is_outgoing {
+                    &e.source_id
+                } else {
+                    &e.target_id
+                };
                 let count = fanout_counts.entry(anchor_id.clone()).or_insert(0);
                 if *count >= self.max_fanout_per_node {
                     continue;
@@ -162,7 +190,11 @@ impl SubgraphTraverser {
                     _ => EdgeDirection::Incoming,
                 };
 
-                let other_id = if is_outgoing { &e.target_id } else { &e.source_id };
+                let other_id = if is_outgoing {
+                    &e.target_id
+                } else {
+                    &e.source_id
+                };
                 if visited.insert(other_id.clone()) {
                     next_frontier.push(other_id.clone());
                 }
@@ -205,19 +237,33 @@ impl SubgraphTraverser {
 
             // Trace downstream execution flow
             for _hop in 0..query.depth.max(3) {
-                let batch = backend.get_edges_for_nodes(&[curr_id.clone()], query.min_confidence).await?;
+                let batch = backend
+                    .get_edges_for_nodes(&[curr_id.clone()], query.min_confidence)
+                    .await?;
                 // Filter outgoing execution calls/references
                 let mut candidates: Vec<Edge> = batch
                     .into_iter()
-                    .filter(|e| e.source_id == curr_id && matches!(e.kind, EdgeKind::Calls | EdgeKind::MapsTo | EdgeKind::References))
+                    .filter(|e| {
+                        e.source_id == curr_id
+                            && matches!(
+                                e.kind,
+                                EdgeKind::Calls | EdgeKind::MapsTo | EdgeKind::References
+                            )
+                    })
                     .collect();
 
                 // Sort by confidence descending
                 candidates.sort_by(|a, b| {
-                    b.confidence.unwrap_or(1.0).partial_cmp(&a.confidence.unwrap_or(1.0)).unwrap_or(std::cmp::Ordering::Equal)
+                    b.confidence
+                        .unwrap_or(1.0)
+                        .partial_cmp(&a.confidence.unwrap_or(1.0))
+                        .unwrap_or(std::cmp::Ordering::Equal)
                 });
 
-                if let Some(best_edge) = candidates.into_iter().find(|e| !visited.contains(&e.target_id)) {
+                if let Some(best_edge) = candidates
+                    .into_iter()
+                    .find(|e| !visited.contains(&e.target_id))
+                {
                     let next_id = best_edge.target_id.clone();
                     visited.insert(next_id.clone());
 
@@ -269,7 +315,11 @@ impl SubgraphTraverser {
                 for candidate in candidates {
                     if matches!(
                         candidate.kind,
-                        NodeKind::Struct | NodeKind::Class | NodeKind::Interface | NodeKind::Model | NodeKind::Enum
+                        NodeKind::Struct
+                            | NodeKind::Class
+                            | NodeKind::Interface
+                            | NodeKind::Model
+                            | NodeKind::Enum
                     ) {
                         edges.push(LocalizedEdge {
                             source_id: root.node.id.clone(),
@@ -309,11 +359,43 @@ fn extract_type_names_from_signature(sig: &str) -> Vec<String> {
 fn is_primitive_type(t: &str) -> bool {
     matches!(
         t,
-        "String" | "str" | "bool" | "u8" | "u16" | "u32" | "u64" | "usize" |
-        "i8" | "i16" | "i32" | "i64" | "isize" | "f32" | "f64" | "Option" |
-        "Result" | "Vec" | "HashMap" | "HashSet" | "Arc" | "Rc" | "Box" |
-        "None" | "Some" | "Ok" | "Err" | "Self" | "Promise" | "Array" |
-        "Number" | "Boolean" | "Object" | "Any" | "Void" | "List" | "Dict"
+        "String"
+            | "str"
+            | "bool"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "usize"
+            | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "isize"
+            | "f32"
+            | "f64"
+            | "Option"
+            | "Result"
+            | "Vec"
+            | "HashMap"
+            | "HashSet"
+            | "Arc"
+            | "Rc"
+            | "Box"
+            | "None"
+            | "Some"
+            | "Ok"
+            | "Err"
+            | "Self"
+            | "Promise"
+            | "Array"
+            | "Number"
+            | "Boolean"
+            | "Object"
+            | "Any"
+            | "Void"
+            | "List"
+            | "Dict"
     )
 }
 
@@ -355,7 +437,13 @@ mod tests {
         let e2 = Edge::new("caller:1", "root:1", EdgeKind::MapsTo);
         let e3 = Edge::new("test:1", "root:1", EdgeKind::Tests);
 
-        backend.insert_batch(&[root.clone(), callee.clone(), caller.clone(), test.clone()], &[e1, e2, e3]).await.unwrap();
+        backend
+            .insert_batch(
+                &[root.clone(), callee.clone(), caller.clone(), test.clone()],
+                &[e1, e2, e3],
+            )
+            .await
+            .unwrap();
 
         let traverser = SubgraphTraverser::default();
         let scored_root = ScoredNode {
@@ -377,7 +465,10 @@ mod tests {
             ..Default::default()
         };
 
-        let subgraph = traverser.extract_subgraph(backend.as_ref(), vec![scored_root], &query).await.unwrap();
+        let subgraph = traverser
+            .extract_subgraph(backend.as_ref(), vec![scored_root], &query)
+            .await
+            .unwrap();
         assert_eq!(subgraph.root_nodes.len(), 1);
         assert_eq!(subgraph.neighbor_nodes.len(), 3);
         assert_eq!(subgraph.edges.len(), 3);
@@ -391,12 +482,30 @@ mod tests {
             "root:1",
             "process_order",
             NodeKind::Function,
-            Some("pub fn process_order(order: &Order, gateway: &PaymentGateway) -> Result<Receipt>"),
+            Some(
+                "pub fn process_order(order: &Order, gateway: &PaymentGateway) -> Result<Receipt>",
+            ),
         );
-        let order_struct = make_test_node("order:1", "Order", NodeKind::Struct, Some("pub struct Order { id: u64 }"));
-        let gateway_struct = make_test_node("gw:1", "PaymentGateway", NodeKind::Struct, Some("pub struct PaymentGateway"));
+        let order_struct = make_test_node(
+            "order:1",
+            "Order",
+            NodeKind::Struct,
+            Some("pub struct Order { id: u64 }"),
+        );
+        let gateway_struct = make_test_node(
+            "gw:1",
+            "PaymentGateway",
+            NodeKind::Struct,
+            Some("pub struct PaymentGateway"),
+        );
 
-        backend.insert_batch(&[root.clone(), order_struct.clone(), gateway_struct.clone()], &[]).await.unwrap();
+        backend
+            .insert_batch(
+                &[root.clone(), order_struct.clone(), gateway_struct.clone()],
+                &[],
+            )
+            .await
+            .unwrap();
 
         let traverser = SubgraphTraverser::default();
         let scored_root = ScoredNode {
@@ -417,7 +526,10 @@ mod tests {
             ..Default::default()
         };
 
-        let subgraph = traverser.extract_subgraph(backend.as_ref(), vec![scored_root], &query).await.unwrap();
+        let subgraph = traverser
+            .extract_subgraph(backend.as_ref(), vec![scored_root], &query)
+            .await
+            .unwrap();
         assert_eq!(subgraph.inlined_type_contracts.len(), 2);
         assert!(subgraph.inlined_type_contracts.contains_key("order:1"));
         assert!(subgraph.inlined_type_contracts.contains_key("gw:1"));

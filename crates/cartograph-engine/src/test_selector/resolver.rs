@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-use std::path::Path;
+use crate::test_selector::diff_mapper::{ManifestModification, MappedDiffTarget};
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::error::Result;
-use cartograph_core::model::{
-    Node, SelectedTest, TestCategory, TestGranularity, TestRunnerKind,
-};
-use crate::test_selector::diff_mapper::{ManifestModification, MappedDiffTarget};
+use cartograph_core::model::{Node, SelectedTest, TestCategory, TestGranularity, TestRunnerKind};
+use std::collections::HashMap;
+use std::path::Path;
 
 pub struct TestResolver;
 
@@ -62,7 +60,11 @@ impl TestResolver {
                 let path_segments: Vec<String> = if record.path_str.is_empty() {
                     vec![record.target_symbol_id.clone(), test_id.clone()]
                 } else {
-                    record.path_str.split(" -> ").map(|s| s.to_string()).collect()
+                    record
+                        .path_str
+                        .split(" -> ")
+                        .map(|s| s.to_string())
+                        .collect()
                 };
 
                 if let Some(existing) = candidates_map.get_mut(&test_id) {
@@ -79,7 +81,8 @@ impl TestResolver {
                 } else {
                     let runner_kind = Self::detect_runner_kind(&record.test_node);
                     let category = Self::detect_category(&record.test_node);
-                    let standalone_command = Self::synthesize_standalone_command(&record.test_node, &runner_kind);
+                    let standalone_command =
+                        Self::synthesize_standalone_command(&record.test_node, &runner_kind);
 
                     candidates_map.insert(
                         test_id,
@@ -132,7 +135,8 @@ impl TestResolver {
                 if is_test && is_in_pkg && !candidates_map.contains_key(&node.id) {
                     let runner_kind = Self::detect_runner_kind(&node);
                     let category = Self::detect_category(&node);
-                    let standalone_command = Self::synthesize_standalone_command(&node, &runner_kind);
+                    let standalone_command =
+                        Self::synthesize_standalone_command(&node, &runner_kind);
 
                     candidates_map.insert(
                         node.id.clone(),
@@ -221,11 +225,19 @@ impl TestResolver {
         let lower_path = node.filepath.to_lowercase();
         let lower_name = node.name.to_lowercase();
 
-        if lower_path.contains("benchmark") || lower_name.starts_with("benchmark") || lower_name.starts_with("bench_") {
+        if lower_path.contains("benchmark")
+            || lower_name.starts_with("benchmark")
+            || lower_name.starts_with("bench_")
+        {
             TestCategory::Benchmark
-        } else if lower_path.contains("e2e") || lower_path.contains("playwright") || lower_path.contains("cypress") {
+        } else if lower_path.contains("e2e")
+            || lower_path.contains("playwright")
+            || lower_path.contains("cypress")
+        {
             TestCategory::E2E
-        } else if lower_path.contains("integration") || (lower_path.starts_with("tests/") && lower_path.ends_with(".rs")) {
+        } else if lower_path.contains("integration")
+            || (lower_path.starts_with("tests/") && lower_path.ends_with(".rs"))
+        {
             TestCategory::Integration
         } else {
             TestCategory::Unit
@@ -270,7 +282,11 @@ impl TestResolver {
                     .parent()
                     .and_then(|p| p.to_str())
                     .unwrap_or(".");
-                let pkg_spec = if dir == "." { "./...".to_string() } else { format!("./{dir}/...") };
+                let pkg_spec = if dir == "." {
+                    "./...".to_string()
+                } else {
+                    format!("./{dir}/...")
+                };
                 format!("go test -run '^{name}$' {pkg_spec}")
             }
             TestRunnerKind::RSpec => {

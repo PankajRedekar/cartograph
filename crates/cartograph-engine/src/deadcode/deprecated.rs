@@ -15,15 +15,32 @@ pub async fn track_deprecated_symbols(
     for file in &all_files {
         if let Ok(nodes) = backend.get_nodes_by_filepath(file).await {
             for node in nodes {
-                let is_deprecated = node.docstring.as_ref().map(|d| d.contains("@deprecated") || d.contains("DEPRECATED")).unwrap_or(false)
-                    || node.signature.as_ref().map(|s| s.contains("#[deprecated]") || s.contains("@deprecated")).unwrap_or(false)
-                    || node.metadata.as_ref().map(|m| m.get("deprecated").is_some()).unwrap_or(false);
+                let is_deprecated = node
+                    .docstring
+                    .as_ref()
+                    .map(|d| d.contains("@deprecated") || d.contains("DEPRECATED"))
+                    .unwrap_or(false)
+                    || node
+                        .signature
+                        .as_ref()
+                        .map(|s| s.contains("#[deprecated]") || s.contains("@deprecated"))
+                        .unwrap_or(false)
+                    || node
+                        .metadata
+                        .as_ref()
+                        .map(|m| m.get("deprecated").is_some())
+                        .unwrap_or(false);
 
                 if is_deprecated {
-                    let callers = backend.get_upstream_impact(&node.id, 1).await.unwrap_or_default();
+                    let callers = backend
+                        .get_upstream_impact(&node.id, 1)
+                        .await
+                        .unwrap_or_default();
                     let caller_locations: Vec<String> = callers
                         .iter()
-                        .map(|c| format!("{}:{} ({})", c.filepath, c.start_line.unwrap_or(1), c.name))
+                        .map(|c| {
+                            format!("{}:{} ({})", c.filepath, c.start_line.unwrap_or(1), c.name)
+                        })
                         .collect();
 
                     let caller_count = callers.len();
@@ -37,11 +54,8 @@ pub async fn track_deprecated_symbols(
                     };
 
                     let note = if let Some(ref doc) = node.docstring {
-                        if let Some(idx) = doc.find("@deprecated") {
-                            Some(doc[idx..].lines().next().unwrap_or("").trim().to_string())
-                        } else {
-                            None
-                        }
+                        doc.find("@deprecated")
+                            .map(|idx| doc[idx..].lines().next().unwrap_or("").trim().to_string())
                     } else {
                         None
                     };

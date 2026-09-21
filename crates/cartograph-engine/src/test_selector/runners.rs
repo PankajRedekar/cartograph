@@ -1,8 +1,6 @@
+use cartograph_core::model::{SelectedTest, TestGranularity, TestRunnerInvocation, TestRunnerKind};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use cartograph_core::model::{
-    SelectedTest, TestGranularity, TestRunnerInvocation, TestRunnerKind,
-};
 
 pub struct RunnerSynthesizer;
 
@@ -20,7 +18,10 @@ impl RunnerSynthesizer {
         // Group tests by runner kind
         let mut by_runner: HashMap<TestRunnerKind, Vec<&SelectedTest>> = HashMap::new();
         for test in tests {
-            by_runner.entry(test.runner_kind.clone()).or_default().push(test);
+            by_runner
+                .entry(test.runner_kind.clone())
+                .or_default()
+                .push(test);
         }
 
         let repo_root_str = repo_root.to_str().unwrap_or(".").to_string();
@@ -53,7 +54,12 @@ impl RunnerSynthesizer {
                     invocations.push(Self::synthesize_rspec(&group, &repo_root_str, granularity));
                 }
                 TestRunnerKind::Custom(ref template) => {
-                    invocations.push(Self::synthesize_custom(&group, &repo_root_str, template, &runner));
+                    invocations.push(Self::synthesize_custom(
+                        &group,
+                        &repo_root_str,
+                        template,
+                        &runner,
+                    ));
                 }
             }
         }
@@ -129,7 +135,10 @@ impl RunnerSynthesizer {
                 args,
                 display_command: display,
                 included_tests: bin_tests.iter().map(|t| t.test_node.name.clone()).collect(),
-                target_files: bin_tests.iter().map(|t| t.test_node.filepath.clone()).collect(),
+                target_files: bin_tests
+                    .iter()
+                    .map(|t| t.test_node.filepath.clone())
+                    .collect(),
             });
         }
 
@@ -145,8 +154,14 @@ impl RunnerSynthesizer {
                 program: "cargo".to_string(),
                 args,
                 display_command: display,
-                included_tests: unit_tests.iter().map(|t| t.test_node.name.clone()).collect(),
-                target_files: unit_tests.iter().map(|t| t.test_node.filepath.clone()).collect(),
+                included_tests: unit_tests
+                    .iter()
+                    .map(|t| t.test_node.name.clone())
+                    .collect(),
+                target_files: unit_tests
+                    .iter()
+                    .map(|t| t.test_node.filepath.clone())
+                    .collect(),
             });
         }
 
@@ -160,7 +175,12 @@ impl RunnerSynthesizer {
             .collect();
 
         let expr = patterns.join(" | ");
-        let args = vec!["nextest".to_string(), "run".to_string(), "-E".to_string(), expr.clone()];
+        let args = vec![
+            "nextest".to_string(),
+            "run".to_string(),
+            "-E".to_string(),
+            expr.clone(),
+        ];
         let display = format!("cargo nextest run -E '{expr}'");
 
         TestRunnerInvocation {
@@ -182,7 +202,8 @@ impl RunnerSynthesizer {
         let mut args = Vec::new();
 
         if granularity == TestGranularity::File {
-            let unique_files: HashSet<String> = tests.iter().map(|t| t.test_node.filepath.clone()).collect();
+            let unique_files: HashSet<String> =
+                tests.iter().map(|t| t.test_node.filepath.clone()).collect();
             for f in unique_files {
                 args.push(f);
             }
@@ -212,8 +233,13 @@ impl RunnerSynthesizer {
         }
     }
 
-    fn synthesize_jest(tests: &[&SelectedTest], working_dir: &str, is_vitest: bool) -> TestRunnerInvocation {
-        let unique_files: HashSet<String> = tests.iter().map(|t| t.test_node.filepath.clone()).collect();
+    fn synthesize_jest(
+        tests: &[&SelectedTest],
+        working_dir: &str,
+        is_vitest: bool,
+    ) -> TestRunnerInvocation {
+        let unique_files: HashSet<String> =
+            tests.iter().map(|t| t.test_node.filepath.clone()).collect();
         let test_names: Vec<&str> = tests.iter().map(|t| t.test_node.name.as_str()).collect();
         let filter = test_names.join("|");
 
@@ -252,7 +278,8 @@ impl RunnerSynthesizer {
     }
 
     fn synthesize_mocha(tests: &[&SelectedTest], working_dir: &str) -> TestRunnerInvocation {
-        let unique_files: HashSet<String> = tests.iter().map(|t| t.test_node.filepath.clone()).collect();
+        let unique_files: HashSet<String> =
+            tests.iter().map(|t| t.test_node.filepath.clone()).collect();
         let test_names: Vec<&str> = tests.iter().map(|t| t.test_node.name.as_str()).collect();
         let filter = test_names.join("|");
 
@@ -319,7 +346,10 @@ impl RunnerSynthesizer {
                 args,
                 display_command: display,
                 included_tests: dir_tests.iter().map(|t| t.test_node.name.clone()).collect(),
-                target_files: dir_tests.iter().map(|t| t.test_node.filepath.clone()).collect(),
+                target_files: dir_tests
+                    .iter()
+                    .map(|t| t.test_node.filepath.clone())
+                    .collect(),
             });
         }
 
@@ -334,7 +364,8 @@ impl RunnerSynthesizer {
         let mut args = vec!["exec".to_string(), "rspec".to_string()];
 
         if granularity == TestGranularity::File {
-            let unique_files: HashSet<String> = tests.iter().map(|t| t.test_node.filepath.clone()).collect();
+            let unique_files: HashSet<String> =
+                tests.iter().map(|t| t.test_node.filepath.clone()).collect();
             for f in unique_files {
                 args.push(f);
             }
@@ -371,7 +402,13 @@ impl RunnerSynthesizer {
         let names: Vec<String> = tests.iter().map(|t| t.test_node.name.clone()).collect();
         let pkgs: Vec<String> = files
             .iter()
-            .map(|f| Path::new(f).parent().and_then(|p| p.to_str()).unwrap_or("").to_string())
+            .map(|f| {
+                Path::new(f)
+                    .parent()
+                    .and_then(|p| p.to_str())
+                    .unwrap_or("")
+                    .to_string()
+            })
             .collect();
 
         let filled = template

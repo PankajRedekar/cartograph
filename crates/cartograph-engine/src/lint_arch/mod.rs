@@ -85,15 +85,9 @@ impl ArchLinter {
         let start_time = Instant::now();
 
         // 1. Fetch inter-file edges and indexed files from storage backend
-        let raw_edges = self
-            .backend
-            .get_inter_file_dependencies(0.0)
-            .await?;
+        let raw_edges = self.backend.get_inter_file_dependencies(0.0).await?;
 
-        let all_files = self
-            .backend
-            .get_all_indexed_files()
-            .await?;
+        let all_files = self.backend.get_all_indexed_files().await?;
 
         // 2. Resolve presets if specified
         let mut effective_config = self.config.clone();
@@ -107,11 +101,11 @@ impl ArchLinter {
             for file in &all_files {
                 if let Ok(nodes) = self.backend.get_nodes_by_filepath(file).await {
                     for node in nodes {
-                        if let Some(ref doc) = node.docstring {
-                            if let Some(layer) = ArchTagExtractor::extract_layer(doc) {
-                                file_tags.insert(file.to_string(), layer);
-                                break;
-                            }
+                        if let Some(ref doc) = node.docstring
+                            && let Some(layer) = ArchTagExtractor::extract_layer(doc)
+                        {
+                            file_tags.insert(file.to_string(), layer);
+                            break;
                         }
                     }
                 }
@@ -203,11 +197,7 @@ impl ArchLinter {
             Vec<BoundaryViolation>,
             Vec<DependencyCycle>,
         ) = if let Some(ref base) = self.baseline {
-            ArchBaselineManager::filter_with_baseline(
-                unique_violations,
-                detected_cycles,
-                base,
-            )
+            ArchBaselineManager::filter_with_baseline(unique_violations, detected_cycles, base)
         } else {
             (unique_violations, detected_cycles, Vec::new(), Vec::new())
         };
@@ -216,13 +206,13 @@ impl ArchLinter {
             v.is_baseline_suppressed = true;
         }
 
-        if self.ratchet {
-            if let Some(ref base) = self.baseline {
-                let (ratcheted, _, _) =
-                    ArchBaselineManager::ratchet_baseline(base, &active_violations, &active_cycles);
-                if let Some(ref path) = self.baseline_path {
-                    let _ = ArchBaselineManager::save_to_path(path, &ratcheted);
-                }
+        if self.ratchet
+            && let Some(ref base) = self.baseline
+        {
+            let (ratcheted, _, _) =
+                ArchBaselineManager::ratchet_baseline(base, &active_violations, &active_cycles);
+            if let Some(ref path) = self.baseline_path {
+                let _ = ArchBaselineManager::save_to_path(path, &ratcheted);
             }
         }
 

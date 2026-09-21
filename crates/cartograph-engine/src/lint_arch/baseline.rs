@@ -84,11 +84,8 @@ impl ArchBaselineManager {
 
         for c in cycles {
             if seen_c_fps.insert(c.fingerprint.clone()) {
-                let path_files: Vec<String> = c
-                    .hops
-                    .iter()
-                    .map(|hop| hop.filepath.clone())
-                    .collect();
+                let path_files: Vec<String> =
+                    c.hops.iter().map(|hop| hop.filepath.clone()).collect();
 
                 recorded_cycles.push(BaselineCycleEntry {
                     fingerprint: c.fingerprint.clone(),
@@ -321,15 +318,18 @@ mod tests {
             is_new_in_diff: false,
         };
 
-        let (active_new, _, suppressed_new, _) =
-            ArchBaselineManager::filter_with_baseline(vec![v1.clone(), v3.clone()], vec![], &baseline);
+        let (active_new, _, suppressed_new, _) = ArchBaselineManager::filter_with_baseline(
+            vec![v1.clone(), v3.clone()],
+            vec![],
+            &baseline,
+        );
         assert_eq!(active_new.len(), 1);
         assert_eq!(active_new[0].fingerprint, "fp3");
         assert_eq!(suppressed_new.len(), 1);
 
         // 4. Ratchet baseline: v2 was fixed, so baseline should drop v2
         let (ratcheted, pruned_v, pruned_c) =
-            ArchBaselineManager::ratchet_baseline(&baseline, &[v1.clone()], &[]);
+            ArchBaselineManager::ratchet_baseline(&baseline, std::slice::from_ref(&v1), &[]);
         assert_eq!(pruned_v, 1);
         assert_eq!(pruned_c, 0);
         assert_eq!(ratcheted.violations.len(), 1);

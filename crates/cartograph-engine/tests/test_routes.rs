@@ -3,10 +3,10 @@ use cartograph_core::model::{
     Edge, EdgeKind, HttpMethod, Node, NodeKind, RouteAuthKind, RouteFilterOptions,
 };
 use cartograph_db::memory::MemoryBackend;
+use cartograph_engine::RouteEngine;
 use cartograph_engine::routes::formatters::{
     JsonFormatter, MarkdownFormatter, TerminalFormatter, XmlFormatter,
 };
-use cartograph_engine::RouteEngine;
 use serde_json::json;
 
 #[tokio::test]
@@ -152,13 +152,22 @@ async fn test_fullstack_route_trace_end_to_end() {
                 table_node.clone(),
                 component_node.clone(),
             ],
-            &[e_route_ctrl, e_ctrl_svc, e_svc_model, e_model_tbl, e_comp_route],
+            &[
+                e_route_ctrl,
+                e_ctrl_svc,
+                e_svc_model,
+                e_model_tbl,
+                e_comp_route,
+            ],
         )
         .await
         .unwrap();
 
     let engine = RouteEngine::new(&backend);
-    let report = engine.query_routes(&RouteFilterOptions::default()).await.unwrap();
+    let report = engine
+        .query_routes(&RouteFilterOptions::default())
+        .await
+        .unwrap();
 
     assert_eq!(report.routes.len(), 1);
     let trace = &report.routes[0];
@@ -171,7 +180,10 @@ async fn test_fullstack_route_trace_end_to_end() {
 
     // Frontend Callers verified
     assert_eq!(trace.frontend_callers.len(), 1);
-    assert_eq!(trace.frontend_callers[0].component_name.as_deref(), Some("CheckoutButton"));
+    assert_eq!(
+        trace.frontend_callers[0].component_name.as_deref(),
+        Some("CheckoutButton")
+    );
     assert_eq!(trace.frontend_callers[0].method, HttpMethod::Post);
 
     // Call Chain verified
@@ -254,8 +266,10 @@ async fn test_inverted_model_and_table_route_query() {
     let engine = RouteEngine::new(&backend);
 
     // Inverted query by model
-    let mut opts = RouteFilterOptions::default();
-    opts.model_name = Some("UserModel".into());
+    let opts = RouteFilterOptions {
+        model_name: Some("UserModel".into()),
+        ..Default::default()
+    };
     let report = engine.query_routes(&opts).await.unwrap();
 
     assert_eq!(report.routes.len(), 1);
@@ -340,7 +354,10 @@ async fn test_verify_contracts_breaking_change_detection() {
     head_backend.insert_batch(&[head_get], &[]).await.unwrap();
 
     let engine = RouteEngine::new(&head_backend);
-    let diff = engine.verify_contracts(&base_backend, "main", "HEAD").await.unwrap();
+    let diff = engine
+        .verify_contracts(&base_backend, "main", "HEAD")
+        .await
+        .unwrap();
 
     assert!(!diff.passed);
     assert_eq!(diff.breaking_changes.len(), 2);

@@ -19,12 +19,12 @@ impl ContractDiffEngine {
 
         let mut base_map: HashMap<(HttpMethod, String), &FullStackRouteTrace> = HashMap::new();
         for trace in base_traces {
-            base_map.insert((trace.method.clone(), trace.normalized_path.clone()), trace);
+            base_map.insert((trace.method, trace.normalized_path.clone()), trace);
         }
 
         let mut head_map: HashMap<(HttpMethod, String), &FullStackRouteTrace> = HashMap::new();
         for trace in head_traces {
-            head_map.insert((trace.method.clone(), trace.normalized_path.clone()), trace);
+            head_map.insert((trace.method, trace.normalized_path.clone()), trace);
         }
 
         let mut breaking_changes = Vec::new();
@@ -32,7 +32,7 @@ impl ContractDiffEngine {
 
         // 1. Detect removed routes or method changes
         for ((base_method, base_path), base_trace) in &base_map {
-            if let Some(head_trace) = head_map.get(&(base_method.clone(), base_path.clone())) {
+            if let Some(head_trace) = head_map.get(&(*base_method, base_path.clone())) {
                 // Route exists in both -> check parameters and auth changes
                 Self::compare_route_parameters(
                     base_trace,
@@ -49,17 +49,18 @@ impl ContractDiffEngine {
                 );
             } else {
                 // Route missing in head with same method -> check if method was changed
-                let other_method_in_head = head_traces.iter().find(|t| t.normalized_path == *base_path);
+                let other_method_in_head =
+                    head_traces.iter().find(|t| t.normalized_path == *base_path);
 
                 if let Some(head_other) = other_method_in_head {
                     breaking_changes.push(ContractBreakingChange {
                         route_id: base_trace.id.clone(),
                         path: base_path.clone(),
-                        method: base_method.clone(),
+                        method: *base_method,
                         severity: ContractChangeSeverity::Breaking,
                         change: ContractChangeKind::MethodChanged {
-                            old_method: base_method.clone(),
-                            new_method: head_other.method.clone(),
+                            old_method: *base_method,
+                            new_method: head_other.method,
                         },
                         description: format!(
                             "HTTP Method changed from {} to {} on endpoint '{}'",
@@ -78,7 +79,7 @@ impl ContractDiffEngine {
                     breaking_changes.push(ContractBreakingChange {
                         route_id: base_trace.id.clone(),
                         path: base_path.clone(),
-                        method: base_method.clone(),
+                        method: *base_method,
                         severity: ContractChangeSeverity::Breaking,
                         change: ContractChangeKind::RouteRemoved,
                         description: format!(
@@ -88,7 +89,9 @@ impl ContractDiffEngine {
                         ),
                         filepath: base_trace.filepath.clone(),
                         line: base_trace.line,
-                        remediation_hint: Some("Restore the endpoint or maintain an API deprecation alias".to_string()),
+                        remediation_hint: Some(
+                            "Restore the endpoint or maintain an API deprecation alias".to_string(),
+                        ),
                     });
                 }
             }
@@ -96,11 +99,11 @@ impl ContractDiffEngine {
 
         // 2. Detect newly added endpoints in head (Non-breaking)
         for ((head_method, head_path), head_trace) in &head_map {
-            if !base_map.contains_key(&(head_method.clone(), head_path.clone())) {
+            if !base_map.contains_key(&(*head_method, head_path.clone())) {
                 non_breaking_changes.push(ContractBreakingChange {
                     route_id: head_trace.id.clone(),
                     path: head_path.clone(),
-                    method: head_method.clone(),
+                    method: *head_method,
                     severity: ContractChangeSeverity::Informational,
                     change: ContractChangeKind::RouteAdded,
                     description: format!(
@@ -136,19 +139,22 @@ impl ContractDiffEngine {
         breaking: &mut Vec<ContractBreakingChange>,
         _non_breaking: &mut Vec<ContractBreakingChange>,
     ) {
-        let base_params: HashMap<&str, &cartograph_core::model::RouteParameter> =
-            base.parameters.iter().map(|p| (p.name.as_str(), p)).collect();
+        let base_params: HashMap<&str, &cartograph_core::model::RouteParameter> = base
+            .parameters
+            .iter()
+            .map(|p| (p.name.as_str(), p))
+            .collect();
 
         for head_param in &head.parameters {
             if !base_params.contains_key(head_param.name.as_str()) && head_param.required {
                 breaking.push(ContractBreakingChange {
                     route_id: head.id.clone(),
                     path: head.normalized_path.clone(),
-                    method: head.method.clone(),
+                    method: head.method,
                     severity: ContractChangeSeverity::Breaking,
                     change: ContractChangeKind::NewRequiredParam {
                         name: head_param.name.clone(),
-                        location: head_param.location.clone(),
+                        location: head_param.location,
                     },
                     description: format!(
                         "New required path parameter '{}' was added to '{:#?}'",
@@ -156,7 +162,9 @@ impl ContractDiffEngine {
                     ),
                     filepath: head.filepath.clone(),
                     line: head.line,
-                    remediation_hint: Some("Provide a default value or keep the parameter optional".to_string()),
+                    remediation_hint: Some(
+                        "Provide a default value or keep the parameter optional".to_string(),
+                    ),
                 });
             }
         }
@@ -172,7 +180,7 @@ impl ContractDiffEngine {
             breaking.push(ContractBreakingChange {
                 route_id: head.id.clone(),
                 path: head.normalized_path.clone(),
-                method: head.method.clone(),
+                method: head.method,
                 severity: ContractChangeSeverity::Breaking,
                 change: ContractChangeKind::AuthElevated {
                     old_auth: RouteAuthKind::Public,
@@ -185,7 +193,9 @@ impl ContractDiffEngine {
                 ),
                 filepath: head.filepath.clone(),
                 line: head.line,
-                remediation_hint: Some("Ensure public callers are updated with authentication credentials".to_string()),
+                remediation_hint: Some(
+                    "Ensure public callers are updated with authentication credentials".to_string(),
+                ),
             });
         }
     }

@@ -13,7 +13,11 @@ fn test_deadcode_cli_help() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stderr);
     let full_out = format!("{}\n{}", stdout, String::from_utf8_lossy(&output.stdout));
-    assert!(full_out.contains("deadcode") || full_out.contains("DeadCode") || full_out.contains("Detect dead code"));
+    assert!(
+        full_out.contains("deadcode")
+            || full_out.contains("DeadCode")
+            || full_out.contains("Detect dead code")
+    );
     assert!(full_out.contains("--components-only"));
     assert!(full_out.contains("--ghost-deps"));
     assert!(full_out.contains("--export-ai-ignore"));

@@ -110,7 +110,13 @@ async fn test_multi_root_impact_subgraph() {
     let sqlite_backend = SqliteBackend::open_memory().unwrap();
     let memory_backend = cartograph_db::memory::MemoryBackend::new();
 
-    let nodes = vec![n("Root1"), n("Root2"), n("Caller1"), n("Caller2"), n("TopCaller")];
+    let nodes = vec![
+        n("Root1"),
+        n("Root2"),
+        n("Caller1"),
+        n("Caller2"),
+        n("TopCaller"),
+    ];
     let edges = vec![
         Edge::new("Caller1", "Root1", EdgeKind::Calls),
         Edge::new("Caller2", "Root2", EdgeKind::References),
@@ -220,22 +226,43 @@ async fn test_get_tests_for_targets() {
             "Target2".to_string(),
             "DirectlyModifiedTest".to_string(),
         ];
-        let tests = backend.get_tests_for_targets(&targets, 3, 0.0).await.unwrap();
+        let tests = backend
+            .get_tests_for_targets(&targets, 3, 0.0)
+            .await
+            .unwrap();
 
         let test_ids: Vec<String> = tests.iter().map(|t| t.test_node.id.clone()).collect();
-        assert!(test_ids.contains(&"DirectTest".to_string()), "DirectTest should be found");
-        assert!(test_ids.contains(&"TransTest".to_string()), "TransTest should be found");
-        assert!(test_ids.contains(&"DirectlyModifiedTest".to_string()), "DirectlyModifiedTest should be found");
+        assert!(
+            test_ids.contains(&"DirectTest".to_string()),
+            "DirectTest should be found"
+        );
+        assert!(
+            test_ids.contains(&"TransTest".to_string()),
+            "TransTest should be found"
+        );
+        assert!(
+            test_ids.contains(&"DirectlyModifiedTest".to_string()),
+            "DirectlyModifiedTest should be found"
+        );
 
-        let direct = tests.iter().find(|t| t.test_node.id == "DirectTest").unwrap();
+        let direct = tests
+            .iter()
+            .find(|t| t.test_node.id == "DirectTest")
+            .unwrap();
         assert_eq!(direct.hop_distance, 1);
         assert_eq!(direct.target_symbol_id, "Target1");
 
-        let trans = tests.iter().find(|t| t.test_node.id == "TransTest").unwrap();
+        let trans = tests
+            .iter()
+            .find(|t| t.test_node.id == "TransTest")
+            .unwrap();
         assert_eq!(trans.hop_distance, 2);
         assert_eq!(trans.target_symbol_id, "Target2");
 
-        let modified_test = tests.iter().find(|t| t.test_node.id == "DirectlyModifiedTest").unwrap();
+        let modified_test = tests
+            .iter()
+            .find(|t| t.test_node.id == "DirectlyModifiedTest")
+            .unwrap();
         assert_eq!(modified_test.hop_distance, 0);
     }
 }
@@ -289,12 +316,7 @@ async fn test_route_traversals() {
         "src/services.rs",
     );
 
-    let model_node = make_test_node(
-        "model:invoice",
-        "Invoice",
-        NodeKind::Model,
-        "src/models.rs",
-    );
+    let model_node = make_test_node("model:invoice", "Invoice", NodeKind::Model, "src/models.rs");
 
     let ui_component = make_test_node(
         "component:checkout_button",
@@ -311,7 +333,11 @@ async fn test_route_traversals() {
         ui_component.clone(),
     ];
 
-    let mut client_edge = Edge::new("component:checkout_button", "route:checkout", EdgeKind::Calls);
+    let mut client_edge = Edge::new(
+        "component:checkout_button",
+        "route:checkout",
+        EdgeKind::Calls,
+    );
     client_edge.metadata = Some(serde_json::json!({
         "type": "api_client_call",
         "component": "CheckoutButton",
@@ -334,7 +360,10 @@ async fn test_route_traversals() {
         backend.insert_batch(&nodes, &edges).await.unwrap();
 
         // 1. Test get_routes
-        let routes = backend.get_routes(Some("POST"), Some("checkout")).await.unwrap();
+        let routes = backend
+            .get_routes(Some("POST"), Some("checkout"))
+            .await
+            .unwrap();
         assert_eq!(routes.len(), 1);
         assert_eq!(routes[0].id, "route:checkout");
 
@@ -342,7 +371,10 @@ async fn test_route_traversals() {
         assert_eq!(empty.len(), 0);
 
         // 2. Test downstream traces
-        let traces = backend.get_route_downstream_traces(&["route:checkout".to_string()], 5, 0.0).await.unwrap();
+        let traces = backend
+            .get_route_downstream_traces(&["route:checkout".to_string()], 5, 0.0)
+            .await
+            .unwrap();
         assert_eq!(traces.len(), 3);
         let trace_ids: Vec<String> = traces.iter().map(|t| t.target_node.id.clone()).collect();
         assert!(trace_ids.contains(&"fn:checkout_handler".to_string()));
@@ -350,13 +382,19 @@ async fn test_route_traversals() {
         assert!(trace_ids.contains(&"model:invoice".to_string()));
 
         // 3. Test inverted model-to-route lookup
-        let model_routes = backend.get_routes_for_models(&["model:invoice".to_string()], 5, 0.0).await.unwrap();
+        let model_routes = backend
+            .get_routes_for_models(&["model:invoice".to_string()], 5, 0.0)
+            .await
+            .unwrap();
         assert_eq!(model_routes.len(), 1);
         assert_eq!(model_routes[0].route_node.id, "route:checkout");
         assert_eq!(model_routes[0].hop_distance, 3);
 
         // 4. Test frontend caller lookup
-        let callers = backend.get_frontend_callers_for_routes(&["route:checkout".to_string()]).await.unwrap();
+        let callers = backend
+            .get_frontend_callers_for_routes(&["route:checkout".to_string()])
+            .await
+            .unwrap();
         assert_eq!(callers.len(), 1);
         assert_eq!(callers[0].caller_node.id, "component:checkout_button");
         assert_eq!(callers[0].component_name.as_deref(), Some("CheckoutButton"));
@@ -526,7 +564,9 @@ async fn test_coupling_and_class_member_queries() {
 
         // 1. Verify get_symbol_coupling_metrics
         let coupling = backend
-            .get_symbol_coupling_metrics(&["cartograph://src/order.rs::OrderService::process#method".to_string()])
+            .get_symbol_coupling_metrics(&[
+                "cartograph://src/order.rs::OrderService::process#method".to_string(),
+            ])
             .await
             .unwrap();
         assert_eq!(coupling.len(), 1);
@@ -543,5 +583,3 @@ async fn test_coupling_and_class_member_queries() {
         assert_eq!(members[0].kind, "method");
     }
 }
-
-

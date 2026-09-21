@@ -48,10 +48,16 @@ impl MarkdownFormatter {
         ));
 
         md.push_str(&format!("- **Framework**: `{}`\n", trace.framework));
-        md.push_str(&format!("- **Source**: `{}:{}`\n", trace.filepath, trace.line));
+        md.push_str(&format!(
+            "- **Source**: `{}:{}`\n",
+            trace.filepath, trace.line
+        ));
         md.push_str(&format!("- **Authentication**: `{:?}`\n", trace.auth));
         md.push_str(&format!("- **Data Mutation**: `{}`\n", trace.is_mutation));
-        md.push_str(&format!("- **Confidence**: `{:.0}%`\n\n", trace.confidence * 100.0));
+        md.push_str(&format!(
+            "- **Confidence**: `{:.0}%`\n\n",
+            trace.confidence * 100.0
+        ));
 
         // Mermaid Sequence Diagram
         md.push_str("## Request Sequence Diagram\n\n");
@@ -59,14 +65,22 @@ impl MarkdownFormatter {
 
         // Participants
         if let Some(first_caller) = trace.frontend_callers.first() {
-            let comp = first_caller.component_name.as_deref().unwrap_or("ClientComponent");
+            let comp = first_caller
+                .component_name
+                .as_deref()
+                .unwrap_or("ClientComponent");
             md.push_str(&format!("  participant Client as {comp}\n"));
         } else {
             md.push_str("  actor Client as Client Caller\n");
         }
 
-        let _route_clean = trace.normalized_path.replace(['/', '{', '}', ':', '-'], "_");
-        md.push_str(&format!("  participant Route as Route ({})\n", trace.method.as_str()));
+        let _route_clean = trace
+            .normalized_path
+            .replace(['/', '{', '}', ':', '-'], "_");
+        md.push_str(&format!(
+            "  participant Route as Route ({})\n",
+            trace.method.as_str()
+        ));
 
         for (i, step) in trace.call_chain.iter().enumerate() {
             let clean_name = step.name.replace(['/', ':', '.', '(', ')'], "_");

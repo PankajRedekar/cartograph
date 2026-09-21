@@ -29,9 +29,18 @@ impl TokenBudgetManager {
         let ceiling = match max_tokens {
             Some(c) => c,
             None => {
-                let total_tokens = root_slices.iter().map(|s| s.estimated_tokens).sum::<usize>()
-                    + type_contract_slices.iter().map(|s| s.estimated_tokens).sum::<usize>()
-                    + neighbor_slices.iter().map(|s| s.estimated_tokens).sum::<usize>();
+                let total_tokens = root_slices
+                    .iter()
+                    .map(|s| s.estimated_tokens)
+                    .sum::<usize>()
+                    + type_contract_slices
+                        .iter()
+                        .map(|s| s.estimated_tokens)
+                        .sum::<usize>()
+                    + neighbor_slices
+                        .iter()
+                        .map(|s| s.estimated_tokens)
+                        .sum::<usize>();
 
                 return BudgetedSubgraphContext {
                     root_slices,
@@ -49,14 +58,17 @@ impl TokenBudgetManager {
         let mut current_tokens = root_tokens;
 
         // Priority Tier 2: Inlined Type Contracts (100% guaranteed)
-        let type_tokens: usize = type_contract_slices.iter().map(|s| s.estimated_tokens).sum();
+        let type_tokens: usize = type_contract_slices
+            .iter()
+            .map(|s| s.estimated_tokens)
+            .sum();
         current_tokens += type_tokens;
 
         // Priority Tier 3: Neighbor code bodies vs. Signatures degradation
         let mut final_neighbor_slices = Vec::new();
         let mut omitted_bodies = 0;
 
-        for (full_slice, sig_slice) in neighbor_slices.into_iter().zip(neighbor_sig_slices.into_iter()) {
+        for (full_slice, sig_slice) in neighbor_slices.into_iter().zip(neighbor_sig_slices) {
             if current_tokens + full_slice.estimated_tokens <= ceiling {
                 current_tokens += full_slice.estimated_tokens;
                 final_neighbor_slices.push(full_slice);
@@ -118,7 +130,7 @@ mod tests {
         assert_eq!(budgeted.type_contract_slices.len(), 1);
         assert_eq!(budgeted.neighbor_slices.len(), 2);
         assert_eq!(budgeted.neighbor_slices[0].estimated_tokens, 1000); // Full body kept
-        assert_eq!(budgeted.neighbor_slices[1].estimated_tokens, 50);   // Degraded to signature!
+        assert_eq!(budgeted.neighbor_slices[1].estimated_tokens, 50); // Degraded to signature!
         assert_eq!(budgeted.omitted_neighbor_bodies_count, 1);
         assert_eq!(budgeted.total_estimated_tokens, 1750);
         assert!(budgeted.total_estimated_tokens <= 1800);

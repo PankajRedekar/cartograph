@@ -1,16 +1,16 @@
 use std::sync::LazyLock;
 use tree_sitter::{Node as TsNode, Parser, Query, Tree};
 
-use cartograph_core::{build_uri, Edge, EdgeKind, Node, NodeKind};
 use crate::error::{AstError, Result};
 use crate::hash::compute_node_checksum;
 use crate::line_index::LineIndex;
 use crate::model::{
-    AstDiagnostic, CallFidelity, DiagnosticSeverity, ParseContext, ParsedFile,
-    UnresolvedReference, Visibility,
+    AstDiagnostic, CallFidelity, DiagnosticSeverity, ParseContext, ParsedFile, UnresolvedReference,
+    Visibility,
 };
 use crate::traits::LanguageParser;
 use crate::trivia::{SignatureNormalizer, TriviaBinder};
+use cartograph_core::{Edge, EdgeKind, Node, NodeKind, build_uri};
 
 pub static RUBY_TAGS_QUERY: LazyLock<Query> = LazyLock::new(|| {
     let language = tree_sitter_ruby::LANGUAGE.into();
@@ -201,12 +201,12 @@ impl<'a> RubyExtractor<'a> {
             }
         }
 
-        let is_rails_model = superclass.as_deref().map_or(false, |s| {
-            s == "ApplicationRecord" || s == "ActiveRecord::Base"
-        });
-        let is_rails_controller = superclass.as_deref().map_or(false, |s| {
-            s == "ApplicationController" || s.ends_with("Controller")
-        });
+        let is_rails_model = superclass
+            .as_deref()
+            .is_some_and(|s| s == "ApplicationRecord" || s == "ActiveRecord::Base");
+        let is_rails_controller = superclass
+            .as_deref()
+            .is_some_and(|s| s == "ApplicationController" || s.ends_with("Controller"));
 
         let kind = if is_rails_model {
             NodeKind::Model
@@ -361,7 +361,9 @@ impl<'a> RubyExtractor<'a> {
             start_col: Some(span.start_col),
             end_line: Some(span.end_line),
             end_col: Some(span.end_col),
-            signature: Some(SignatureNormalizer::normalize(&format!("def {method_name}"))),
+            signature: Some(SignatureNormalizer::normalize(&format!(
+                "def {method_name}"
+            ))),
             docstring,
             checksum,
             metadata: Some(metadata),
@@ -370,7 +372,8 @@ impl<'a> RubyExtractor<'a> {
         // defines edge if inside class/module
         if let Some(parent_name) = self.scope_stack.last() {
             let parent_uri = build_uri(self.filepath, "", parent_name, &NodeKind::Class);
-            self.edges.push(Edge::new(parent_uri, uri, EdgeKind::Defines));
+            self.edges
+                .push(Edge::new(parent_uri, uri, EdgeKind::Defines));
         }
 
         self.scope_stack.push(method_name.to_string());
@@ -392,7 +395,8 @@ impl<'a> RubyExtractor<'a> {
     }
 
     fn handle_invocation(&mut self, node: TsNode) {
-        let method_node = match node.child_by_field_name("method")
+        let method_node = match node
+            .child_by_field_name("method")
             .or_else(|| node.child_by_field_name("name"))
             .or_else(|| node.named_child(0))
         {
@@ -405,30 +409,33 @@ impl<'a> RubyExtractor<'a> {
 
         // ActiveRecord associations: has_many :line_items, belongs_to :user
         if method_name == "has_many" || method_name == "belongs_to" || method_name == "has_one" {
-            if let Some(args) = node.child_by_field_name("arguments") {
-                if let Some(first_arg) = args.named_child(0) {
-                    let rel_name = self.node_text(first_arg).trim_start_matches(':');
-                    let model_name = Self::snake_to_pascal(rel_name);
-                    self.unresolved_references.push(UnresolvedReference {
-                        source_node_id: caller_id.clone(),
-                        target_symbol: model_name,
-                        import_source: None,
-                        kind: EdgeKind::References,
-                        span,
-                        call_fidelity: CallFidelity::Definite,
-                        receiver_type_hint: None,
-                        receiver_var: None,
-                        arg_count: None,
-                    });
-                }
+            if let Some(args) = node.child_by_field_name("arguments")
+                && let Some(first_arg) = args.named_child(0)
+            {
+                let rel_name = self.node_text(first_arg).trim_start_matches(':');
+                let model_name = Self::snake_to_pascal(rel_name);
+                self.unresolved_references.push(UnresolvedReference {
+                    source_node_id: caller_id.clone(),
+                    target_symbol: model_name,
+                    import_source: None,
+                    kind: EdgeKind::References,
+                    span,
+                    call_fidelity: CallFidelity::Definite,
+                    receiver_type_hint: None,
+                    receiver_var: None,
+                    arg_count: None,
+                });
             }
         } else if method_name == "namespace" {
             // Rails route namespace nesting: namespace :api do ... end
             let mut ns_name = String::new();
-            if let Some(args) = node.child_by_field_name("arguments") {
-                if let Some(first_arg) = args.named_child(0) {
-                    ns_name = self.node_text(first_arg).trim_matches([':', '\'', '"']).to_string();
-                }
+            if let Some(args) = node.child_by_field_name("arguments")
+                && let Some(first_arg) = args.named_child(0)
+            {
+                ns_name = self
+                    .node_text(first_arg)
+                    .trim_matches([':', '\'', '"'])
+                    .to_string();
             }
             if !ns_name.is_empty() {
                 self.namespace_stack.push(ns_name);
@@ -445,21 +452,73 @@ impl<'a> RubyExtractor<'a> {
             return;
         } else if method_name == "resources" || method_name == "resource" {
             // Rails routes: resources :invoices
-            if let Some(args) = node.child_by_field_name("arguments") {
-                if let Some(first_arg) = args.named_child(0) {
-                    let resource_name = self.node_text(first_arg).trim_start_matches(':').trim_matches(['\'', '"']);
-                    let ns_prefix = if self.namespace_stack.is_empty() {
-                        "".to_string()
-                    } else {
-                        format!("/{}", self.namespace_stack.join("/"))
-                    };
-                    let base_path = format!("{ns_prefix}/{resource_name}");
+            if let Some(args) = node.child_by_field_name("arguments")
+                && let Some(first_arg) = args.named_child(0)
+            {
+                let resource_name = self
+                    .node_text(first_arg)
+                    .trim_start_matches(':')
+                    .trim_matches(['\'', '"']);
+                let ns_prefix = if self.namespace_stack.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("/{}", self.namespace_stack.join("/"))
+                };
+                let base_path = format!("{ns_prefix}/{resource_name}");
 
-                    // Master resource node (for backwards compatibility with existing tests)
-                    let uri = build_uri(self.filepath, "routes", resource_name, &NodeKind::Route);
+                // Master resource node (for backwards compatibility with existing tests)
+                let uri = build_uri(self.filepath, "routes", resource_name, &NodeKind::Route);
+                self.nodes.push(Node {
+                    id: uri,
+                    name: resource_name.to_string(),
+                    kind: NodeKind::Route,
+                    filepath: self.filepath.to_string(),
+                    scope: "routes".to_string(),
+                    start_line: Some(span.start_line),
+                    start_col: Some(span.start_col),
+                    end_line: Some(span.end_line),
+                    end_col: Some(span.end_col),
+                    signature: Some(format!("resources :{resource_name}")),
+                    docstring: None,
+                    checksum: None,
+                    metadata: Some(serde_json::json!({
+                        "route_dsl": "resources",
+                        "resource": resource_name,
+                        "framework": "rails",
+                    })),
+                });
+
+                // Expand 7 RESTful actions
+                let rest_actions = if method_name == "resources" {
+                    vec![
+                        ("GET", base_path.clone(), "index"),
+                        ("POST", base_path.clone(), "create"),
+                        ("GET", format!("{base_path}/new"), "new"),
+                        ("GET", format!("{base_path}/:id"), "show"),
+                        ("GET", format!("{base_path}/:id/edit"), "edit"),
+                        ("PATCH", format!("{base_path}/:id"), "update"),
+                        ("DELETE", format!("{base_path}/:id"), "destroy"),
+                    ]
+                } else {
+                    vec![
+                        ("GET", base_path.clone(), "show"),
+                        ("POST", base_path.clone(), "create"),
+                        ("GET", format!("{base_path}/new"), "new"),
+                        ("GET", format!("{base_path}/edit"), "edit"),
+                        ("PATCH", base_path.clone(), "update"),
+                        ("DELETE", base_path.clone(), "destroy"),
+                    ]
+                };
+
+                for (m, path, action) in rest_actions {
+                    let route_name = format!("{m} {path}");
+                    let route_uri =
+                        build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
+                    let controller_target = format!("{}#{}", resource_name, action);
+
                     self.nodes.push(Node {
-                        id: uri,
-                        name: resource_name.to_string(),
+                        id: route_uri.clone(),
+                        name: route_name.clone(),
                         kind: NodeKind::Route,
                         filepath: self.filepath.to_string(),
                         scope: "routes".to_string(),
@@ -467,68 +526,90 @@ impl<'a> RubyExtractor<'a> {
                         start_col: Some(span.start_col),
                         end_line: Some(span.end_line),
                         end_col: Some(span.end_col),
-                        signature: Some(format!("resources :{resource_name}")),
+                        signature: Some(format!("{m} {path}")),
                         docstring: None,
                         checksum: None,
                         metadata: Some(serde_json::json!({
-                            "route_dsl": "resources",
-                            "resource": resource_name,
+                            "http_method": m,
+                            "raw_pattern": path,
                             "framework": "rails",
+                            "handler": controller_target,
+                            "auth": "unknown",
                         })),
                     });
 
-                    // Expand 7 RESTful actions
-                    let rest_actions = if method_name == "resources" {
-                        vec![
-                            ("GET", base_path.clone(), "index"),
-                            ("POST", base_path.clone(), "create"),
-                            ("GET", format!("{base_path}/new"), "new"),
-                            ("GET", format!("{base_path}/:id"), "show"),
-                            ("GET", format!("{base_path}/:id/edit"), "edit"),
-                            ("PATCH", format!("{base_path}/:id"), "update"),
-                            ("DELETE", format!("{base_path}/:id"), "destroy"),
-                        ]
+                    self.unresolved_references.push(UnresolvedReference {
+                        source_node_id: route_uri,
+                        target_symbol: controller_target,
+                        import_source: None,
+                        kind: EdgeKind::MapsTo,
+                        span,
+                        call_fidelity: CallFidelity::Definite,
+                        receiver_type_hint: None,
+                        receiver_var: None,
+                        arg_count: None,
+                    });
+                }
+            }
+        } else if ["get", "post", "put", "patch", "delete"].contains(&method_name) {
+            // Explicit Rails routes: get '/users/:id', to: 'users#show'
+            if let Some(args) = node.child_by_field_name("arguments")
+                && let Some(first_arg) = args.named_child(0)
+            {
+                let raw_path = self.node_text(first_arg).trim_matches(['\'', '"']);
+                if raw_path.starts_with('/') {
+                    let ns_prefix = if self.namespace_stack.is_empty() {
+                        "".to_string()
                     } else {
-                        vec![
-                            ("GET", base_path.clone(), "show"),
-                            ("POST", base_path.clone(), "create"),
-                            ("GET", format!("{base_path}/new"), "new"),
-                            ("GET", format!("{base_path}/edit"), "edit"),
-                            ("PATCH", base_path.clone(), "update"),
-                            ("DELETE", base_path.clone(), "destroy"),
-                        ]
+                        format!("/{}", self.namespace_stack.join("/"))
                     };
+                    let full_path = format!("{}{raw_path}", ns_prefix);
+                    let method_upper = method_name.to_uppercase();
+                    let route_name = format!("{method_upper} {full_path}");
+                    let uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
 
-                    for (m, path, action) in rest_actions {
-                        let route_name = format!("{m} {path}");
-                        let route_uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
-                        let controller_target = format!("{}#{}", resource_name, action);
+                    // Find `to: 'controller#action'`
+                    let full_text = self.node_text(args);
+                    let mut handler = None;
+                    if let Some(to_idx) = full_text.find("to:") {
+                        let after_to = &full_text[to_idx + 3..];
+                        let h = after_to
+                            .trim()
+                            .trim_matches(['\'', '"', ','])
+                            .chars()
+                            .take_while(|c| *c != ',' && *c != ' ' && *c != '\n')
+                            .collect::<String>();
+                        if !h.is_empty() {
+                            handler = Some(h.trim_matches(['\'', '"']).to_string());
+                        }
+                    }
 
-                        self.nodes.push(Node {
-                            id: route_uri.clone(),
-                            name: route_name.clone(),
-                            kind: NodeKind::Route,
-                            filepath: self.filepath.to_string(),
-                            scope: "routes".to_string(),
-                            start_line: Some(span.start_line),
-                            start_col: Some(span.start_col),
-                            end_line: Some(span.end_line),
-                            end_col: Some(span.end_col),
-                            signature: Some(format!("{m} {path}")),
-                            docstring: None,
-                            checksum: None,
-                            metadata: Some(serde_json::json!({
-                                "http_method": m,
-                                "raw_pattern": path,
-                                "framework": "rails",
-                                "handler": controller_target,
-                                "auth": "unknown",
-                            })),
-                        });
+                    self.nodes.push(Node {
+                        id: uri.clone(),
+                        name: route_name.clone(),
+                        kind: NodeKind::Route,
+                        filepath: self.filepath.to_string(),
+                        scope: "routes".to_string(),
+                        start_line: Some(span.start_line),
+                        start_col: Some(span.start_col),
+                        end_line: Some(span.end_line),
+                        end_col: Some(span.end_col),
+                        signature: Some(format!("{method_upper} {full_path}")),
+                        docstring: None,
+                        checksum: None,
+                        metadata: Some(serde_json::json!({
+                            "http_method": method_upper,
+                            "raw_pattern": full_path,
+                            "framework": "rails",
+                            "handler": handler,
+                            "auth": "unknown",
+                        })),
+                    });
 
+                    if let Some(h) = handler {
                         self.unresolved_references.push(UnresolvedReference {
-                            source_node_id: route_uri,
-                            target_symbol: controller_target,
+                            source_node_id: uri,
+                            target_symbol: h,
                             import_source: None,
                             kind: EdgeKind::MapsTo,
                             span,
@@ -540,104 +621,40 @@ impl<'a> RubyExtractor<'a> {
                     }
                 }
             }
-        } else if ["get", "post", "put", "patch", "delete"].contains(&method_name) {
-            // Explicit Rails routes: get '/users/:id', to: 'users#show'
-            if let Some(args) = node.child_by_field_name("arguments") {
-                if let Some(first_arg) = args.named_child(0) {
-                    let raw_path = self.node_text(first_arg).trim_matches(['\'', '"']);
-                    if raw_path.starts_with('/') {
-                        let ns_prefix = if self.namespace_stack.is_empty() {
-                            "".to_string()
-                        } else {
-                            format!("/{}", self.namespace_stack.join("/"))
-                        };
-                        let full_path = format!("{}{raw_path}", ns_prefix);
-                        let method_upper = method_name.to_uppercase();
-                        let route_name = format!("{method_upper} {full_path}");
-                        let uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
-
-                        // Find `to: 'controller#action'`
-                        let full_text = self.node_text(args);
-                        let mut handler = None;
-                        if let Some(to_idx) = full_text.find("to:") {
-                            let after_to = &full_text[to_idx + 3..];
-                            let h = after_to.trim().trim_matches(['\'', '"', ',']).chars().take_while(|c| *c != ',' && *c != ' ' && *c != '\n').collect::<String>();
-                            if !h.is_empty() {
-                                handler = Some(h.trim_matches(['\'', '"']).to_string());
-                            }
-                        }
-
-                        self.nodes.push(Node {
-                            id: uri.clone(),
-                            name: route_name.clone(),
-                            kind: NodeKind::Route,
-                            filepath: self.filepath.to_string(),
-                            scope: "routes".to_string(),
-                            start_line: Some(span.start_line),
-                            start_col: Some(span.start_col),
-                            end_line: Some(span.end_line),
-                            end_col: Some(span.end_col),
-                            signature: Some(format!("{method_upper} {full_path}")),
-                            docstring: None,
-                            checksum: None,
-                            metadata: Some(serde_json::json!({
-                                "http_method": method_upper,
-                                "raw_pattern": full_path,
-                                "framework": "rails",
-                                "handler": handler,
-                                "auth": "unknown",
-                            })),
-                        });
-
-                        if let Some(h) = handler {
-                            self.unresolved_references.push(UnresolvedReference {
-                                source_node_id: uri,
-                                target_symbol: h,
-                                import_source: None,
-                                kind: EdgeKind::MapsTo,
-                                span,
-                                call_fidelity: CallFidelity::Definite,
-                                receiver_type_hint: None,
-                                receiver_var: None,
-                                arg_count: None,
-                            });
-                        }
-                    }
-                }
-            }
         } else if method_name == "find_by_sql" || method_name == "execute" {
             // Inline SQL slicing in Ruby
-            if self.options.extract_inline_sql {
-                if let Some(args) = node.child_by_field_name("arguments") {
-                    if let Some(arg) = args.named_child(0) {
-                        let raw_sql = self.node_text(arg).trim_matches(|c| c == '\'' || c == '"');
-                        let uppercase = raw_sql.to_uppercase();
-                        if let Some(idx) = uppercase.find(" FROM ") {
-                            let table: String = raw_sql[idx + 6..]
-                                .trim_start()
-                                .chars()
-                                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                                .collect();
-                            if !table.is_empty() && !caller_id.is_empty() {
-                                self.unresolved_references.push(UnresolvedReference {
-                                    source_node_id: caller_id.clone(),
-                                    target_symbol: table,
-                                    import_source: None,
-                                    kind: EdgeKind::References,
-                                    span,
-                                    call_fidelity: CallFidelity::Definite,
-                                    receiver_type_hint: None,
-                                    receiver_var: None,
-                                    arg_count: None,
-                                });
-                            }
-                        }
+            if self.options.extract_inline_sql
+                && let Some(args) = node.child_by_field_name("arguments")
+                && let Some(arg) = args.named_child(0)
+            {
+                let raw_sql = self.node_text(arg).trim_matches(|c| c == '\'' || c == '"');
+                let uppercase = raw_sql.to_uppercase();
+                if let Some(idx) = uppercase.find(" FROM ") {
+                    let table: String = raw_sql[idx + 6..]
+                        .trim_start()
+                        .chars()
+                        .take_while(|c| c.is_alphanumeric() || *c == '_')
+                        .collect();
+                    if !table.is_empty() && !caller_id.is_empty() {
+                        self.unresolved_references.push(UnresolvedReference {
+                            source_node_id: caller_id.clone(),
+                            target_symbol: table,
+                            import_source: None,
+                            kind: EdgeKind::References,
+                            span,
+                            call_fidelity: CallFidelity::Definite,
+                            receiver_type_hint: None,
+                            receiver_var: None,
+                            arg_count: None,
+                        });
                     }
                 }
             }
         } else {
             // General method call
-            let receiver_name = node.child_by_field_name("receiver").map(|r| self.node_text(r).to_string());
+            let receiver_name = node
+                .child_by_field_name("receiver")
+                .map(|r| self.node_text(r).to_string());
             let call_fidelity = if receiver_name.as_deref() == Some("self") {
                 CallFidelity::Definite
             } else {
@@ -741,7 +758,10 @@ end
         let model_node = &parsed.nodes[0];
         assert_eq!(model_node.name, "Invoice");
         assert_eq!(model_node.kind, NodeKind::Model);
-        assert_eq!(model_node.docstring.as_deref(), Some("Customer Invoice Model"));
+        assert_eq!(
+            model_node.docstring.as_deref(),
+            Some("Customer Invoice Model")
+        );
 
         let calc_node = &parsed.nodes[1];
         assert_eq!(calc_node.name, "calculate_total");
@@ -805,20 +825,39 @@ end
         let ctx = ParseContext::new("config/routes.rb", code);
         let parsed = parser.parse(&ctx).expect("Parsing nested routes failed");
 
-        let get_users = parsed.nodes.iter().find(|n| n.name == "GET /api/v1/users").expect("GET /api/v1/users not found");
+        let get_users = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "GET /api/v1/users")
+            .expect("GET /api/v1/users not found");
         assert_eq!(get_users.kind, NodeKind::Route);
         let meta = get_users.metadata.as_ref().unwrap();
         assert_eq!(meta["framework"], "rails");
         assert_eq!(meta["handler"], "users#index");
 
-        let post_users = parsed.nodes.iter().find(|n| n.name == "POST /api/v1/users").expect("POST /api/v1/users not found");
+        let post_users = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "POST /api/v1/users")
+            .expect("POST /api/v1/users not found");
         assert_eq!(post_users.kind, NodeKind::Route);
 
-        let delete_user = parsed.nodes.iter().find(|n| n.name == "DELETE /api/v1/users/:id").expect("DELETE /api/v1/users/:id not found");
+        let delete_user = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "DELETE /api/v1/users/:id")
+            .expect("DELETE /api/v1/users/:id not found");
         assert_eq!(delete_user.kind, NodeKind::Route);
 
-        let health_route = parsed.nodes.iter().find(|n| n.name == "GET /api/v1/healthz").expect("GET /api/v1/healthz not found");
+        let health_route = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "GET /api/v1/healthz")
+            .expect("GET /api/v1/healthz not found");
         assert_eq!(health_route.kind, NodeKind::Route);
-        assert_eq!(health_route.metadata.as_ref().unwrap()["handler"], "health#check");
+        assert_eq!(
+            health_route.metadata.as_ref().unwrap()["handler"],
+            "health#check"
+        );
     }
 }

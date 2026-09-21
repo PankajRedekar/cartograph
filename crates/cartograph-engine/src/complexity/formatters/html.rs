@@ -41,7 +41,10 @@ impl HtmlFormatter {
                 HotspotQuadrant::Healthy => ("#10b981", "#ffffff", 5.0),
             };
 
-            let title_attr = format!("{}: CC {}, Churn {:.2}", r.name, r.complexity.cyclomatic, r.churn.churn_velocity_score);
+            let title_attr = format!(
+                "{}: CC {}, Churn {:.2}",
+                r.name, r.complexity.cyclomatic, r.churn.churn_velocity_score
+            );
 
             scatter_dots_svg.push_str(&format!(
                 r#"<circle cx="{:.1}" cy="{:.1}" r="{:.1}" fill="{fill_color}" fill-opacity="0.85" stroke="{stroke_color}" stroke-width="1.5" cursor="pointer" onclick="selectSymbol('{id}')"><title>{title_attr}</title></circle>"#,
@@ -323,15 +326,28 @@ fn render_table_rows(records: &[ComplexityRecord]) -> String {
     let mut rows = String::new();
     for (idx, r) in records.iter().enumerate() {
         let quad_badge = match r.quadrant {
-            HotspotQuadrant::CriticalHotspot => r#"<span class="badge badge-q1">🚨 Q1 Hotspot</span>"#,
-            HotspotQuadrant::ChurnHotspot => r#"<span class="badge" style="background:rgba(245,158,11,0.2);color:#f59e0b;">⚠️ Q2 Churn</span>"#,
-            HotspotQuadrant::StableTechnicalDebt => r#"<span class="badge" style="background:rgba(139,92,246,0.2);color:#c084fc;">⏳ Q4 Debt</span>"#,
-            HotspotQuadrant::Healthy => r#"<span class="badge" style="background:rgba(16,185,129,0.2);color:#34d399;">✅ Q3 Healthy</span>"#,
+            HotspotQuadrant::CriticalHotspot => {
+                r#"<span class="badge badge-q1">🚨 Q1 Hotspot</span>"#
+            }
+            HotspotQuadrant::ChurnHotspot => {
+                r#"<span class="badge" style="background:rgba(245,158,11,0.2);color:#f59e0b;">⚠️ Q2 Churn</span>"#
+            }
+            HotspotQuadrant::StableTechnicalDebt => {
+                r#"<span class="badge" style="background:rgba(139,92,246,0.2);color:#c084fc;">⏳ Q4 Debt</span>"#
+            }
+            HotspotQuadrant::Healthy => {
+                r#"<span class="badge" style="background:rgba(16,185,129,0.2);color:#34d399;">✅ Q3 Healthy</span>"#
+            }
         };
 
         let status = if r.test_deficit.is_danger_zone {
             r#"<span class="badge badge-danger">0 Tests ⚠️</span>"#
-        } else if r.god_class.as_ref().map(|g| g.is_god_class).unwrap_or(false) {
+        } else if r
+            .god_class
+            .as_ref()
+            .map(|g| g.is_god_class)
+            .unwrap_or(false)
+        {
             r#"<span class="badge" style="background:rgba(220,38,38,0.3);color:#fca5a5;">God-Class</span>"#
         } else {
             r#"<span style="font-size:0.8rem;">Normal</span>"#

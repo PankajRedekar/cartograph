@@ -179,9 +179,16 @@ mod tests {
 
         assert_eq!(table.find_by_name("verify").len(), 1);
         assert_eq!(
-            table.find_method_in_type("AuthService", "verify").unwrap().id,
+            table
+                .find_method_in_type("AuthService", "verify")
+                .unwrap()
+                .id,
             node.id
         );
-        assert!(table.find_method_in_type("OtherService", "verify").is_none());
+        assert!(
+            table
+                .find_method_in_type("OtherService", "verify")
+                .is_none()
+        );
     }
 }

@@ -43,8 +43,8 @@ pub struct SubgraphLocator {
 
 impl SubgraphLocator {
     pub fn new(backend: Arc<dyn GraphStoreBackend>, repo_root: PathBuf) -> Self {
-        let search_engine = HybridSearchEngine::new(Arc::clone(&backend))
-            .with_repo_root(repo_root.clone());
+        let search_engine =
+            HybridSearchEngine::new(Arc::clone(&backend)).with_repo_root(repo_root.clone());
         let traverser = SubgraphTraverser::default();
 
         Self {

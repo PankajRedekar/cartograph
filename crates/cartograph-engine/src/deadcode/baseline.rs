@@ -3,9 +3,9 @@ use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::Path;
 
-use chrono::Utc;
 use cartograph_core::error::{CartographError, Result};
 use cartograph_core::model::{BaselineDeadItemEntry, DeadCodeBaseline, DeadSymbolItem};
+use chrono::Utc;
 
 pub struct BaselineManager;
 
@@ -20,15 +20,17 @@ impl BaselineManager {
         }
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        let baseline: DeadCodeBaseline = serde_json::from_reader(reader)
-            .map_err(|e| CartographError::Configuration(format!("Failed to parse baseline: {}", e)))?;
+        let baseline: DeadCodeBaseline = serde_json::from_reader(reader).map_err(|e| {
+            CartographError::Configuration(format!("Failed to parse baseline: {}", e))
+        })?;
         Ok(baseline)
     }
 
     /// Saves a baseline to disk with pretty JSON formatting
     pub fn save_baseline(path: &Path, baseline: &DeadCodeBaseline) -> Result<()> {
-        let content = serde_json::to_string_pretty(baseline)
-            .map_err(|e| CartographError::Configuration(format!("Failed to serialize baseline: {}", e)))?;
+        let content = serde_json::to_string_pretty(baseline).map_err(|e| {
+            CartographError::Configuration(format!("Failed to serialize baseline: {}", e))
+        })?;
         fs::write(path, content)?;
         Ok(())
     }
@@ -96,7 +98,9 @@ impl BaselineManager {
         current_dead_fingerprints: &HashSet<String>,
     ) -> Result<usize> {
         let original_count = baseline.dead_items.len();
-        baseline.dead_items.retain(|item| current_dead_fingerprints.contains(&item.fingerprint));
+        baseline
+            .dead_items
+            .retain(|item| current_dead_fingerprints.contains(&item.fingerprint));
         let removed_count = original_count - baseline.dead_items.len();
 
         if removed_count > 0 {

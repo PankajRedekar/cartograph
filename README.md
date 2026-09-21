@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/PankajRedekar/cartograph/actions"><img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-2024%20edition-orange?style=flat-square&logo=rust" alt="Rust 2024" /></a>
-  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/roadmap-Phase%202.5%20Complete-blue?style=flat-square" alt="Roadmap" /></a>
+  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/roadmap-Phase%202%20Complete-brightgreen?style=flat-square" alt="Roadmap" /></a>
   <a href="openspec/specs/"><img src="https://img.shields.io/badge/specs-OpenSpec%20verified-purple?style=flat-square" alt="OpenSpec" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue?style=flat-square" alt="License" /></a>
 </p>
@@ -95,7 +95,7 @@ cargo install --path crates/cartograph-cli
 Verify installation:
 ```bash
 cartograph --version
-# cartograph 0.1.0
+# cartograph 0.2.0
 ```
 
 ---
@@ -657,6 +657,35 @@ cartograph deadcode --sarif > deadcode.sarif
 
 ---
 
+### 11. `cartograph config` — Unified Configuration & Polyrepo Management
+
+Cartograph Phase 2.7 introduces centralized project configuration (`cartograph.toml`), eliminating repetitive CLI flags across team members and CI pipelines.
+
+```bash
+# 1. Initialize starter configuration with Clean Architecture preset
+cartograph config init --preset clean-architecture
+
+# 2. Initialize minimal configuration
+cartograph config init --minimal
+
+# 3. Available presets: clean-architecture, hexagonal, mvc, monorepo
+cartograph config init --preset hexagonal --force
+
+# 4. Validate configuration syntax and architecture rules
+cartograph config validate
+
+# 5. Display resolved configuration in TOML or JSON
+cartograph config show
+cartograph config show --json
+```
+
+#### Key Capabilities
+- **Single Source of Truth (`cartograph.toml`)**: Centralizes storage backend, file ignore patterns, test selection depth/runners, architectural layers/rules, complexity thresholds, and dead code profiles.
+- **Multi-Git Polyrepo Workspace Support**: Seamlessly discovers and aggregates changes across multi-microservice workspaces where individual sibling folders contain independent `.git` repositories (e.g. `~/workspace/auth-service/.git`, `~/workspace/billing-service/.git`). Aggregated diff headers (`a/auth-service/...`) enable unified impact, test selection, and complexity diffing from the workspace root.
+- **Turn-Key Production CI/CD (`.github/workflows/cartograph-ci.yml`)**: Ready-to-use GitHub Actions workflow enforcing test suite parity, zero-warning Clippy/Rustfmt, architectural cycle guards, PR dead code blocking, complexity hotspot gating, and predictive test selection.
+
+---
+
 ## 🌐 Supported Languages & AST Constructs
 
 Cartograph embeds native Tree-Sitter grammars and declarative `.scm` query definitions:
@@ -867,13 +896,14 @@ Cartograph is structured across three major evolutionary milestones:
   - [x] 1.2 Multi-Language Tree-Sitter AST Engine (Rust, Python, TS/TSX, Ruby, Go, SQL, Markdown)
   - [x] 1.3 High-Speed Parallel Indexer, Universal Linker & Real-Time File Watcher
   - [x] 1.4 1-Turn Subgraph Localization (`cartograph locate`) & Quad-Engine Formatters
-- [ ] **Phase 2: Structural Analysis & Intelligence Tools (v1.1)**
+- [x] **Phase 2: Structural Analysis & Intelligence Tools (v1.1)** — **100% COMPLETE**
   - [x] 2.1 Blast-Radius Impact Analysis (`cartograph impact`)
   - [x] 2.2 Smart Predictive Test Selection (`cartograph test-selector`)
   - [x] 2.3 Interactive Full-Stack Route Mapper (`cartograph routes`)
   - [x] 2.4 Structural & Architectural Linter (`cartograph lint-arch`)
   - [x] 2.5 God-Class & Complexity Heatmap (`cartograph complexity`)
-  - [ ] 2.6 Dead Code & Abandoned Component Detector (`cartograph deadcode`)
+  - [x] 2.6 Dead Code & Abandoned Component Detector (`cartograph deadcode`)
+  - [x] 2.7 Consolidated Configuration, Multi-Git Polyrepo Support & Production CI/CD (`cartograph config`)
 - [ ] **Phase 3: AI Augmentation & Logic Synthesis (v1.2)**
   - [ ] 3.1 Business Logic & Validation Rule Extractor (`cartograph extract-logic`)
   - [ ] 3.2 Contract-Aware AI PR Reviewer (`cartograph ai-review`)

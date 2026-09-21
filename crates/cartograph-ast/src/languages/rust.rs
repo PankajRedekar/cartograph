@@ -1,16 +1,16 @@
 use std::sync::LazyLock;
 use tree_sitter::{Node as TsNode, Parser, Query, Tree};
 
-use cartograph_core::{build_uri, Edge, EdgeKind, Node, NodeKind};
 use crate::error::{AstError, Result};
 use crate::hash::compute_node_checksum;
 use crate::line_index::LineIndex;
 use crate::model::{
-    AstDiagnostic, CallFidelity, DiagnosticSeverity, ParseContext, ParsedFile,
-    UnresolvedReference, Visibility,
+    AstDiagnostic, CallFidelity, DiagnosticSeverity, ParseContext, ParsedFile, UnresolvedReference,
+    Visibility,
 };
 use crate::traits::LanguageParser;
 use crate::trivia::{SignatureNormalizer, TriviaBinder};
+use cartograph_core::{Edge, EdgeKind, Node, NodeKind, build_uri};
 
 pub static RUST_TAGS_QUERY: LazyLock<Query> = LazyLock::new(|| {
     let language = tree_sitter_rust::LANGUAGE.into();
@@ -348,17 +348,15 @@ impl<'a> RustExtractor<'a> {
             "visibility": visibility.as_str(),
             "span": span,
         });
-        if is_test {
-            if let Some(map) = metadata_json.as_object_mut() {
-                map.insert("is_test".to_string(), serde_json::json!(true));
-                map.insert("framework".to_string(), serde_json::json!("cargo"));
-                let test_type = if self.filepath.starts_with("tests/") {
-                    "integration"
-                } else {
-                    "unit"
-                };
-                map.insert("test_type".to_string(), serde_json::json!(test_type));
-            }
+        if is_test && let Some(map) = metadata_json.as_object_mut() {
+            map.insert("is_test".to_string(), serde_json::json!(true));
+            map.insert("framework".to_string(), serde_json::json!("cargo"));
+            let test_type = if self.filepath.starts_with("tests/") {
+                "integration"
+            } else {
+                "unit"
+            };
+            map.insert("test_type".to_string(), serde_json::json!(test_type));
         }
 
         self.nodes.push(Node {
@@ -380,7 +378,8 @@ impl<'a> RustExtractor<'a> {
         // defines edge if inside an impl block
         if let Some(parent) = self.scope_stack.last() {
             let parent_uri = build_uri(self.filepath, "", parent, &NodeKind::Struct);
-            self.edges.push(Edge::new(parent_uri, uri.clone(), EdgeKind::Defines));
+            self.edges
+                .push(Edge::new(parent_uri, uri.clone(), EdgeKind::Defines));
         }
 
         // Actix-web route attribute extraction: #[get("/users/{id}")], #[post("/users")]
@@ -388,52 +387,54 @@ impl<'a> RustExtractor<'a> {
         for attr in &attrs {
             for verb in &["get", "post", "put", "delete", "patch", "head"] {
                 let prefix = format!("#[{verb}(");
-                if attr.contains(&prefix) {
-                    if let Some(start) = attr.find(&prefix) {
-                        let inside = &attr[start + prefix.len()..];
-                        let mut in_quote = None;
-                        let mut path = String::new();
-                        for c in inside.chars() {
-                            if let Some(q) = in_quote {
-                                if c == q {
-                                    break;
-                                } else {
-                                    path.push(c);
-                                }
-                            } else if c == '"' || c == '\'' {
-                                in_quote = Some(c);
+                if attr.contains(&prefix)
+                    && let Some(start) = attr.find(&prefix)
+                {
+                    let inside = &attr[start + prefix.len()..];
+                    let mut in_quote = None;
+                    let mut path = String::new();
+                    for c in inside.chars() {
+                        if let Some(q) = in_quote {
+                            if c == q {
+                                break;
+                            } else {
+                                path.push(c);
                             }
+                        } else if c == '"' || c == '\'' {
+                            in_quote = Some(c);
                         }
-                        if !path.is_empty() {
-                            let method = verb.to_uppercase();
-                            let route_name = format!("{method} {path}");
-                            let route_uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
+                    }
+                    if !path.is_empty() {
+                        let method = verb.to_uppercase();
+                        let route_name = format!("{method} {path}");
+                        let route_uri =
+                            build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
 
-                            self.nodes.push(Node {
-                                id: route_uri.clone(),
-                                name: route_name.clone(),
-                                kind: NodeKind::Route,
-                                filepath: self.filepath.to_string(),
-                                scope: "routes".to_string(),
-                                start_line: Some(span.start_line),
-                                start_col: Some(span.start_col),
-                                end_line: Some(span.end_line),
-                                end_col: Some(span.end_col),
-                                signature: Some(format!("{method} {path}")),
-                                docstring: None,
-                                checksum: None,
-                                metadata: Some(serde_json::json!({
-                                    "http_method": method,
-                                    "raw_pattern": path,
-                                    "framework": "actix-web",
-                                    "handler": fn_name,
-                                    "auth": "unknown",
-                                    "span": span,
-                                })),
-                            });
+                        self.nodes.push(Node {
+                            id: route_uri.clone(),
+                            name: route_name.clone(),
+                            kind: NodeKind::Route,
+                            filepath: self.filepath.to_string(),
+                            scope: "routes".to_string(),
+                            start_line: Some(span.start_line),
+                            start_col: Some(span.start_col),
+                            end_line: Some(span.end_line),
+                            end_col: Some(span.end_col),
+                            signature: Some(format!("{method} {path}")),
+                            docstring: None,
+                            checksum: None,
+                            metadata: Some(serde_json::json!({
+                                "http_method": method,
+                                "raw_pattern": path,
+                                "framework": "actix-web",
+                                "handler": fn_name,
+                                "auth": "unknown",
+                                "span": span,
+                            })),
+                        });
 
-                            self.edges.push(Edge::new(route_uri, uri.clone(), EdgeKind::MapsTo));
-                        }
+                        self.edges
+                            .push(Edge::new(route_uri, uri.clone(), EdgeKind::MapsTo));
                     }
                 }
             }
@@ -455,62 +456,77 @@ impl<'a> RustExtractor<'a> {
             let fn_text = self.node_text(fn_node);
 
             // Axum route check: Router::new().route("/users", get(get_users).post(create_user))
-            if fn_text.ends_with(".route") {
-                if let Some(args) = node.child_by_field_name("arguments") {
-                    let mut cursor = args.walk();
-                    let mut path = None;
-                    for child in args.children(&mut cursor) {
-                        if path.is_none() && (child.kind() == "string_literal" || child.kind() == "raw_string_literal") {
-                            path = Some(self.node_text(child).trim_matches(['"', 'r', '#']).to_string());
-                        }
+            if fn_text.ends_with(".route")
+                && let Some(args) = node.child_by_field_name("arguments")
+            {
+                let mut cursor = args.walk();
+                let mut path = None;
+                for child in args.children(&mut cursor) {
+                    if path.is_none()
+                        && (child.kind() == "string_literal"
+                            || child.kind() == "raw_string_literal")
+                    {
+                        path = Some(
+                            self.node_text(child)
+                                .trim_matches(['"', 'r', '#'])
+                                .to_string(),
+                        );
                     }
-                    if let Some(route_path) = path {
-                        let full_args_text = self.node_text(args);
-                        for verb in &["get", "post", "put", "delete", "patch"] {
-                            let verb_pattern = format!("{verb}(");
-                            if let Some(idx) = full_args_text.find(&verb_pattern) {
-                                let inside = &full_args_text[idx + verb_pattern.len()..];
-                                let handler = inside.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect::<String>();
-                                if !handler.is_empty() {
-                                    let method = verb.to_uppercase();
-                                    let route_name = format!("{method} {route_path}");
-                                    let route_uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
+                }
+                if let Some(route_path) = path {
+                    let full_args_text = self.node_text(args);
+                    for verb in &["get", "post", "put", "delete", "patch"] {
+                        let verb_pattern = format!("{verb}(");
+                        if let Some(idx) = full_args_text.find(&verb_pattern) {
+                            let inside = &full_args_text[idx + verb_pattern.len()..];
+                            let handler = inside
+                                .chars()
+                                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                                .collect::<String>();
+                            if !handler.is_empty() {
+                                let method = verb.to_uppercase();
+                                let route_name = format!("{method} {route_path}");
+                                let route_uri = build_uri(
+                                    self.filepath,
+                                    "routes",
+                                    &route_name,
+                                    &NodeKind::Route,
+                                );
 
-                                    self.nodes.push(Node {
-                                        id: route_uri.clone(),
-                                        name: route_name.clone(),
-                                        kind: NodeKind::Route,
-                                        filepath: self.filepath.to_string(),
-                                        scope: "routes".to_string(),
-                                        start_line: Some(span.start_line),
-                                        start_col: Some(span.start_col),
-                                        end_line: Some(span.end_line),
-                                        end_col: Some(span.end_col),
-                                        signature: Some(format!("{method} {route_path}")),
-                                        docstring: None,
-                                        checksum: None,
-                                        metadata: Some(serde_json::json!({
-                                            "http_method": method,
-                                            "raw_pattern": route_path,
-                                            "framework": "axum",
-                                            "handler": handler,
-                                            "auth": "unknown",
-                                            "span": span,
-                                        })),
-                                    });
+                                self.nodes.push(Node {
+                                    id: route_uri.clone(),
+                                    name: route_name.clone(),
+                                    kind: NodeKind::Route,
+                                    filepath: self.filepath.to_string(),
+                                    scope: "routes".to_string(),
+                                    start_line: Some(span.start_line),
+                                    start_col: Some(span.start_col),
+                                    end_line: Some(span.end_line),
+                                    end_col: Some(span.end_col),
+                                    signature: Some(format!("{method} {route_path}")),
+                                    docstring: None,
+                                    checksum: None,
+                                    metadata: Some(serde_json::json!({
+                                        "http_method": method,
+                                        "raw_pattern": route_path,
+                                        "framework": "axum",
+                                        "handler": handler,
+                                        "auth": "unknown",
+                                        "span": span,
+                                    })),
+                                });
 
-                                    self.unresolved_references.push(UnresolvedReference {
-                                        source_node_id: route_uri,
-                                        target_symbol: handler,
-                                        import_source: None,
-                                        kind: EdgeKind::MapsTo,
-                                        span,
-                                        call_fidelity: CallFidelity::Definite,
-                                        receiver_type_hint: None,
-                                        receiver_var: None,
-                                        arg_count: None,
-                                    });
-                                }
+                                self.unresolved_references.push(UnresolvedReference {
+                                    source_node_id: route_uri,
+                                    target_symbol: handler,
+                                    import_source: None,
+                                    kind: EdgeKind::MapsTo,
+                                    span,
+                                    call_fidelity: CallFidelity::Definite,
+                                    receiver_type_hint: None,
+                                    receiver_var: None,
+                                    arg_count: None,
+                                });
                             }
                         }
                     }
@@ -660,7 +676,10 @@ impl Authenticatable for User {
         assert_eq!(parsed.nodes.len(), 3);
         assert_eq!(parsed.nodes[0].name, "User");
         assert_eq!(parsed.nodes[0].kind, NodeKind::Struct);
-        assert_eq!(parsed.nodes[0].docstring.as_deref(), Some("Represents a user"));
+        assert_eq!(
+            parsed.nodes[0].docstring.as_deref(),
+            Some("Represents a user")
+        );
 
         assert_eq!(parsed.nodes[1].name, "Authenticatable");
         assert_eq!(parsed.nodes[1].kind, NodeKind::Interface);
@@ -699,7 +718,10 @@ async fn test_async_fetch() {
         for node in &parsed.nodes {
             let meta = node.metadata.as_ref().expect("metadata present");
             assert_eq!(meta.get("is_test").and_then(|v| v.as_bool()), Some(true));
-            assert_eq!(meta.get("framework").and_then(|v| v.as_str()), Some("cargo"));
+            assert_eq!(
+                meta.get("framework").and_then(|v| v.as_str()),
+                Some("cargo")
+            );
         }
     }
 
@@ -719,17 +741,29 @@ fn app() {
         let ctx = ParseContext::new("src/routes.rs", code);
         let parsed = parser.parse(&ctx).expect("Parsing Rust routes failed");
 
-        let actix_route = parsed.nodes.iter().find(|n| n.name == "GET /api/v1/users/{id}").expect("Actix route not found");
+        let actix_route = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "GET /api/v1/users/{id}")
+            .expect("Actix route not found");
         assert_eq!(actix_route.kind, NodeKind::Route);
         let actix_meta = actix_route.metadata.as_ref().unwrap();
         assert_eq!(actix_meta["framework"], "actix-web");
         assert_eq!(actix_meta["handler"], "get_user");
 
-        let axum_get = parsed.nodes.iter().find(|n| n.name == "GET /api/v1/items").expect("Axum GET route not found");
+        let axum_get = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "GET /api/v1/items")
+            .expect("Axum GET route not found");
         assert_eq!(axum_get.kind, NodeKind::Route);
         assert_eq!(axum_get.metadata.as_ref().unwrap()["framework"], "axum");
 
-        let axum_post = parsed.nodes.iter().find(|n| n.name == "POST /api/v1/items").expect("Axum POST route not found");
+        let axum_post = parsed
+            .nodes
+            .iter()
+            .find(|n| n.name == "POST /api/v1/items")
+            .expect("Axum POST route not found");
         assert_eq!(axum_post.kind, NodeKind::Route);
     }
 }

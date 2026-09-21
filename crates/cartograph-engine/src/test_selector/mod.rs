@@ -18,12 +18,12 @@ pub use resolver::TestResolver;
 pub use runners::RunnerSynthesizer;
 pub use semantic_filter::{FilteredTargets, SemanticFilter};
 
-use std::collections::HashSet;
-use std::path::PathBuf;
-use std::time::Instant;
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::error::{CartographError, Result};
 use cartograph_core::model::{TestGranularity, TestSelectionReport};
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::time::Instant;
 
 #[derive(Debug, Clone)]
 pub struct TestSelectorOptions {
@@ -203,9 +203,9 @@ impl<'a> TestSelector<'a> {
 
         // Gating verification
         if !deficit_analysis.passes_gating {
-            let reason = deficit_analysis
-                .gating_failure_reason
-                .unwrap_or_else(|| "Gating failure: minimum test coverage requirement not satisfied".to_string());
+            let reason = deficit_analysis.gating_failure_reason.unwrap_or_else(|| {
+                "Gating failure: minimum test coverage requirement not satisfied".to_string()
+            });
             return Err(CartographError::Other(reason));
         }
 

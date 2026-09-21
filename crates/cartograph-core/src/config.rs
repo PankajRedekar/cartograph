@@ -417,7 +417,9 @@ impl std::str::FromStr for CouplingFilter {
 }
 
 /// Severity classification of an architectural violation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ArchSeverity {
     /// Informational advisory; does not fail CI
@@ -971,3 +973,405 @@ impl Default for DeadCodeConfig {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Phase 2.7: Master Unified Project Configuration (`cartograph.toml`)
+// ---------------------------------------------------------------------------
+
+/// Project identity and classification metadata
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectInfoConfig {
+    /// Human-readable project name
+    #[serde(default = "default_project_name")]
+    pub name: String,
+
+    /// Project classification profile: application, library, or monorepo
+    #[serde(default)]
+    pub profile: ProjectProfile,
+
+    /// Optional semantic version string
+    #[serde(default)]
+    pub version: Option<String>,
+
+    /// Project authors or maintainers
+    #[serde(default)]
+    pub authors: Vec<String>,
+
+    /// Brief description of the project
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+fn default_project_name() -> String {
+    "my-project".to_string()
+}
+
+impl Default for ProjectInfoConfig {
+    fn default() -> Self {
+        Self {
+            name: default_project_name(),
+            profile: ProjectProfile::default(),
+            version: None,
+            authors: Vec::new(),
+            description: None,
+        }
+    }
+}
+
+/// Master configuration container mapping 1:1 to cartograph.toml
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ProjectConfig {
+    /// Project metadata
+    #[serde(default)]
+    pub project: ProjectInfoConfig,
+
+    /// Primary storage backend settings
+    #[serde(default)]
+    pub storage: StorageConfig,
+
+    /// Multi-database named profiles (--db <profile>)
+    #[serde(default)]
+    pub profiles: ProfileConfig,
+
+    /// AST file discovery and parallel indexing settings
+    #[serde(default)]
+    pub index: IndexConfig,
+
+    /// Real-time file watcher settings
+    #[serde(default)]
+    pub watch: WatchConfig,
+
+    /// Predictive test selector settings and custom runners
+    #[serde(default)]
+    pub tests: TestConfig,
+
+    /// Architectural boundary, cycle, and layer linting
+    #[serde(default)]
+    pub lint_arch: LintArchConfig,
+
+    /// Code complexity, God-class, and churn hotspot heatmap settings
+    #[serde(default)]
+    pub complexity: ComplexityConfig,
+
+    /// Dead code, abandoned component, and ghost dependency settings
+    #[serde(default)]
+    pub deadcode: DeadCodeConfig,
+}
+
+impl ProjectConfig {
+    /// Load and deserialize configuration from a specific file path
+    pub fn load_from_path(path: &std::path::Path) -> Result<Self, String> {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read config file at {}: {e}", path.display()))?;
+        toml::from_str(&content)
+            .map_err(|e| format!("Invalid TOML syntax in {}: {e}", path.display()))
+    }
+
+    /// Search for cartograph.toml or .cartograph/config.toml in workspace root.
+    /// If not found or invalid, returns default configuration.
+    pub fn find_and_load(workspace_root: &std::path::Path) -> Self {
+        let primary = workspace_root.join("cartograph.toml");
+        if primary.is_file() {
+            match Self::load_from_path(&primary) {
+                Ok(cfg) => return cfg,
+                Err(err) => {
+                    eprintln!(
+                        "⚠️  [cartograph] Warning loading cartograph.toml: {err}. Using defaults."
+                    );
+                }
+            }
+        }
+
+        let secondary = workspace_root.join(".cartograph/config.toml");
+        if secondary.is_file() {
+            match Self::load_from_path(&secondary) {
+                Ok(cfg) => return cfg,
+                Err(err) => {
+                    eprintln!(
+                        "⚠️  [cartograph] Warning loading .cartograph/config.toml: {err}. Using defaults."
+                    );
+                }
+            }
+        }
+
+        Self::default()
+    }
+
+    /// Serialize this configuration to a formatted TOML string
+    pub fn to_toml_string(&self) -> Result<String, toml::ser::Error> {
+        toml::to_string_pretty(self)
+    }
+
+    /// Generate a fully documented, comprehensive cartograph.toml starter template
+    pub fn generate_template(project_name: &str, preset: Option<&str>, minimal: bool) -> String {
+        let profile = if preset.is_some_and(|p| p.eq_ignore_ascii_case("monorepo")) {
+            "monorepo"
+        } else {
+            "application"
+        };
+
+        if minimal {
+            return format!(
+                r#"# 🗺️ Cartograph Minimal Configuration (cartograph.toml)
+
+[project]
+name = "{project_name}"
+profile = "{profile}"
+
+[storage]
+backend = "sqlite"
+
+[storage.sqlite]
+path = ".cartograph/cartograph.db"
+"#
+            );
+        }
+
+        let arch_preset_comment = match preset {
+            Some(p) => format!("preset = \"{p}\""),
+            None => "# preset = \"clean-architecture\"".to_string(),
+        };
+
+        let layers_block = match preset
+            .unwrap_or("clean-architecture")
+            .to_lowercase()
+            .as_str()
+        {
+            "hexagonal" => {
+                r#"[[lint_arch.layers]]
+name = "domain"
+description = "Domain core business logic and entities"
+patterns = ["**/domain/**", "**/core/**"]
+forbidden = ["adapters"]
+
+[[lint_arch.layers]]
+name = "ports"
+description = "Inbound and outbound interfaces/ports"
+patterns = ["**/ports/**"]
+forbidden = ["adapters"]
+
+[[lint_arch.layers]]
+name = "adapters"
+description = "Inbound HTTP/CLI and outbound DB/Messaging adapters"
+patterns = ["**/adapters/**", "**/infra/**"]
+forbidden = []"#
+            }
+            "mvc" => {
+                r#"[[lint_arch.layers]]
+name = "models"
+description = "Data entities and database models"
+patterns = ["**/models/**"]
+forbidden = ["controllers", "views"]
+
+[[lint_arch.layers]]
+name = "views"
+description = "Templates and UI presentation components"
+patterns = ["**/views/**", "**/templates/**"]
+forbidden = ["controllers"]
+
+[[lint_arch.layers]]
+name = "controllers"
+description = "Request handlers and orchestration"
+patterns = ["**/controllers/**", "**/handlers/**"]
+forbidden = []"#
+            }
+            _ => {
+                r#"[[lint_arch.layers]]
+name = "domain"
+description = "Core business entities and enterprise rules"
+patterns = ["**/domain/**", "**/models/**"]
+forbidden = ["application", "infrastructure", "presentation"]
+
+[[lint_arch.layers]]
+name = "application"
+description = "Use cases, domain services, and orchestrators"
+patterns = ["**/services/**", "**/usecases/**"]
+forbidden = ["infrastructure", "presentation"]
+
+[[lint_arch.layers]]
+name = "infrastructure"
+description = "Database, HTTP clients, message brokers, external APIs"
+patterns = ["**/db/**", "**/adapters/**", "**/repositories/**"]
+forbidden = ["presentation"]
+
+[[lint_arch.layers]]
+name = "presentation"
+description = "HTTP controllers, GraphQL resolvers, CLI commands"
+patterns = ["**/controllers/**", "**/routes/**", "**/cli/**"]
+forbidden = []"#
+            }
+        };
+
+        format!(
+            r#"# 🗺️ Cartograph Configuration Specification (cartograph.toml)
+# Documentation: https://github.com/PankajRedekar/cartograph
+
+[project]
+name = "{project_name}"
+profile = "{profile}"              # "application" | "library" | "monorepo"
+
+[storage]
+backend = "sqlite"                 # "sqlite" | "memory"
+
+[storage.sqlite]
+path = ".cartograph/cartograph.db"
+mmap_size = 268435456              # 256MB memory-mapped I/O
+busy_timeout_ms = 5000
+journal_mode = "WAL"
+synchronous = "NORMAL"
+
+[index]
+exclude_patterns = [
+    "**/.git",
+    "**/.cartograph",
+    "**/node_modules",
+    "**/vendor",
+    "**/target",
+    "**/dist",
+    "**/build",
+    "**/.venv",
+    "**/__pycache__"
+]
+max_file_size_bytes = 2097152      # 2MB
+mmap_threshold_bytes = 65536       # 64KB
+follow_symlinks = false
+
+[watch]
+debounce_ms = 25                   # Milliseconds to debounce multiple file saves
+cst_cache_capacity = 500           # AST CST parsing cache limit
+track_blast_radius = true          # Calculate downstream blast radius on save
+
+[tests]
+granularity = "auto"               # "auto" | "case" | "suite" | "file" | "package"
+min_confidence = 0.5               # Minimum edge confidence for test selection
+max_depth = 5                      # Maximum transitive hop depth
+ignore_docstrings = true           # Skip all tests if change is comments/docs only
+fail_on_untested = false           # Gate CI if modified code has 0 tests
+min_coverage = 0.0                 # Target test coverage percentage
+
+[tests.runners.cargo]
+command = "cargo test --test {{test_file}} -- {{test_case}}"
+
+[tests.runners.pytest]
+command = "pytest {{test_file}}::{{test_case}}"
+
+[tests.runners.jest]
+command = "npx jest {{test_file}} -t '{{test_case}}'"
+
+[lint_arch]
+enabled = true
+{arch_preset_comment}
+detect_cycles = true
+cycle_granularity = "package"      # "file" | "module" | "package" | "symbol"
+coupling = "runtime"               # "runtime" | "type_only" | "all"
+honor_arch_tags = true             # Honor in-code /// @arch tags
+fail_on = "error"                  # "error" | "warning" | "never"
+strict = false
+max_violations = 0
+
+[lint_arch.package_encapsulation]
+enabled = true
+package_roots = ["*-service", "crates/*", "packages/*", "apps/*"]
+internal_patterns = ["**/internal/**", "**/private/**"]
+entrypoints = ["lib.rs", "index.ts", "index.js", "mod.rs", "__init__.py"]
+
+{layers_block}
+
+[lint_arch.exemptions]
+ignore_paths = ["**/tests/**", "**/fixtures/**", "**/benches/**"]
+
+[complexity]
+weight_cyclomatic = 0.35
+weight_cognitive = 0.25
+weight_loc = 0.15
+weight_coupling = 0.15
+weight_churn = 0.10
+
+max_function_cyclomatic = 15
+max_function_cognitive = 20
+max_function_loc = 100
+max_nesting_depth = 4
+max_parameters = 5
+
+max_class_wmc = 50
+max_class_loc = 500
+max_class_methods = 20
+min_lcom4 = 2
+max_god_class_index = 75.0
+
+max_ai_tokens = 2500
+max_ai_cognitive = 30
+churn_window_days = 90
+churn_max_commits = 100
+default_top_n = 15
+
+[deadcode]
+profile = "{profile}"
+min_lines = 5                      # Skip stubs under 5 lines
+min_confidence = 0.75              # Confidence threshold (0.0 - 1.0)
+include_tests = false              # Production reachability only
+custom_roots = []                  # Extra entrypoint globs
+ignore_patterns = [
+    "**/node_modules/**",
+    "**/target/**",
+    "**/vendor/**",
+    "**/.git/**"
+]
+frameworks = [
+    "react",
+    "nextjs",
+    "vue",
+    "fastapi",
+    "django",
+    "rails",
+    "axum",
+    "actix"
+]
+ai_ignore_file = ".contextignore"
+fail_on_new_deadcode = false
+"#
+        )
+    }
+}
+
+#[cfg(test)]
+mod project_config_tests {
+    use super::*;
+
+    #[test]
+    fn test_project_config_defaults() {
+        let config = ProjectConfig::default();
+        assert_eq!(config.project.name, "my-project");
+        assert_eq!(config.storage.backend, "sqlite");
+        assert_eq!(config.complexity.max_function_cyclomatic, 15);
+        assert_eq!(config.deadcode.min_lines, 5);
+        assert_eq!(config.tests.max_depth, 5);
+        assert!(config.lint_arch.detect_cycles);
+    }
+
+    #[test]
+    fn test_project_config_template_parsing() {
+        let template =
+            ProjectConfig::generate_template("test-service", Some("clean-architecture"), false);
+        let parsed: ProjectConfig = toml::from_str(&template).expect("Template must be valid TOML");
+        assert_eq!(parsed.project.name, "test-service");
+        assert_eq!(parsed.storage.backend, "sqlite");
+        assert_eq!(parsed.lint_arch.layers.len(), 4);
+    }
+
+    #[test]
+    fn test_project_config_minimal_template() {
+        let template = ProjectConfig::generate_template("mini-app", None, true);
+        let parsed: ProjectConfig =
+            toml::from_str(&template).expect("Minimal template must be valid TOML");
+        assert_eq!(parsed.project.name, "mini-app");
+        assert_eq!(parsed.storage.backend, "sqlite");
+    }
+
+    #[test]
+    fn test_project_config_roundtrip_serialization() {
+        let config = ProjectConfig::default();
+        let toml_str = config.to_toml_string().expect("Must serialize to TOML");
+        let parsed: ProjectConfig = toml::from_str(&toml_str).expect("Must deserialize from TOML");
+        assert_eq!(config, parsed);
+    }
+}

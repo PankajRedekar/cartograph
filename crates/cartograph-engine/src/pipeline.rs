@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use cartograph_ast::model::ParsedFile;
 use cartograph_ast::AstRegistry;
+use cartograph_ast::model::ParsedFile;
 use cartograph_core::backend::GraphStoreBackend;
 use rayon::prelude::*;
 
