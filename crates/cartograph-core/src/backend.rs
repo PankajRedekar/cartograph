@@ -3,9 +3,9 @@ use async_trait::async_trait;
 
 use crate::error::Result;
 use crate::model::{
-    Edge, GraphStats, Node, RawClassMemberRecord, RawFrontendCallerRecord, RawImpactRecord,
-    RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord, RawSymbolCouplingRecord,
-    RawTestRecord, SearchResult,
+    Edge, GraphStats, Node, RawClassMemberRecord, RawDeadSymbolRecord, RawFrontendCallerRecord,
+    RawImpactRecord, RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord,
+    RawSymbolCouplingRecord, RawTestRecord, SearchResult,
 };
 
 #[async_trait]
@@ -133,6 +133,22 @@ pub trait GraphStoreBackend: Send + Sync {
 
     /// Retrieve all distinct file paths tracked in the graph database.
     async fn get_all_indexed_files(&self) -> Result<Vec<String>>;
+
+    /// Retrieve all unreachable symbols from designated living root IDs with min_confidence.
+    async fn get_unreachable_subgraph(
+        &self,
+        living_root_ids: &[String],
+        min_confidence: f64,
+    ) -> Result<Vec<RawDeadSymbolRecord>>;
+
+    /// Retrieve all external package targets that have zero incoming import edges.
+    async fn get_ghost_dependencies(&self) -> Result<Vec<String>>;
+
+    /// Retrieve all symbols reachable only from test roots but unreachable from production roots.
+    async fn get_test_only_reachable_symbols(
+        &self,
+        prod_root_ids: &[String],
+    ) -> Result<Vec<String>>;
 
     /// Return aggregate statistics of the graph store.
     async fn stats(&self) -> Result<GraphStats>;

@@ -1754,4 +1754,254 @@ pub struct RawClassMemberRecord {
     pub metadata: Option<serde_json::Value>,
 }
 
+// ---------------------------------------------------------------------------
+// Phase 2.6: Dead Code & Abandoned Component Detection Models
+// ---------------------------------------------------------------------------
+
+/// Classification category of detected dead code
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeadCodeCategory {
+    DeadFunction,
+    DeadMethod,
+    DeadClass,
+    AbandonedComponent,
+    DanglingRoute,
+    DeadRouteParameter,
+    UnusedRpcOperation,
+    AbandonedModel,
+    DeadIsland,
+    ZombieFile,
+    TestOnlyZombie,
+    UnreadField,
+    UnusedEnumVariant,
+    DeadBarrelExport,
+    GhostDependency,
+    DeprecatedSymbol,
+}
+
+impl DeadCodeCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DeadCodeCategory::DeadFunction => "dead_function",
+            DeadCodeCategory::DeadMethod => "dead_method",
+            DeadCodeCategory::DeadClass => "dead_class",
+            DeadCodeCategory::AbandonedComponent => "abandoned_component",
+            DeadCodeCategory::DanglingRoute => "dangling_route",
+            DeadCodeCategory::DeadRouteParameter => "dead_route_parameter",
+            DeadCodeCategory::UnusedRpcOperation => "unused_rpc_operation",
+            DeadCodeCategory::AbandonedModel => "abandoned_model",
+            DeadCodeCategory::DeadIsland => "dead_island",
+            DeadCodeCategory::ZombieFile => "zombie_file",
+            DeadCodeCategory::TestOnlyZombie => "test_only_zombie",
+            DeadCodeCategory::UnreadField => "unread_field",
+            DeadCodeCategory::UnusedEnumVariant => "unused_enum_variant",
+            DeadCodeCategory::DeadBarrelExport => "dead_barrel_export",
+            DeadCodeCategory::GhostDependency => "ghost_dependency",
+            DeadCodeCategory::DeprecatedSymbol => "deprecated_symbol",
+        }
+    }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            DeadCodeCategory::DeadFunction => "Dead Function",
+            DeadCodeCategory::DeadMethod => "Dead Method",
+            DeadCodeCategory::DeadClass => "Dead Class",
+            DeadCodeCategory::AbandonedComponent => "Abandoned UI Component",
+            DeadCodeCategory::DanglingRoute => "Dangling API Route",
+            DeadCodeCategory::DeadRouteParameter => "Dead Route Parameter",
+            DeadCodeCategory::UnusedRpcOperation => "Unused GraphQL/gRPC Operation",
+            DeadCodeCategory::AbandonedModel => "Abandoned Database Model",
+            DeadCodeCategory::DeadIsland => "Dead Island (Mutual Cycle)",
+            DeadCodeCategory::ZombieFile => "Zombie File",
+            DeadCodeCategory::TestOnlyZombie => "Test-Only Zombie",
+            DeadCodeCategory::UnreadField => "Unread Field",
+            DeadCodeCategory::UnusedEnumVariant => "Unused Enum Variant",
+            DeadCodeCategory::DeadBarrelExport => "Dead Barrel Re-Export",
+            DeadCodeCategory::GhostDependency => "Ghost Manifest Dependency",
+            DeadCodeCategory::DeprecatedSymbol => "Deprecated Symbol",
+        }
+    }
+}
+
+/// Confidence tier indicating certainty that code is truly dead
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfidenceTier {
+    Suppressed,
+    Low,
+    Medium,
+    High,
+}
+
+impl ConfidenceTier {
+    pub fn badge(&self) -> &'static str {
+        match self {
+            ConfidenceTier::High => "🟢 High",
+            ConfidenceTier::Medium => "🟡 Medium",
+            ConfidenceTier::Low => "🟠 Low",
+            ConfidenceTier::Suppressed => "⚪ Suppressed",
+        }
+    }
+}
+
+/// Specific factor influencing the confidence score calculation
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConfidenceFactor {
+    pub description: String,
+    pub delta: f64,
+}
+
+/// Individual detected dead code symbol record
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeadSymbolItem {
+    pub id: String,
+    pub name: String,
+    pub kind: NodeKind,
+    pub filepath: String,
+    pub scope: String,
+    pub start_line: u32,
+    pub end_line: u32,
+    pub loc: usize,
+    pub sloc: usize,
+    pub estimated_tokens: usize,
+    pub category: DeadCodeCategory,
+    pub confidence: f64,
+    pub tier: ConfidenceTier,
+    pub confidence_factors: Vec<ConfidenceFactor>,
+    pub island_id: Option<String>,
+    pub parent_id: Option<String>,
+    pub associated_tests: Vec<String>,
+    pub fingerprint: String,
+}
+
+/// Dead Island: A cluster of mutually dependent dead nodes forming an unreachable subgraph
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeadIsland {
+    pub id: String,
+    pub island_roots: Vec<String>,
+    pub member_symbol_ids: Vec<String>,
+    pub filepaths: Vec<String>,
+    pub total_loc: usize,
+    pub total_sloc: usize,
+    pub total_tokens: usize,
+    pub deletion_order: Vec<String>,
+    pub cascading_package_savings: Vec<String>,
+}
+
+/// Ghost Dependency: Installed manifest package with zero imports across the entire graph
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GhostDependencyReport {
+    pub package_name: String,
+    pub manifest_file: String,
+    pub version: String,
+    pub estimated_disk_saved_mb: f64,
+    pub estimated_bundle_saved_kb: f64,
+    pub removal_command: String,
+}
+
+/// Status of a deprecated symbol
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeprecatedSymbolStatus {
+    pub id: String,
+    pub name: String,
+    pub filepath: String,
+    pub start_line: u32,
+    pub deprecation_note: Option<String>,
+    pub remaining_callers_count: usize,
+    pub caller_locations: Vec<String>,
+    pub is_ready_for_cremation: bool,
+    pub migration_progress_pct: f64,
+}
+
+/// Zombie File: A source file where 100% of defined symbols are dead
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ZombieFileReport {
+    pub filepath: String,
+    pub total_loc: usize,
+    pub total_sloc: usize,
+    pub symbol_count: usize,
+    pub total_tokens: usize,
+    pub prune_command: String,
+}
+
+/// Financial, operational, and code health impact metrics
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct DeadCodeImpactMetrics {
+    pub total_dead_symbols: usize,
+    pub total_dead_loc: usize,
+    pub total_dead_sloc: usize,
+    pub total_wasted_tokens: usize,
+    pub estimated_monthly_token_cost: f64,
+    pub estimated_bundle_bloat_kb: f64,
+    pub zombie_file_count: usize,
+    pub dead_island_count: usize,
+    pub ghost_dependency_count: usize,
+    pub ready_for_cremation_count: usize,
+    pub test_only_zombie_count: usize,
+}
+
+/// Git Diff Delta for PR evaluation
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct DeadCodePRDelta {
+    pub newly_introduced: Vec<DeadSymbolItem>,
+    pub newly_orphaned: Vec<DeadSymbolItem>,
+    pub resolved_symbols: Vec<String>,
+    pub net_dead_loc_delta: i64,
+}
+
+/// Technical debt baseline storage structure (`.cartograph-deadcode-baseline.json`)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeadCodeBaseline {
+    pub version: String,
+    pub recorded_at: String,
+    pub git_commit: Option<String>,
+    pub dead_items: Vec<BaselineDeadItemEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BaselineDeadItemEntry {
+    pub fingerprint: String,
+    pub symbol_name: String,
+    pub filepath: String,
+    pub category: DeadCodeCategory,
+    pub loc: usize,
+    pub confidence: f64,
+}
+
+/// Complete top-level report payload for `cartograph deadcode`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeadCodeReport {
+    pub repo_path: String,
+    pub db_profile: String,
+    pub total_scanned_symbols: usize,
+    pub dead_symbols: Vec<DeadSymbolItem>,
+    pub dead_islands: Vec<DeadIsland>,
+    pub zombie_files: Vec<ZombieFileReport>,
+    pub ghost_dependencies: Vec<GhostDependencyReport>,
+    pub deprecated_statuses: Vec<DeprecatedSymbolStatus>,
+    pub impact: DeadCodeImpactMetrics,
+    pub pr_delta: Option<DeadCodePRDelta>,
+    pub baseline_suppressed_count: usize,
+    pub duration_ms: f64,
+}
+
+/// Raw record returned by database for unreachable subgraph query
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawDeadSymbolRecord {
+    pub id: String,
+    pub name: String,
+    pub kind: String,
+    pub filepath: String,
+    pub scope: String,
+    pub start_line: Option<u32>,
+    pub end_line: Option<u32>,
+    pub signature: Option<String>,
+    pub docstring: Option<String>,
+    pub checksum: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+    pub in_degree: usize,
+    pub out_degree: usize,
+}
+
 

@@ -584,6 +584,79 @@ cartograph complexity --format xml
 
 ---
 
+### 10. `cartograph deadcode` — Dead Code & Abandoned Component Detector (<20ms)
+Compiler-grade mark-and-sweep reachability engine that detects unreachable functions, abandoned React/Vue/Svelte UI components, dangling API routes, dead route parameters, unread struct/class fields, unused enum variants, dead islands (mutual-reference cyclic clusters), ghost third-party manifest dependencies (npm, Cargo, PyPI), and tracks `@deprecated` lifecycle progress while calculating enterprise AI token waste ($/mo) and generating `.contextignore` shielding masks.
+
+```bash
+# Basic usage: Discover dead code exceeding 5 lines with confidence >= 0.75
+cartograph deadcode
+
+# Inspect only abandoned UI components (React, Vue, Svelte)
+cartograph deadcode --components-only
+
+# Inspect only dangling API routes and dead route parameters
+cartograph deadcode --routes-only
+
+# Inspect only abandoned database models & SQL tables
+cartograph deadcode --models-only
+
+# Inspect dead islands (mutual-reference cyclic clusters) with clean deletion orders
+cartograph deadcode --islands-only
+
+# Inspect 100% dead zombie files ready for 'git rm'
+cartograph deadcode --files-only
+
+# Inspect unread struct/class fields and unused enum variants
+cartograph deadcode --unread-fields --unused-variants
+
+# Inspect unused third-party manifest dependencies (npm, Cargo, PyPI)
+cartograph deadcode --ghost-deps
+
+# Inspect @deprecated symbols ready for cremation or track migration progress
+cartograph deadcode --deprecated-only
+
+# Highlight production code kept alive solely by unit tests (Test-Only Zombies)
+cartograph deadcode --test-orphans
+
+# Generate .contextignore to shield AI coding agents from dead code ingestion
+cartograph deadcode --export-ai-ignore .contextignore
+
+# Zero-risk blast-radius simulation of pruning a symbol
+cartograph deadcode --simulate-prune "OldComponent"
+
+# Generate copyable, token-optimized AI refactoring prompt for safe deletion
+cartograph deadcode --prompt-prune "OldComponent"
+
+# CI/CD Quality Gates: fail on any new dead code or accidental orphans in PR
+cartograph deadcode --branch "origin/main...HEAD" --fail-on-new-deadcode
+
+# Technical debt baseline: record legacy dead code and auto-ratchet improvements
+cartograph deadcode --record-baseline .cartograph-deadcode-baseline.json
+cartograph deadcode --baseline .cartograph-deadcode-baseline.json --ratchet
+
+# Launch real-time watcher with instant accidental orphan alerts (<1ms)
+cartograph watch --deadcode
+
+# Interactive split-pane TUI explorer
+cartograph deadcode -i
+
+# Standalone interactive HTML dashboard or SARIF 2.1.0 output
+cartograph deadcode --format html > deadcode_report.html
+cartograph deadcode --sarif > deadcode.sarif
+```
+
+#### Key Capabilities
+- **Compiler-Grade Mark-and-Sweep Reachability**: Fast BFS forward reachability from living roots (main, routes, conventions, package exports).
+- **Dead Island (SCC) & Mutual-Cycle Decomposition**: Traverses unreachable subgraphs using Tarjan's SCC algorithm, exposing hidden multi-function cycles with computed topological deletion orders.
+- **Cascading Ghost Dependency Correlator (`--ghost-deps`)**: Identifies unused third-party dependencies in `package.json`, `Cargo.toml`, and `requirements.txt`, calculating disk and frontend bundle savings.
+- **Fine-Grained AST Dead Elements**: Flags unread struct/class fields, unused enum variants, and dead barrel exports (`index.ts`).
+- **`@deprecated` Lifecycle Automation (`--deprecated-only`)**: Separates Ready-for-Cremation symbols (0 callers) from Migration In Progress items with completion percentage and caller coordinates.
+- **Financial & AI Token Waste Quantifier**: Calculates dead LOC, SLOC, estimated LLM prompt token burn ($L / 3.6$), and monthly enterprise dollar cost ($/mo).
+- **AI Agent Context Mask (`--export-ai-ignore`)**: Emits `.contextignore` / `.cursorignore` to prevent AI agents from ingesting dead patterns and hallucinating obsolete APIs.
+- **Real-Time Watcher Accidental Orphan Hook (`cartograph watch --deadcode`)**: Fires sub-1ms notifications when a file edit severs the last caller to any symbol.
+
+---
+
 ## 🌐 Supported Languages & AST Constructs
 
 Cartograph embeds native Tree-Sitter grammars and declarative `.scm` query definitions:

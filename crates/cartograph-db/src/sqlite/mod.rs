@@ -14,9 +14,9 @@ use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::SqliteConfig;
 use cartograph_core::error::{CartographError, Result};
 use cartograph_core::model::{
-    Edge, GraphStats, Node, RawClassMemberRecord, RawFrontendCallerRecord, RawImpactRecord,
-    RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord, RawSymbolCouplingRecord,
-    RawTestRecord, SearchResult,
+    Edge, GraphStats, Node, RawClassMemberRecord, RawDeadSymbolRecord, RawFrontendCallerRecord,
+    RawImpactRecord, RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord,
+    RawSymbolCouplingRecord, RawTestRecord, SearchResult,
 };
 
 use traversal::row_to_node;
@@ -606,6 +606,28 @@ impl GraphStoreBackend for SqliteBackend {
     async fn get_all_indexed_files(&self) -> Result<Vec<String>> {
         let conn = self.conn.lock();
         traversal::get_all_indexed_files(&conn)
+    }
+
+    async fn get_unreachable_subgraph(
+        &self,
+        living_root_ids: &[String],
+        min_confidence: f64,
+    ) -> Result<Vec<RawDeadSymbolRecord>> {
+        let conn = self.conn.lock();
+        traversal::get_unreachable_subgraph(&conn, living_root_ids, min_confidence)
+    }
+
+    async fn get_ghost_dependencies(&self) -> Result<Vec<String>> {
+        let conn = self.conn.lock();
+        traversal::get_ghost_dependencies(&conn)
+    }
+
+    async fn get_test_only_reachable_symbols(
+        &self,
+        prod_root_ids: &[String],
+    ) -> Result<Vec<String>> {
+        let conn = self.conn.lock();
+        traversal::get_test_only_reachable_symbols(&conn, prod_root_ids)
     }
 
     async fn stats(&self) -> Result<GraphStats> {

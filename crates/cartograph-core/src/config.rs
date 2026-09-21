@@ -849,3 +849,125 @@ impl Default for ComplexityConfig {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Phase 2.6: Dead Code & Abandoned Component Detection Config
+// ---------------------------------------------------------------------------
+
+/// Project classification profile affecting entrypoint and visibility heuristics
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectProfile {
+    /// End-user application (CLI, backend server, web app). Public symbols without callers are dead.
+    #[default]
+    Application,
+    /// Reusable library or SDK. Publicly exported symbols are presumed living roots.
+    Library,
+    /// Monorepo containing both internal applications and shared published libraries.
+    Monorepo,
+}
+
+/// Category filtering for dead code analysis
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DeadCodeCategoryFilter {
+    #[default]
+    All,
+    Components,
+    Routes,
+    Models,
+    Islands,
+    Files,
+    Functions,
+    Methods,
+    UnreadFields,
+    UnusedVariants,
+    BarrelExports,
+    GhostDependencies,
+    Deprecated,
+    TestOrphans,
+}
+
+/// Project-level configuration for cartograph deadcode in cartograph.toml
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeadCodeConfig {
+    #[serde(default)]
+    pub profile: ProjectProfile,
+
+    #[serde(default = "default_deadcode_min_lines")]
+    pub min_lines: usize,
+
+    #[serde(default = "default_deadcode_min_confidence")]
+    pub min_confidence: f64,
+
+    #[serde(default)]
+    pub include_tests: bool,
+
+    #[serde(default)]
+    pub custom_roots: Vec<String>,
+
+    #[serde(default = "default_deadcode_ignore_patterns")]
+    pub ignore_patterns: Vec<String>,
+
+    #[serde(default = "default_deadcode_frameworks")]
+    pub frameworks: Vec<String>,
+
+    #[serde(default)]
+    pub ai_ignore_file: Option<std::path::PathBuf>,
+
+    #[serde(default)]
+    pub max_dead_loc: Option<usize>,
+    #[serde(default)]
+    pub max_wasted_tokens: Option<usize>,
+    #[serde(default)]
+    pub fail_on_new_deadcode: bool,
+}
+
+fn default_deadcode_min_lines() -> usize {
+    5
+}
+fn default_deadcode_min_confidence() -> f64 {
+    0.75
+}
+fn default_deadcode_ignore_patterns() -> Vec<String> {
+    vec![
+        "**/node_modules/**".to_string(),
+        "**/target/**".to_string(),
+        "**/vendor/**".to_string(),
+        "**/.git/**".to_string(),
+        "**/dist/**".to_string(),
+        "**/build/**".to_string(),
+    ]
+}
+fn default_deadcode_frameworks() -> Vec<String> {
+    vec![
+        "react".to_string(),
+        "nextjs".to_string(),
+        "vue".to_string(),
+        "fastapi".to_string(),
+        "django".to_string(),
+        "rails".to_string(),
+        "axum".to_string(),
+        "actix".to_string(),
+        "graphql".to_string(),
+        "grpc".to_string(),
+    ]
+}
+
+impl Default for DeadCodeConfig {
+    fn default() -> Self {
+        Self {
+            profile: ProjectProfile::default(),
+            min_lines: default_deadcode_min_lines(),
+            min_confidence: default_deadcode_min_confidence(),
+            include_tests: false,
+            custom_roots: Vec::new(),
+            ignore_patterns: default_deadcode_ignore_patterns(),
+            frameworks: default_deadcode_frameworks(),
+            ai_ignore_file: None,
+            max_dead_loc: None,
+            max_wasted_tokens: None,
+            fail_on_new_deadcode: false,
+        }
+    }
+}
+

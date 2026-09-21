@@ -7,21 +7,24 @@ pub mod uri;
 pub use backend::GraphStoreBackend;
 pub use config::{
     ArchExemptionRule, ArchExemptionsConfig, ArchLayerConfig, ArchRuleConfig, ArchSeverity,
-    ComplexityConfig, CouplingFilter, CycleGranularity, GitDiffMode, IndexConfig, LintArchConfig,
-    MemoryConfig, PackageEncapsulationConfig, ProfileConfig, RuleAction, SqliteConfig, StorageConfig,
-    WatchConfig,
+    ComplexityConfig, CouplingFilter, CycleGranularity, DeadCodeCategoryFilter, DeadCodeConfig,
+    GitDiffMode, IndexConfig, LintArchConfig, MemoryConfig, PackageEncapsulationConfig,
+    ProfileConfig, ProjectProfile, RuleAction, SqliteConfig, StorageConfig, WatchConfig,
 };
 pub use error::{CartographError, Result};
 pub use model::{
-    AiContextFrictionMetric, ArchBaseline, BaselineCycleEntry, BaselineHotspotEntry,
-    BaselineViolationEntry, BoundaryViolation, ChurnMetric, ClassCohesionMetric,
-    ComplexityBaseline, ComplexityDiffDelta, ComplexityGranularity, ComplexityMetric,
-    ComplexityRecord, ComplexityReport, ComplexityTrendMetric, CouplingMetric, CycleHop,
-    DecompositionCluster, DependencyCycle, Edge, EdgeKind, FeedbackArcCut, GodClassEvaluation,
-    GodClassSeverity, GraphStats, HotspotQuadrant, LintArchReport, LintArchSummary,
-    MaintainabilityMetric, Node, NodeKind, RawClassMemberRecord, RawFrontendCallerRecord,
-    RawImpactRecord, RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord,
-    RawSymbolCouplingRecord, RawTestRecord, SearchResult, TestDeficitMetric, TrendDirection,
+    AiContextFrictionMetric, ArchBaseline, BaselineCycleEntry, BaselineDeadItemEntry,
+    BaselineHotspotEntry, BaselineViolationEntry, BoundaryViolation, ChurnMetric,
+    ClassCohesionMetric, ComplexityBaseline, ComplexityDiffDelta, ComplexityGranularity,
+    ComplexityMetric, ComplexityRecord, ComplexityReport, ComplexityTrendMetric, ConfidenceFactor,
+    ConfidenceTier, CouplingMetric, CycleHop, DeadCodeBaseline, DeadCodeCategory,
+    DeadCodeImpactMetrics, DeadCodePRDelta, DeadCodeReport, DeadIsland, DeadSymbolItem,
+    DecompositionCluster, DependencyCycle, DeprecatedSymbolStatus, Edge, EdgeKind, FeedbackArcCut,
+    GhostDependencyReport, GodClassEvaluation, GodClassSeverity, GraphStats, HotspotQuadrant,
+    LintArchReport, LintArchSummary, MaintainabilityMetric, Node, NodeKind, RawClassMemberRecord,
+    RawDeadSymbolRecord, RawFrontendCallerRecord, RawImpactRecord, RawInterFileEdgeRecord,
+    RawRouteModelRecord, RawRouteTraceRecord, RawSymbolCouplingRecord, RawTestRecord, SearchResult,
+    TestDeficitMetric, TrendDirection, ZombieFileReport,
 };
 pub use uri::{build_uri, parse_uri, CanonicalUri, URI_SCHEME};
 

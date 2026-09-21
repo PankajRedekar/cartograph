@@ -148,9 +148,21 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - **Multi-Engine Presentation & Interactive Dashboard**: ANSI color meters with ASCII tables, interactive split-pane TUI (`-i`), self-contained standalone interactive HTML/SVG dashboard (`--format html`) with 4-Quadrant Tornhill scatter plot and spatial treemap, GitHub PR Markdown with Mermaid quadrant charts (`quadrantChart`), SARIF 2.1.0, JSON, AI agent XML (`<complexity_hotspot_report>`), and copyable AI refactoring prompt generator (`--prompt-refactor`).
   - **Performance SLA**: Evaluates 50,000+ nodes and full Git churn in **<25ms** (PR branch diff in **<3ms**).
 
-- [ ] **2.6 Dead Code & Abandoned Component Detector (`cartograph deadcode`)**
-  - Identifies orphaned classes, methods, endpoints, and React components with zero incoming dependency edges.
-  - Configurable threshold filters (`--min-lines 20`).
+- [x] **2.6 Dead Code & Abandoned Component Detector (`cartograph deadcode`)**
+  - **Compiler-Grade Mark-and-Sweep Reachability**: Fast BFS reachability traversal starting from living roots (main/init entrypoints, mounted routes, framework convention files, library exports) over the AST graph.
+  - **Dead Island (SCC) & Mutual Cycle Decomposition**: Detects complex cyclic clusters of unreachable code using Tarjan's Strongly Connected Components algorithm, calculates optimal topological deletion orders, and prevents island accumulation.
+  - **Cascading Ghost Dependency Detector (`--ghost-deps`)**: Cross-references package manifests (`package.json`, `Cargo.toml`, `pyproject.toml`, `requirements.txt`) with AST import edges to uncover unreferenced third-party packages and calculate cascading deletion savings (bundle bloat KB and disk MB).
+  - **Fine-Grained AST Dead Elements (`--unread-fields`, `--unused-variants`)**: Detects unread struct/class fields with zero read accesses across the codebase, unused enum variants never constructed or matched, and dead barrel re-exports in `index.ts`/`mod.rs`.
+  - **`@deprecated` Lifecycle Automation (`--deprecated-only`)**: Scans `#[deprecated]`, `@deprecated`, and JSDoc annotations; categorizes into **Ready-for-Cremation** (0 callers, safe to delete immediately) vs. **Migration In Progress** (% completion tracking with caller coordinates).
+  - **Domain Orphan Classifiers**: Specialized classifiers for abandoned UI components (React/Vue/Svelte), dangling HTTP API routes, dead route parameters, unused GraphQL/gRPC operations, unreferenced database models, and 100% dead zombie files (`--files-only`).
+  - **Test-Only Zombie Correlator (`--test-orphans`)**: Bifurcates production reachability from test reachability to flag production code orphaned except for lingering unit tests.
+  - **Financial & AI Context Waste Quantifier**: Quantifies dead physical LOC, dead SLOC, estimated wasted LLM prompt tokens ($L / 3.6$), and calculates estimated monthly dollar burn ($/mo) for enterprise AI workflows.
+  - **AI Agent Context Exclusion Mask (`--export-ai-ignore`)**: Automatically generates or updates `.contextignore` / `.cursorignore` to shield autonomous AI agents from ingesting dead code patterns.
+  - **Speculative Safe Pruning & Refactoring Advisor (`--simulate-prune`, `--prompt-prune`)**: Verifies zero blast-radius breakage via Phase 2.1 Impact Engine and synthesizes token-optimized AI refactoring prompts for Claude, GPT-4o, and Antigravity agents.
+  - **Git Diff PR Delta & Technical Debt Baseline Ratchet (`--branch`, `--staged`, `--ratchet`)**: Differentiates newly authored dead code from accidental orphans, compares against `.cartograph-deadcode-baseline.json` SHA-256 fingerprints, and auto-tightens baselines upon cleanups.
+  - **Real-Time Watcher Accidental Orphan Hook (`cartograph watch --deadcode`)**: Sub-1ms notification hook alerting developers when an edit severs the last caller to any symbol.
+  - **Multi-Engine Presentation Layer**: Colored ANSI terminal tables with confidence badges (🟢 High, 🟡 Medium, 🟠 Low), interactive split-pane TUI (`-i`), standalone interactive HTML dashboard (`--html`), GitHub PR Markdown with Mermaid `graph TD` diagrams, SARIF 2.1.0, and machine JSON.
+  - **Performance SLA**: Sub-20ms full graph traversal on 50,000+ nodes, sub-2ms PR diff check.
 
 ---
 

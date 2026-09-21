@@ -25,6 +25,7 @@ pub struct WatcherSettings {
     pub cst_cache_capacity: usize,
     pub track_blast_radius: bool,
     pub lint_arch: Option<cartograph_core::config::LintArchConfig>,
+    pub deadcode: Option<cartograph_core::config::DeadCodeConfig>,
 }
 
 impl Default for WatcherSettings {
@@ -36,6 +37,7 @@ impl Default for WatcherSettings {
             cst_cache_capacity: cfg.cst_cache_capacity,
             track_blast_radius: cfg.track_blast_radius,
             lint_arch: None,
+            deadcode: None,
         }
     }
 }
@@ -60,6 +62,11 @@ pub enum WatchEvent {
         duration_us: u64,
         violations: Vec<cartograph_core::model::BoundaryViolation>,
         cycles: Vec<cartograph_core::model::DependencyCycle>,
+    },
+    AccidentalOrphanDetected {
+        severed_by_file: String,
+        orphaned_symbols: Vec<cartograph_core::model::DeadSymbolItem>,
+        duration_us: u64,
     },
     Error {
         message: String,
@@ -303,6 +310,28 @@ impl FileWatcher {
                                     violations: report.violations,
                                     cycles: report.cycles,
                                 });
+                            }
+                        }
+
+                        if let Some(ref dc_cfg) = self.settings.deadcode {
+                            let dc_engine = crate::deadcode::DeadCodeEngine::new(
+                                self.backend.clone(),
+                                dc_cfg.clone(),
+                                self.settings.root_path.clone(),
+                            );
+                            let dc_opts = crate::deadcode::DeadCodeRunOptions {
+                                min_confidence: Some(0.80),
+                                ..Default::default()
+                            };
+                            if let Ok(report) = dc_engine.run(dc_opts).await {
+                                let orphans: Vec<_> = report.dead_symbols.into_iter().filter(|s| s.confidence >= 0.85).collect();
+                                if !orphans.is_empty() {
+                                    let _ = event_tx.send(WatchEvent::AccidentalOrphanDetected {
+                                        severed_by_file: "watcher".to_string(),
+                                        orphaned_symbols: orphans,
+                                        duration_us: (report.duration_ms * 1000.0) as u64,
+                                    });
+                                }
                             }
                         }
                     }

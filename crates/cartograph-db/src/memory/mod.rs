@@ -8,9 +8,9 @@ use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::MemoryConfig;
 use cartograph_core::error::Result;
 use cartograph_core::model::{
-    Edge, EdgeKind, GraphStats, Node, NodeKind, RawClassMemberRecord, RawFrontendCallerRecord,
-    RawImpactRecord, RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord,
-    RawSymbolCouplingRecord, RawTestRecord, SearchResult,
+    Edge, EdgeKind, GraphStats, Node, NodeKind, RawClassMemberRecord, RawDeadSymbolRecord,
+    RawFrontendCallerRecord, RawImpactRecord, RawInterFileEdgeRecord, RawRouteModelRecord,
+    RawRouteTraceRecord, RawSymbolCouplingRecord, RawTestRecord, SearchResult,
 };
 
 #[derive(Default)]
@@ -1089,6 +1089,226 @@ impl GraphStoreBackend for MemoryBackend {
         let mut result: Vec<String> = files.into_iter().collect();
         result.sort();
         Ok(result)
+    }
+
+    async fn get_unreachable_subgraph(
+        &self,
+        living_root_ids: &[String],
+        min_confidence: f64,
+    ) -> Result<Vec<RawDeadSymbolRecord>> {
+        let state = self.state.read();
+
+        // 1. Identify all reachable node IDs
+        let mut reachable: HashSet<String> = HashSet::new();
+        if !living_root_ids.is_empty() {
+            let mut queue: VecDeque<String> = VecDeque::new();
+            for root_id in living_root_ids {
+                if state.nodes.contains_key(root_id) {
+                    reachable.insert(root_id.clone());
+                    queue.push_back(root_id.clone());
+                }
+            }
+
+            while let Some(current) = queue.pop_front() {
+                if let Some(edges) = state.forward_edges.get(&current) {
+                    for edge in edges {
+                        if edge.confidence.unwrap_or(1.0) >= min_confidence
+                            && matches!(
+                                edge.kind,
+                                EdgeKind::Calls
+                                    | EdgeKind::Imports
+                                    | EdgeKind::References
+                                    | EdgeKind::Extends
+                                    | EdgeKind::Implements
+                                    | EdgeKind::MapsTo
+                                    | EdgeKind::Contains
+                            )
+                        {
+                            if !reachable.contains(&edge.target_id) && state.nodes.contains_key(&edge.target_id) {
+                                reachable.insert(edge.target_id.clone());
+                                queue.push_back(edge.target_id.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Collect unreachable nodes (excluding module and file)
+        let mut results = Vec::new();
+        for (id, node) in &state.nodes {
+            if matches!(node.kind, NodeKind::Module | NodeKind::File) {
+                continue;
+            }
+            if !reachable.contains(id) {
+                let in_degree = state
+                    .backward_edges
+                    .get(id)
+                    .map(|edges| {
+                        edges
+                            .iter()
+                            .filter(|e| {
+                                e.confidence.unwrap_or(1.0) >= min_confidence
+                                    && matches!(
+                                        e.kind,
+                                        EdgeKind::Calls
+                                            | EdgeKind::Imports
+                                            | EdgeKind::References
+                                            | EdgeKind::Extends
+                                            | EdgeKind::Implements
+                                            | EdgeKind::MapsTo
+                                    )
+                            })
+                            .count()
+                    })
+                    .unwrap_or(0);
+
+                let out_degree = state
+                    .forward_edges
+                    .get(id)
+                    .map(|edges| {
+                        edges
+                            .iter()
+                            .filter(|e| {
+                                e.confidence.unwrap_or(1.0) >= min_confidence
+                                    && matches!(
+                                        e.kind,
+                                        EdgeKind::Calls
+                                            | EdgeKind::Imports
+                                            | EdgeKind::References
+                                            | EdgeKind::Extends
+                                            | EdgeKind::Implements
+                                            | EdgeKind::MapsTo
+                                    )
+                            })
+                            .count()
+                    })
+                    .unwrap_or(0);
+
+                results.push(RawDeadSymbolRecord {
+                    id: node.id.clone(),
+                    name: node.name.clone(),
+                    kind: node.kind.as_str().to_string(),
+                    filepath: node.filepath.clone(),
+                    scope: node.scope.clone(),
+                    start_line: node.start_line,
+                    end_line: node.end_line,
+                    signature: node.signature.clone(),
+                    docstring: node.docstring.clone(),
+                    checksum: node.checksum.clone(),
+                    metadata: node.metadata.clone(),
+                    in_degree,
+                    out_degree,
+                });
+            }
+        }
+
+        results.sort_by(|a, b| a.filepath.cmp(&b.filepath).then_with(|| a.start_line.cmp(&b.start_line)));
+        Ok(results)
+    }
+
+    async fn get_ghost_dependencies(&self) -> Result<Vec<String>> {
+        let state = self.state.read();
+        let mut import_targets: HashSet<String> = HashSet::new();
+        for edges in state.forward_edges.values() {
+            for edge in edges {
+                if edge.kind == EdgeKind::Imports {
+                    import_targets.insert(edge.target_id.clone());
+                }
+            }
+        }
+        let mut results: Vec<String> = import_targets.into_iter().collect();
+        results.sort();
+        Ok(results)
+    }
+
+    async fn get_test_only_reachable_symbols(
+        &self,
+        prod_root_ids: &[String],
+    ) -> Result<Vec<String>> {
+        let state = self.state.read();
+
+        // 1. Production reachable
+        let mut prod_reachable: HashSet<String> = HashSet::new();
+        let mut queue: VecDeque<String> = VecDeque::new();
+        for root_id in prod_root_ids {
+            if state.nodes.contains_key(root_id) {
+                prod_reachable.insert(root_id.clone());
+                queue.push_back(root_id.clone());
+            }
+        }
+        while let Some(current) = queue.pop_front() {
+            if let Some(edges) = state.forward_edges.get(&current) {
+                for edge in edges {
+                    if matches!(
+                        edge.kind,
+                        EdgeKind::Calls
+                            | EdgeKind::Imports
+                            | EdgeKind::References
+                            | EdgeKind::Extends
+                            | EdgeKind::Implements
+                            | EdgeKind::MapsTo
+                    ) {
+                        if !prod_reachable.contains(&edge.target_id) && state.nodes.contains_key(&edge.target_id) {
+                            prod_reachable.insert(edge.target_id.clone());
+                            queue.push_back(edge.target_id.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Test reachable
+        let mut test_reachable: HashSet<String> = HashSet::new();
+        let mut test_queue: VecDeque<String> = VecDeque::new();
+        for (id, node) in &state.nodes {
+            if matches!(node.kind, NodeKind::Other(ref s) if s == "test")
+                || node.filepath.contains("test")
+                || node.filepath.contains("spec")
+            {
+                test_reachable.insert(id.clone());
+                test_queue.push_back(id.clone());
+            }
+        }
+        while let Some(current) = test_queue.pop_front() {
+            if let Some(edges) = state.forward_edges.get(&current) {
+                for edge in edges {
+                    if matches!(
+                        edge.kind,
+                        EdgeKind::Calls
+                            | EdgeKind::Imports
+                            | EdgeKind::References
+                            | EdgeKind::Extends
+                            | EdgeKind::Implements
+                            | EdgeKind::MapsTo
+                            | EdgeKind::Tests
+                    ) {
+                        if !test_reachable.contains(&edge.target_id) && state.nodes.contains_key(&edge.target_id) {
+                            test_reachable.insert(edge.target_id.clone());
+                            test_queue.push_back(edge.target_id.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Difference
+        let mut diff = Vec::new();
+        for id in test_reachable {
+            if !prod_reachable.contains(&id) {
+                if let Some(node) = state.nodes.get(&id) {
+                    if !matches!(node.kind, NodeKind::Other(ref s) if s == "test")
+                        && !matches!(node.kind, NodeKind::Module | NodeKind::File)
+                        && !node.filepath.contains("test")
+                        && !node.filepath.contains("spec")
+                    {
+                        diff.push(id);
+                    }
+                }
+            }
+        }
+        diff.sort();
+        Ok(diff)
     }
 
     async fn stats(&self) -> Result<GraphStats> {
