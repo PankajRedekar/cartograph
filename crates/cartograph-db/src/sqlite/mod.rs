@@ -14,8 +14,9 @@ use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::SqliteConfig;
 use cartograph_core::error::{CartographError, Result};
 use cartograph_core::model::{
-    Edge, GraphStats, Node, RawFrontendCallerRecord, RawImpactRecord, RawInterFileEdgeRecord,
-    RawRouteModelRecord, RawRouteTraceRecord, RawTestRecord, SearchResult,
+    Edge, GraphStats, Node, RawClassMemberRecord, RawFrontendCallerRecord, RawImpactRecord,
+    RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord, RawSymbolCouplingRecord,
+    RawTestRecord, SearchResult,
 };
 
 use traversal::row_to_node;
@@ -584,6 +585,22 @@ impl GraphStoreBackend for SqliteBackend {
     ) -> Result<Vec<RawInterFileEdgeRecord>> {
         let conn = self.conn.lock();
         traversal::get_inter_file_dependencies(&conn, min_confidence)
+    }
+
+    async fn get_symbol_coupling_metrics(
+        &self,
+        symbol_ids: &[String],
+    ) -> Result<Vec<RawSymbolCouplingRecord>> {
+        let conn = self.conn.lock();
+        traversal::get_symbol_coupling_metrics(&conn, symbol_ids)
+    }
+
+    async fn get_class_member_graph(
+        &self,
+        class_id: &str,
+    ) -> Result<Vec<RawClassMemberRecord>> {
+        let conn = self.conn.lock();
+        traversal::get_class_member_graph(&conn, class_id)
     }
 
     async fn get_all_indexed_files(&self) -> Result<Vec<String>> {

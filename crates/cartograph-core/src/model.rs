@@ -1357,4 +1357,401 @@ pub struct RawInterFileEdgeRecord {
     pub metadata: Option<serde_json::Value>,
 }
 
+// ============================================================================
+// Phase 2.5: Complexity & Hotspot Models
+// ============================================================================
+
+/// Granularity level for complexity analysis
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ComplexityGranularity {
+    /// Function, method, class, struct, interface symbols
+    #[default]
+    Symbol,
+    /// File-level aggregated metrics
+    File,
+    /// Directory/module-level aggregated metrics
+    Module,
+    /// Package/crate-level aggregated metrics
+    Package,
+}
+
+impl ComplexityGranularity {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ComplexityGranularity::Symbol => "symbol",
+            ComplexityGranularity::File => "file",
+            ComplexityGranularity::Module => "module",
+            ComplexityGranularity::Package => "package",
+        }
+    }
+}
+
+impl std::fmt::Display for ComplexityGranularity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl std::str::FromStr for ComplexityGranularity {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "symbol" | "fn" | "class" => Ok(ComplexityGranularity::Symbol),
+            "file" => Ok(ComplexityGranularity::File),
+            "module" | "dir" => Ok(ComplexityGranularity::Module),
+            "package" | "crate" => Ok(ComplexityGranularity::Package),
+            other => Err(format!(
+                "Unknown complexity granularity: {other}. Expected symbol, file, module, or package"
+            )),
+        }
+    }
+}
+
+/// Primary AST-level complexity metrics for a function, method, or file
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ComplexityMetric {
+    /// McCabe Cyclomatic Complexity v(G) = decision points + 1
+    pub cyclomatic: u32,
+    /// SonarSource Cognitive Complexity (nesting-penalized)
+    pub cognitive: u32,
+    /// Physical total lines (end_line - start_line + 1)
+    pub loc: u32,
+    /// Source Lines of Code (excluding blank lines and comment-only lines)
+    pub sloc: u32,
+    /// Comment Lines of Code
+    pub cloc: u32,
+    /// Comment-to-Code ratio (cloc / (sloc + cloc))
+    pub comment_ratio: f64,
+    /// Maximum control flow nesting depth
+    pub max_nesting_depth: u32,
+    /// Number of parameters in signature
+    pub parameter_count: u32,
+}
+
+/// Topological graph coupling metrics derived from inter-symbol dependency edges
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct CouplingMetric {
+    /// Afferent Coupling (In-Degree / Ca): number of incoming edges from callers
+    pub in_degree: usize,
+    /// Efferent Coupling (Out-Degree / Ce): number of outgoing edges to callees
+    pub out_degree: usize,
+    /// Total direct coupling degree (Ca + Ce)
+    pub total_degree: usize,
+    /// Instability Index I = Ce / (Ca + Ce), ranges from 0.0 (stable) to 1.0 (unstable)
+    pub instability: f64,
+    /// Number of distinct foreign files/modules coupled
+    pub cross_file_coupling: usize,
+}
+
+/// Complexity-to-Test Deficit metric correlating complexity with the Test Graph
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct TestDeficitMetric {
+    /// Total number of direct and transitive tests exercising this symbol (from Phase 2.2)
+    pub associated_test_count: usize,
+    /// True if component has high complexity (CC >= 15) and 0 tests
+    pub is_danger_zone: bool,
+    /// Ratio of cyclomatic complexity to associated tests
+    pub test_deficit_ratio: f64,
+}
+
+/// AI Context Friction & Reasonability Score
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct AiContextFrictionMetric {
+    /// Estimated token count of the symbol's full definition snippet
+    pub estimated_tokens: usize,
+    /// Context Complexity Ratio = Cognitive Complexity / Tokens
+    pub context_complexity_ratio: f64,
+    /// True if Cognitive > 30 and Tokens > 2500 (exceeds single-turn AI reasoning capacity)
+    pub is_high_hallucination_risk: bool,
+    /// AI agent risk advice
+    pub risk_guidance: Option<String>,
+}
+
+/// Direction of complexity drift over the time window
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TrendDirection {
+    /// Complexity increasing rapidly (+25% or more) 🌋
+    Volcanic,
+    /// Complexity decreasing through refactoring (-15% or more) 🧊
+    CoolingDown,
+    /// Complexity stable (drift within -15% to +25%)
+    #[default]
+    Stable,
+}
+
+impl TrendDirection {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TrendDirection::Volcanic => "Volcanic (Heating Up)",
+            TrendDirection::CoolingDown => "Cooling Down (Improving)",
+            TrendDirection::Stable => "Stable",
+        }
+    }
+
+    pub fn emoji(&self) -> &'static str {
+        match self {
+            TrendDirection::Volcanic => "🌋",
+            TrendDirection::CoolingDown => "🧊",
+            TrendDirection::Stable => "⚪",
+        }
+    }
+}
+
+/// Historical complexity drift trend
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ComplexityTrendMetric {
+    /// Direction of complexity drift over the time window
+    pub trend: TrendDirection,
+    /// Percentage change in cyclomatic complexity over time window
+    pub cyclomatic_pct_change: f64,
+    /// Number of commits analyzing trend across
+    pub snapshot_commits_count: usize,
+}
+
+/// SEI Maintainability Index & SQALE Technical Debt Hours
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct MaintainabilityMetric {
+    /// Standard SEI / Visual Studio Maintainability Index (0.0 to 100.0)
+    pub maintainability_index: f64,
+    /// Estimated SQALE technical debt remediation hours
+    pub estimated_debt_hours: f64,
+}
+
+/// Object-Oriented cohesion and class-level metrics for structs, classes, and interfaces
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ClassCohesionMetric {
+    /// Weighted Methods per Class: sum of cyclomatic complexities of all member methods
+    pub wmc: u32,
+    /// Total number of member methods
+    pub method_count: usize,
+    /// Total number of member attributes/fields
+    pub field_count: usize,
+    /// Lack of Cohesion in Methods 4: number of connected components in method-field sharing graph
+    pub lcom4: usize,
+    /// Tight Class Cohesion: fraction of directly connected method pairs (0.0 to 1.0)
+    pub tcc: f64,
+    /// Access to Foreign Data: count of distinct foreign classes whose fields are accessed
+    pub atfd: usize,
+}
+
+/// Git change velocity and commit recency metrics
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ChurnMetric {
+    /// Number of commits modifying this file in the time window
+    pub commit_count: usize,
+    /// Number of distinct git author contributors
+    pub author_count: usize,
+    /// Unix timestamp of the most recent commit modifying this file
+    pub last_modified_timestamp: i64,
+    /// Normalized churn velocity score (0.0 to 1.0) accounting for frequency and recency
+    pub churn_velocity_score: f64,
+}
+
+/// Adam Tornhill 4-Quadrant Hotspot classification
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum HotspotQuadrant {
+    /// Q1: High Complexity & High Churn (Top Refactoring Priority) 🚨
+    CriticalHotspot,
+    /// Q2: Low Complexity & High Churn (High Volatility, Needs Good Tests) ⚠️
+    ChurnHotspot,
+    /// Q3: Low Complexity & Low Churn (Healthy Code) ✅
+    #[default]
+    Healthy,
+    /// Q4: High Complexity & Low Churn (Stable Technical Debt) ⏳
+    StableTechnicalDebt,
+}
+
+impl HotspotQuadrant {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            HotspotQuadrant::CriticalHotspot => "Critical Hotspot (Q1)",
+            HotspotQuadrant::ChurnHotspot => "Churn Hotspot (Q2)",
+            HotspotQuadrant::Healthy => "Healthy (Q3)",
+            HotspotQuadrant::StableTechnicalDebt => "Stable Technical Debt (Q4)",
+        }
+    }
+
+    pub fn emoji(&self) -> &'static str {
+        match self {
+            HotspotQuadrant::CriticalHotspot => "🚨",
+            HotspotQuadrant::ChurnHotspot => "⚠️",
+            HotspotQuadrant::Healthy => "✅",
+            HotspotQuadrant::StableTechnicalDebt => "⏳",
+        }
+    }
+}
+
+/// God-Class severity classification
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum GodClassSeverity {
+    #[default]
+    Clean,
+    Minor,
+    Major,
+    Critical,
+}
+
+/// Candidate class decomposition cluster extracted via LCOM4 connected components
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DecompositionCluster {
+    /// Synthesized name suggestion for the new extracted class/service (e.g. "UserAuthenticationService")
+    pub candidate_name: String,
+    /// Names of member methods assigned to this cluster
+    pub methods: Vec<String>,
+    /// Names of fields/attributes mutated or shared by these methods
+    pub fields: Vec<String>,
+    /// Percentage of total class methods represented in this component
+    pub method_percentage: f64,
+    /// Concrete architectural rationale for extraction
+    pub rationale: String,
+}
+
+/// Detailed evaluation of a class/struct for God-Class anti-pattern
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct GodClassEvaluation {
+    /// True if component meets God-Class heuristic criteria
+    pub is_god_class: bool,
+    /// Severity classification
+    pub severity: Option<GodClassSeverity>,
+    /// Composite God-Class Index (GCI, 0.0 to 100.0)
+    pub god_class_index: f64,
+    /// List of specific heuristic triggers (e.g. "WMC (68) exceeds threshold (50)")
+    pub triggers: Vec<String>,
+    /// Concrete decomposition clusters if LCOM4 > 1
+    pub candidate_extractions: Vec<DecompositionCluster>,
+}
+
+/// Complete complexity and hotspot evaluation record for a single symbol, file, or module
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ComplexityRecord {
+    /// Canonical URI identifier (e.g. "cartograph://src/services/billing.rs::BillingManager#struct")
+    pub id: String,
+    /// Short symbol name (e.g. "BillingManager" or "process_payment")
+    pub name: String,
+    /// AST kind (Function, Method, Class, Struct, Interface, File, Module)
+    pub kind: String,
+    /// Relative file path
+    pub filepath: String,
+    /// Scope qualifier
+    pub scope: String,
+    /// Source coordinates
+    pub start_line: u32,
+    pub end_line: u32,
+    /// AST Complexity metrics
+    pub complexity: ComplexityMetric,
+    /// Topological graph coupling metrics
+    pub coupling: CouplingMetric,
+    /// Complexity-to-Test Deficit metrics
+    pub test_deficit: TestDeficitMetric,
+    /// AI Context Friction metrics
+    pub ai_friction: AiContextFrictionMetric,
+    /// Complexity Trend
+    pub trend: ComplexityTrendMetric,
+    /// Maintainability Index & Debt Hours
+    pub maintainability: MaintainabilityMetric,
+    /// Class cohesion metrics (if struct/class)
+    pub class_cohesion: Option<ClassCohesionMetric>,
+    /// Git churn velocity
+    pub churn: ChurnMetric,
+    /// Composite Hotspot Score (0.0 to 100.0)
+    pub hotspot_score: f64,
+    /// Hotspot matrix quadrant
+    pub quadrant: HotspotQuadrant,
+    /// God-Class evaluation (if applicable)
+    pub god_class: Option<GodClassEvaluation>,
+    /// SHA-256 fingerprint for baseline comparison
+    pub fingerprint: String,
+}
+
+/// Complexity change introduced by a Git PR branch diff
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ComplexityDiffDelta {
+    pub symbol_name: String,
+    pub filepath: String,
+    pub line_number: u32,
+    pub previous_cyclomatic: Option<u32>,
+    pub new_cyclomatic: u32,
+    pub cyclomatic_delta: i32,
+    pub previous_cognitive: Option<u32>,
+    pub new_cognitive: u32,
+    pub cognitive_delta: i32,
+    pub is_new_god_class: bool,
+}
+
+/// Overall repository-wide complexity and hotspot report
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ComplexityReport {
+    /// Timestamp of analysis execution
+    pub timestamp: String,
+    /// Granularity analyzed
+    pub granularity: ComplexityGranularity,
+    /// Total components analyzed
+    pub total_analyzed: usize,
+    /// Total God-Classes flagged
+    pub god_classes_detected: usize,
+    /// Total Critical Hotspots (Q1) flagged
+    pub critical_hotspots_count: usize,
+    /// Total Danger Zone (0 Tests) flagged
+    pub danger_zone_count: usize,
+    /// Total estimated technical debt hours across repository
+    pub total_debt_hours: f64,
+    /// Repository average metrics
+    pub avg_cyclomatic: f64,
+    pub avg_cognitive: f64,
+    pub avg_loc: f64,
+    pub avg_maintainability_index: f64,
+    /// Top N ranked hotspot records
+    pub top_hotspots: Vec<ComplexityRecord>,
+    /// All God-Classes (if filtered or requested)
+    pub god_classes: Vec<ComplexityRecord>,
+    /// Danger Zone records
+    pub danger_zone: Vec<ComplexityRecord>,
+    /// Git diff delta records (if --branch or --staged)
+    pub diff_deltas: Option<Vec<ComplexityDiffDelta>>,
+    /// Suppressed baseline technical debt items count
+    pub suppressed_baseline_count: usize,
+}
+
+/// Baseline file for complexity technical debt
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ComplexityBaseline {
+    pub version: String,
+    pub recorded_at: String,
+    pub git_commit: Option<String>,
+    pub hotspots: Vec<BaselineHotspotEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BaselineHotspotEntry {
+    pub fingerprint: String,
+    pub symbol_name: String,
+    pub filepath: String,
+    pub cyclomatic: u32,
+    pub cognitive: u32,
+    pub is_god_class: bool,
+}
+
+/// Raw record returned by database for batch coupling analysis
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawSymbolCouplingRecord {
+    pub symbol_id: String,
+    pub in_degree: usize,
+    pub out_degree: usize,
+}
+
+/// Raw record returned by database for class member analysis
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawClassMemberRecord {
+    pub id: String,
+    pub name: String,
+    pub kind: String,
+    pub start_line: Option<u32>,
+    pub end_line: Option<u32>,
+    pub metadata: Option<serde_json::Value>,
+}
+
 

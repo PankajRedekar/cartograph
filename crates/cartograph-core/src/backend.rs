@@ -3,8 +3,9 @@ use async_trait::async_trait;
 
 use crate::error::Result;
 use crate::model::{
-    Edge, GraphStats, Node, RawFrontendCallerRecord, RawImpactRecord, RawInterFileEdgeRecord,
-    RawRouteModelRecord, RawRouteTraceRecord, RawTestRecord, SearchResult,
+    Edge, GraphStats, Node, RawClassMemberRecord, RawFrontendCallerRecord, RawImpactRecord,
+    RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord, RawSymbolCouplingRecord,
+    RawTestRecord, SearchResult,
 };
 
 #[async_trait]
@@ -115,6 +116,20 @@ pub trait GraphStoreBackend: Send + Sync {
         &self,
         min_confidence: f64,
     ) -> Result<Vec<RawInterFileEdgeRecord>>;
+
+    /// Batch query calculating afferent (in-degree) and efferent (out-degree) coupling
+    /// for a list of symbol IDs (or all symbols if list is empty).
+    async fn get_symbol_coupling_metrics(
+        &self,
+        symbol_ids: &[String],
+    ) -> Result<Vec<RawSymbolCouplingRecord>>;
+
+    /// Query all member methods and fields belonging to a class/struct node ID
+    /// via Defines/Contains edges or child nodes within line boundaries.
+    async fn get_class_member_graph(
+        &self,
+        class_id: &str,
+    ) -> Result<Vec<RawClassMemberRecord>>;
 
     /// Retrieve all distinct file paths tracked in the graph database.
     async fn get_all_indexed_files(&self) -> Result<Vec<String>>;

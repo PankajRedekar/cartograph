@@ -8,8 +8,9 @@ use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::MemoryConfig;
 use cartograph_core::error::Result;
 use cartograph_core::model::{
-    Edge, EdgeKind, GraphStats, Node, NodeKind, RawFrontendCallerRecord, RawImpactRecord,
-    RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord, RawTestRecord, SearchResult,
+    Edge, EdgeKind, GraphStats, Node, NodeKind, RawClassMemberRecord, RawFrontendCallerRecord,
+    RawImpactRecord, RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord,
+    RawSymbolCouplingRecord, RawTestRecord, SearchResult,
 };
 
 #[derive(Default)]
@@ -960,6 +961,122 @@ impl GraphStoreBackend for MemoryBackend {
                 .cmp(&b.source_file)
                 .then_with(|| a.source_line.cmp(&b.source_line))
         });
+        Ok(results)
+    }
+
+    async fn get_symbol_coupling_metrics(
+        &self,
+        symbol_ids: &[String],
+    ) -> Result<Vec<RawSymbolCouplingRecord>> {
+        let state = self.state.read();
+        let mut results = Vec::new();
+
+        let target_ids: Vec<String> = if symbol_ids.is_empty() {
+            state.nodes.keys().cloned().collect()
+        } else {
+            symbol_ids.to_vec()
+        };
+
+        for sym_id in target_ids {
+            let out_degree = state
+                .forward_edges
+                .get(&sym_id)
+                .map(|edges| {
+                    edges
+                        .iter()
+                        .filter(|e| {
+                            matches!(
+                                e.kind.as_str(),
+                                "calls" | "references" | "imports" | "extends" | "implements"
+                            )
+                        })
+                        .count()
+                })
+                .unwrap_or(0);
+
+            let in_degree = state
+                .backward_edges
+                .get(&sym_id)
+                .map(|edges| {
+                    edges
+                        .iter()
+                        .filter(|e| {
+                            matches!(
+                                e.kind.as_str(),
+                                "calls" | "references" | "imports" | "extends" | "implements"
+                            )
+                        })
+                        .count()
+                })
+                .unwrap_or(0);
+
+            if in_degree > 0 || out_degree > 0 || !symbol_ids.is_empty() {
+                results.push(RawSymbolCouplingRecord {
+                    symbol_id: sym_id,
+                    in_degree,
+                    out_degree,
+                });
+            }
+        }
+
+        results.sort_by(|a, b| a.symbol_id.cmp(&b.symbol_id));
+        Ok(results)
+    }
+
+    async fn get_class_member_graph(
+        &self,
+        class_id: &str,
+    ) -> Result<Vec<RawClassMemberRecord>> {
+        let state = self.state.read();
+        let class_node = match state.nodes.get(class_id) {
+            Some(node) => node,
+            None => return Ok(Vec::new()),
+        };
+
+        let mut member_ids = HashSet::new();
+
+        // 1. Members via forward 'defines' or 'contains' edges
+        if let Some(edges) = state.forward_edges.get(class_id) {
+            for edge in edges {
+                let k = edge.kind.as_str();
+                if k == "defines" || k == "contains" {
+                    member_ids.insert(edge.target_id.clone());
+                }
+            }
+        }
+
+        // 2. Members within filepath & start_line..=end_line
+        if let (Some(c_start), Some(c_end)) = (class_node.start_line, class_node.end_line) {
+            if let Some(file_node_ids) = state.nodes_by_file.get(&class_node.filepath) {
+                for node_id in file_node_ids {
+                    if node_id != class_id {
+                        if let Some(node) = state.nodes.get(node_id) {
+                            if let (Some(n_start), Some(n_end)) = (node.start_line, node.end_line) {
+                                if n_start >= c_start && n_end <= c_end {
+                                    member_ids.insert(node_id.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut results = Vec::new();
+        for id in member_ids {
+            if let Some(node) = state.nodes.get(&id) {
+                results.push(RawClassMemberRecord {
+                    id: node.id.clone(),
+                    name: node.name.clone(),
+                    kind: node.kind.as_str().to_string(),
+                    start_line: node.start_line,
+                    end_line: node.end_line,
+                    metadata: node.metadata.clone(),
+                });
+            }
+        }
+
+        results.sort_by(|a, b| a.start_line.cmp(&b.start_line).then_with(|| a.id.cmp(&b.id)));
         Ok(results)
     }
 

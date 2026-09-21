@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/PankajRedekar/cartograph/actions"><img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-2024%20edition-orange?style=flat-square&logo=rust" alt="Rust 2024" /></a>
-  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/roadmap-Phase%202.4%20Complete-blue?style=flat-square" alt="Roadmap" /></a>
+  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/roadmap-Phase%202.5%20Complete-blue?style=flat-square" alt="Roadmap" /></a>
   <a href="openspec/specs/"><img src="https://img.shields.io/badge/specs-OpenSpec%20verified-purple?style=flat-square" alt="OpenSpec" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue?style=flat-square" alt="License" /></a>
 </p>
@@ -29,6 +29,7 @@ Modern software development with AI agents (Claude Code, Cursor, Windsurf, Copil
 
 | Feature | Description | Performance |
 | :--- | :--- | :--- |
+| **🔥 God-Class & Complexity Heatmap** | Polyglot Cyclomatic/Cognitive complexity, LCOM4 cohesion graph with decomposition advisor, Adam Tornhill 4-Quadrant churn correlation, Complexity-to-Test Deficit ("Danger Zone"), AI Context Friction (CCR), and standalone interactive HTML dashboard. | **< 10ms** |
 | **💥 Blast-Radius Impact Analysis** | Reverse transitive dependency propagation, AST-grounded git diff mapping, SemVer 2.0 release guard, God-object coupling smell detector, and speculative refactoring simulations. | **< 25ms** |
 | **⚡ Sub-3ms 1-Turn Localization** | Resolves queries directly into localized subgraphs containing target symbols, callers, callees, and code snippets in a single command. | **< 3ms** |
 | **🧠 Centrality- & Churn-Aware Search** | Blends exact matching, qualified scope (`Scope::name`), column-weighted FTS5 BM25, topological degree centrality ($S_{\text{centrality}}$), and git churn velocity ($B_{\text{churn}}$). | **< 1ms** |
@@ -524,6 +525,65 @@ cartograph lint-arch --format markdown
 
 ---
 
+### 9. `cartograph complexity` — God-Class & Complexity Heatmap (<10ms)
+Performs multi-language AST complexity extraction, topological graph coupling, LCOM4 class cohesion analysis, and Git churn correlation to detect architectural God-Classes, predict AI context friction, and prioritize refactoring hotspots.
+
+```bash
+# Run complexity & hotspot analysis across the repository (top 15 hotspots)
+cartograph complexity
+
+# Adjust granularity: symbol (default), file, module, package
+cartograph complexity --granularity file --top 20
+
+# Filter exclusively for God-Classes violating LCOM4 and cohesion thresholds
+cartograph complexity --god-class
+
+# Filter exclusively for the "Danger Zone" (High Complexity + Zero Tests + High Churn)
+cartograph complexity --danger-zone
+
+# Generate copyable AI Refactoring Blueprint prompt for a specific symbol
+cartograph complexity --prompt-refactor BillingManager
+
+# Launch interactive split-pane TUI explorer
+cartograph complexity -i
+
+# Generate zero-dependency, standalone interactive HTML/SVG dashboard
+cartograph complexity --format html > complexity_dashboard.html
+cartograph complexity --html > complexity_dashboard.html
+
+# Evaluate pull request delta complexity (ΔCC) or staged git diff
+cartograph complexity --branch main...HEAD
+cartograph complexity --staged
+
+# CI/CD Quality Gates
+cartograph complexity --fail-on-hotspots --max-debt-hours 40.0
+
+# Record current technical debt baseline and auto-ratchet
+cartograph complexity --record-baseline
+cartograph complexity --baseline .cartograph-complexity-baseline.json --ratchet
+
+# Export for GitHub Code Scanning (SARIF 2.1.0) or AI Agent XML
+cartograph complexity --sarif > complexity.sarif
+cartograph complexity --format xml
+```
+
+#### Key Capabilities
+- **Polyglot AST Complexity Engine**: Tree-sitter CST visitor computing McCabe Cyclomatic Complexity $v(G)$, SonarSource Cognitive Complexity, physical LOC, SLOC, comment ratio, and max nesting depth across Rust, TypeScript, Python, Go, and Ruby.
+- **Topological Graph Coupling Metrics**: Afferent coupling ($C_a$ / in-degree), Efferent coupling ($C_e$ / out-degree), and Robert C. Martin Instability Index ($I = \frac{C_e}{C_a + C_e}$) via single-pass batch graph queries.
+- **LCOM4 Graph Cohesion & God-Class Detector**: Constructs method-field connectivity graphs, calculates Lack of Cohesion in Methods ($LCOM4 \ge 2$), Tight Class Cohesion (TCC), and automatically partitions disconnected components into cohesive candidate class extraction clusters.
+- **Adam Tornhill Churn & 4-Quadrant Hotspot Matrix**: Correlates AST complexity with zero-copy streaming Git commit frequency to classify components into 4 distinct quadrants:
+  - **Q1: Critical Hotspots** 🚨 (High Complexity & High Churn — Top Refactoring Priority)
+  - **Q2: Churn Hotspots** ⚠️ (Low Complexity & High Churn — Needs High Test Coverage)
+  - **Q3: Healthy Code** ✅ (Low Complexity & Low Churn)
+  - **Q4: Stable Technical Debt** ⏳ (High Complexity & Low Churn — Legacy Stability)
+- **Complexity-to-Test Deficit ("Danger Zone")**: Intersects complexity metrics with the Phase 2.2 predictive test graph to pinpoint volatile, highly complex components lacking any automated unit/integration tests.
+- **AI Context Friction & Reasonability Score**: Calculates Context-to-Complexity Ratio ($CCR$) and token volume estimation, identifying functions that risk hallucination or context window overflow when processed by AI coding agents.
+- **Maintainability Index & SQALE Technical Debt**: Calculates normalized SEI Maintainability Index (0–100) and SQALE technical debt remediation hours.
+- **Git Diff ΔCC & Baseline Ratcheting (`--ratchet`)**: Blocks pull requests that introduce new God-Classes or compound technical debt while auto-pruning resolved items.
+- **Multi-Engine Output & Interactive Dashboard**: Emits rich ANSI color-metered terminal tables, interactive split-pane TUI (`-i`), GitHub PR Markdown with Mermaid `quadrantChart`, SARIF 2.1.0, AI agent XML (`<complexity_report>`), and a self-contained standalone HTML/SVG heatmap with interactive search and quadrant scatter plots.
+
+---
+
 ## 🌐 Supported Languages & AST Constructs
 
 Cartograph embeds native Tree-Sitter grammars and declarative `.scm` query definitions:
@@ -735,11 +795,11 @@ Cartograph is structured across three major evolutionary milestones:
   - [x] 1.3 High-Speed Parallel Indexer, Universal Linker & Real-Time File Watcher
   - [x] 1.4 1-Turn Subgraph Localization (`cartograph locate`) & Quad-Engine Formatters
 - [ ] **Phase 2: Structural Analysis & Intelligence Tools (v1.1)**
-  - [ ] 2.1 Blast-Radius Impact Analysis (`cartograph impact`)
-  - [ ] 2.2 Smart Predictive Test Selection (`cartograph test-selector`)
-  - [ ] 2.3 Interactive Full-Stack Route Mapper (`cartograph routes`)
-  - [ ] 2.4 Structural & Architectural Linter (`cartograph lint`)
-  - [ ] 2.5 Polyglot Cross-Language RPC & Foreign Key Linker
+  - [x] 2.1 Blast-Radius Impact Analysis (`cartograph impact`)
+  - [x] 2.2 Smart Predictive Test Selection (`cartograph test-selector`)
+  - [x] 2.3 Interactive Full-Stack Route Mapper (`cartograph routes`)
+  - [x] 2.4 Structural & Architectural Linter (`cartograph lint-arch`)
+  - [x] 2.5 God-Class & Complexity Heatmap (`cartograph complexity`)
   - [ ] 2.6 Dead Code & Abandoned Component Detector (`cartograph deadcode`)
 - [ ] **Phase 3: AI Augmentation & Logic Synthesis (v1.2)**
   - [ ] 3.1 Business Logic & Validation Rule Extractor (`cartograph extract-logic`)

@@ -135,9 +135,18 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - **Quad-Engine Presentation & CI Gating**: ANSI terminal with ASCII cycle ring traces, GitHub PR Markdown with Mermaid diagrams (`graph LR`), standard SARIF 2.1.0 for GitHub Code Scanning, JSON, and AI agent XML (`<architectural_lint_report>`).
   - **Performance SLA**: Evaluates 50+ files and 150+ dependency edges in **<2ms** (SLA target: <10ms).
 
-- [ ] **2.5 God-Class & Complexity Heatmap (`cartograph complexity`)**
-  - Calculates in-degree / out-degree coupling metrics, Cyclomatic complexity, and lines of code (LOC).
-  - Top-N hotspot identification to guide refactoring priorities.
+- [x] **2.5 God-Class & Complexity Heatmap (`cartograph complexity`)**
+  - **Polyglot AST Complexity Engine**: Tree-sitter CST parsing computing McCabe Cyclomatic Complexity $v(G)$, SonarSource Cognitive Complexity, physical LOC, SLOC (excluding whitespace/comments), and max nesting depth across Rust, TypeScript, Python, Go, and Ruby.
+  - **Topological Graph Coupling Metrics**: Afferent coupling ($C_a$ / in-degree), Efferent coupling ($C_e$ / out-degree), and Robert C. Martin Instability Index ($I = \frac{C_e}{C_a + C_e}$) via single-pass batch SQLite queries.
+  - **Object-Oriented Cohesion & God-Class Detector**: Calculates Weighted Methods per Class (WMC), Lack of Cohesion in Methods (LCOM4), Tight Class Cohesion (TCC), Access to Foreign Data (ATFD), and composite God-Class Index (GCI 0–100).
+  - **LCOM4 Graph Decomposition Advisor**: Automatically partitions disconnected method-field clusters into cohesive candidate class extraction blueprints with synthesized names.
+  - **Adam Tornhill-Inspired Git Churn Hotspot Correlation**: Mines Git commit frequency, recency decay, and author dispersion to synthesize the composite Hotspot Score ($Score = Complexity \times \log_2(2 + Churn)$) and 4-quadrant classification (Critical Hotspots, Churn Hotspots, Stable Debt, Healthy).
+  - **Git Diff & PR Complexity Gating (`--branch`, `--staged`)**: Evaluates delta complexity ($\Delta CC$) and blocks pull requests introducing new God-Classes or exceeding thresholds (`--fail-on-god-class`, `--max-cyclomatic`).
+  - **Technical Debt Baseline & Auto-Ratchet**: Snapshots existing complexity debt into `.cartograph-complexity-baseline.json` to prevent regressions while auto-pruning resolved items.
+  - **Complexity-to-Test Deficit & AI Context Friction**: Cross-references the Phase 2.2 Test Graph to flag untested complex code ("Danger Zone") and computes AI Context Complexity Ratio (CCR) to guard against agent hallucinations.
+  - **Maintainability Index & Complexity Velocity**: Calculates normalized SEI Maintainability Index (0–100), SQALE technical debt hours, and tracks historical complexity trends (🌋 Volcanic vs 🧊 Cooling).
+  - **Multi-Engine Presentation & Interactive Dashboard**: ANSI color meters with ASCII tables, interactive split-pane TUI (`-i`), self-contained standalone interactive HTML/SVG dashboard (`--format html`) with 4-Quadrant Tornhill scatter plot and spatial treemap, GitHub PR Markdown with Mermaid quadrant charts (`quadrantChart`), SARIF 2.1.0, JSON, AI agent XML (`<complexity_hotspot_report>`), and copyable AI refactoring prompt generator (`--prompt-refactor`).
+  - **Performance SLA**: Evaluates 50,000+ nodes and full Git churn in **<25ms** (PR branch diff in **<3ms**).
 
 - [ ] **2.6 Dead Code & Abandoned Component Detector (`cartograph deadcode`)**
   - Identifies orphaned classes, methods, endpoints, and React components with zero incoming dependency edges.
@@ -199,7 +208,7 @@ cartograph impact "<symbol_or_filepath>" [--branch <range>]
 cartograph test-selector "<symbol_or_filepath>"
 cartograph routes [<filter>]
 cartograph lint-arch [--strict]
-cartograph complexity [--top 15]
+cartograph complexity [--top 15] [--danger-zone] [--prompt-refactor <symbol>] [--format html]
 cartograph deadcode [--min-lines 20]
 
 # AI & Diagnostics
@@ -227,6 +236,7 @@ Cartograph uses **OpenSpec** for all feature specifications and change managemen
   - `predictive-test-selector/spec.md`
   - `architectural-linter/spec.md`
   - `fullstack-route-mapper/spec.md`
+  - `code-complexity-heatmap/spec.md`
   - `ai-review-and-context/spec.md`
 - `openspec/changes/`: Active change proposals and tasks.
 
