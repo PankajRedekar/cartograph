@@ -444,4 +444,104 @@ async fn test_inter_file_dependencies_and_indexed_files() {
     }
 }
 
+#[tokio::test]
+async fn test_coupling_and_class_member_queries() {
+    let sqlite_backend = SqliteBackend::open_memory().unwrap();
+    let memory_backend = MemoryBackend::default();
+
+    let class_node = Node {
+        id: "cartograph://src/order.rs::OrderService#class".to_string(),
+        name: "OrderService".to_string(),
+        kind: NodeKind::Class,
+        filepath: "src/order.rs".to_string(),
+        scope: "".to_string(),
+        start_line: Some(10),
+        start_col: Some(1),
+        end_line: Some(60),
+        end_col: Some(2),
+        signature: Some("class OrderService".to_string()),
+        docstring: None,
+        checksum: None,
+        metadata: None,
+    };
+
+    let method_node = Node {
+        id: "cartograph://src/order.rs::OrderService::process#method".to_string(),
+        name: "process".to_string(),
+        kind: NodeKind::Method,
+        filepath: "src/order.rs".to_string(),
+        scope: "OrderService".to_string(),
+        start_line: Some(15),
+        start_col: Some(5),
+        end_line: Some(30),
+        end_col: Some(6),
+        signature: Some("def process(self)".to_string()),
+        docstring: None,
+        checksum: None,
+        metadata: None,
+    };
+
+    let caller_node = Node {
+        id: "cartograph://src/api.rs::handle_req#function".to_string(),
+        name: "handle_req".to_string(),
+        kind: NodeKind::Function,
+        filepath: "src/api.rs".to_string(),
+        scope: "".to_string(),
+        start_line: Some(5),
+        start_col: Some(1),
+        end_line: Some(20),
+        end_col: Some(2),
+        signature: None,
+        docstring: None,
+        checksum: None,
+        metadata: None,
+    };
+
+    let nodes = vec![class_node, method_node.clone(), caller_node];
+
+    let edges = vec![
+        Edge {
+            source_id: "cartograph://src/order.rs::OrderService#class".to_string(),
+            target_id: "cartograph://src/order.rs::OrderService::process#method".to_string(),
+            kind: EdgeKind::Defines,
+            confidence: Some(1.0),
+            weight: None,
+            metadata: None,
+        },
+        Edge {
+            source_id: "cartograph://src/api.rs::handle_req#function".to_string(),
+            target_id: "cartograph://src/order.rs::OrderService::process#method".to_string(),
+            kind: EdgeKind::Calls,
+            confidence: Some(1.0),
+            weight: None,
+            metadata: None,
+        },
+    ];
+
+    for backend in [
+        &sqlite_backend as &dyn GraphStoreBackend,
+        &memory_backend as &dyn GraphStoreBackend,
+    ] {
+        backend.insert_batch(&nodes, &edges).await.unwrap();
+
+        // 1. Verify get_symbol_coupling_metrics
+        let coupling = backend
+            .get_symbol_coupling_metrics(&["cartograph://src/order.rs::OrderService::process#method".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(coupling.len(), 1);
+        assert_eq!(coupling[0].in_degree, 1); // 1 incoming call
+        assert_eq!(coupling[0].out_degree, 0);
+
+        // 2. Verify get_class_member_graph
+        let members = backend
+            .get_class_member_graph("cartograph://src/order.rs::OrderService#class")
+            .await
+            .unwrap();
+        assert_eq!(members.len(), 1);
+        assert_eq!(members[0].name, "process");
+        assert_eq!(members[0].kind, "method");
+    }
+}
+
 

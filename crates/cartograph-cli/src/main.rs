@@ -6,10 +6,15 @@ use std::time::Duration;
 use std::str::FromStr;
 
 use cartograph_core::config::{
-    GitDiffMode, IndexConfig, LintArchConfig, StorageConfig,
+    ComplexityConfig, GitDiffMode, IndexConfig, LintArchConfig, StorageConfig,
 };
-use cartograph_core::model::{HttpMethod, RiskLevel, RouteFilterOptions, SemVerTarget, SimulationMode};
+use cartograph_core::model::{
+    ComplexityGranularity, HttpMethod, RiskLevel, RouteFilterOptions, SemVerTarget, SimulationMode,
+};
 use cartograph_db::create_backend;
+use cartograph_engine::complexity::{
+    formatters::*, BaselineManager, ComplexityAnalysisOptions, ComplexityEngine,
+};
 use cartograph_engine::discovery::DiscoveryConfig;
 use cartograph_engine::impact::{ImpactAnalyzer, ImpactOutputFormat, ImpactQuery};
 use cartograph_engine::locate::{LocateCliOptions, OutputFormat, QueryParser, SubgraphLocator};
@@ -495,6 +500,89 @@ enum Commands {
         /// Output results formatted as SARIF 2.1.0 for GitHub Code Scanning
         #[arg(long)]
         sarif: bool,
+    },
+
+    /// Analyze code complexity, technical debt, and 4-quadrant hotspot heatmap (<25ms)
+    Complexity {
+        /// Root directory of repository
+        #[arg(value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Database profile or SQLite file path
+        #[arg(short, long, default_value = "default")]
+        db: String,
+
+        /// Granularity level: symbol, file, module, package (default: symbol)
+        #[arg(short, long, default_value = "symbol")]
+        granularity: String,
+
+        /// Top N hotspot items to report (default: 15)
+        #[arg(short = 'n', long, default_value_t = 15)]
+        top: usize,
+
+        /// Filter analysis to a specific file or substring
+        #[arg(long)]
+        file: Option<String>,
+
+        /// Show only components flagged as God-Class anti-pattern
+        #[arg(long)]
+        god_class: bool,
+
+        /// Show only Danger Zone items (high complexity with zero test coverage)
+        #[arg(long)]
+        danger_zone: bool,
+
+        /// Analyze git branch diff delta (e.g. main...HEAD)
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Analyze git staged changes
+        #[arg(long)]
+        staged: bool,
+
+        /// Record current hotspots to baseline technical debt file
+        #[arg(long)]
+        record_baseline: bool,
+
+        /// Path to custom technical debt baseline file
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+
+        /// Automatically prune resolved items from baseline (ratchet improvements)
+        #[arg(long)]
+        ratchet: bool,
+
+        /// Generate an automated AI refactoring prompt blueprint for a symbol
+        #[arg(long)]
+        prompt_refactor: Option<String>,
+
+        /// CI/CD Gate: fail with exit code 1 if any Critical Hotspots (Q1) or Danger Zone items exist
+        #[arg(long)]
+        fail_on_hotspots: bool,
+
+        /// Maximum permissible technical debt hours before failing CI
+        #[arg(long)]
+        max_debt_hours: Option<f64>,
+
+        /// Presentation output format: terminal, html, markdown, sarif, json, xml, tui (default: terminal)
+        #[arg(short, long)]
+        format: Option<String>,
+
+        /// Output results formatted as JSON (shorthand for --format json)
+        #[arg(long)]
+        json: bool,
+
+        /// Output results as standalone interactive HTML dashboard (shorthand for --format html)
+        #[arg(long)]
+        html: bool,
+
+        /// Output results formatted as SARIF 2.1.0 (shorthand for --format sarif)
+        #[arg(long)]
+        sarif: bool,
+
+        /// Interactive terminal mode (split-pane TUI explorer)
+        #[arg(short, long)]
+        interactive: bool,
     },
 }
 
@@ -1389,6 +1477,147 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if !report.summary.passed {
                 std::process::exit(1);
+            }
+        }
+
+        Commands::Complexity {
+            path,
+            db,
+            granularity,
+            top,
+            file,
+            god_class,
+            danger_zone,
+            branch,
+            staged,
+            record_baseline,
+            baseline,
+            ratchet,
+            prompt_refactor,
+            fail_on_hotspots,
+            max_debt_hours,
+            format,
+            json,
+            html,
+            sarif,
+            interactive,
+        } => {
+            let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
+            let (storage_cfg, _db_path) = resolve_storage_config(&canonical_root, &db);
+            let backend = create_backend(&storage_cfg)?;
+
+            let gran = granularity
+                .parse::<ComplexityGranularity>()
+                .unwrap_or(ComplexityGranularity::Symbol);
+            let config = ComplexityConfig::default();
+
+            let baseline_file = baseline.or_else(|| {
+                let default_p = canonical_root.join(".cartograph-complexity-baseline.json");
+                if default_p.exists() || record_baseline {
+                    Some(default_p)
+                } else {
+                    None
+                }
+            });
+
+            let options = ComplexityAnalysisOptions {
+                repo_root: canonical_root.clone(),
+                granularity: gran,
+                top_n: top,
+                file_filter: file,
+                god_class_only: god_class,
+                danger_zone_only: danger_zone,
+                branch,
+                staged,
+                baseline_path: baseline_file.clone(),
+                ratchet,
+                prompt_refactor: prompt_refactor.clone(),
+            };
+
+            let report = ComplexityEngine::analyze(&*backend, &config, &options).await?;
+
+            if record_baseline {
+                let target_p = baseline_file.unwrap_or_else(|| canonical_root.join(".cartograph-complexity-baseline.json"));
+                BaselineManager::save_baseline(&target_p, &report.top_hotspots, None)?;
+                println!(
+                    "{} Recorded {} hotspots to baseline: {}",
+                    "✔".green().bold(),
+                    report.top_hotspots.len().to_string().bold(),
+                    target_p.display().to_string().cyan()
+                );
+                return Ok(());
+            }
+
+            // If user requested --prompt-refactor <symbol>
+            if let Some(target_symbol) = prompt_refactor {
+                let target_record = report
+                    .top_hotspots
+                    .iter()
+                    .chain(report.god_classes.iter())
+                    .find(|r| r.name == target_symbol || r.name.contains(&target_symbol));
+
+                if let Some(record) = target_record {
+                    let prompt = PromptRefactorFormatter::format(record);
+                    println!("{prompt}");
+                } else {
+                    eprintln!(
+                        "{} Symbol '{}' not found in complexity hotspot analysis.",
+                        "Error:".red().bold(),
+                        target_symbol
+                    );
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+
+            // Output formatting
+            let output_str = if json {
+                JsonFormatter::format(&report)
+            } else if html {
+                HtmlFormatter::format(&report)
+            } else if sarif {
+                SarifFormatter::format(&report)
+            } else if interactive {
+                TuiFormatter::render(&report)
+            } else if let Some(ref f) = format {
+                match f.to_lowercase().as_str() {
+                    "json" => JsonFormatter::format(&report),
+                    "html" => HtmlFormatter::format(&report),
+                    "sarif" => SarifFormatter::format(&report),
+                    "markdown" | "md" => MarkdownFormatter::format(&report),
+                    "xml" | "agent-xml" => AgentXmlFormatter::format(&report),
+                    "tui" => TuiFormatter::render(&report),
+                    _ => TerminalFormatter::format(&report),
+                }
+            } else if !io::stdout().is_terminal() {
+                JsonFormatter::format(&report)
+            } else {
+                TerminalFormatter::format(&report)
+            };
+
+            print!("{output_str}");
+
+            // CI Quality Gates
+            if fail_on_hotspots && (report.critical_hotspots_count > 0 || report.danger_zone_count > 0) {
+                eprintln!(
+                    "{} CI Quality Gate Failed: {} critical hotspots (Q1) and {} danger zone items exist.",
+                    "FAIL:".red().bold(),
+                    report.critical_hotspots_count,
+                    report.danger_zone_count
+                );
+                std::process::exit(1);
+            }
+
+            if let Some(max_h) = max_debt_hours {
+                if report.total_debt_hours > max_h {
+                    eprintln!(
+                        "{} CI Quality Gate Failed: Total technical debt ({:.1}h) exceeds threshold ({:.1}h).",
+                        "FAIL:".red().bold(),
+                        report.total_debt_hours,
+                        max_h
+                    );
+                    std::process::exit(1);
+                }
             }
         }
     }

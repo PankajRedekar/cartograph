@@ -1,3 +1,4 @@
+pub mod complexity;
 pub mod discovery;
 pub mod error;
 pub mod hasher;
@@ -13,6 +14,9 @@ pub mod test_selector;
 pub mod watcher;
 
 // Re-export core abstractions
+pub use complexity::{
+    ComplexityAnalysisOptions, ComplexityEngine,
+};
 pub use discovery::{DiscoveryConfig, FileWalker, ZeroCopyBuffer};
 pub use error::{EngineError, Result};
 pub use hasher::{DiscoveredFile, FileStatus, IncrementalChangeSet, IncrementalDetector};

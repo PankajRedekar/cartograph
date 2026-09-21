@@ -2,8 +2,9 @@ use rusqlite::Connection;
 
 use cartograph_core::error::{CartographError, Result};
 use cartograph_core::model::{
-    EdgeKind, Node, NodeKind, RawFrontendCallerRecord, RawImpactRecord, RawInterFileEdgeRecord,
-    RawRouteModelRecord, RawRouteTraceRecord, RawTestRecord,
+    EdgeKind, Node, NodeKind, RawClassMemberRecord, RawFrontendCallerRecord, RawImpactRecord,
+    RawInterFileEdgeRecord, RawRouteModelRecord, RawRouteTraceRecord, RawSymbolCouplingRecord,
+    RawTestRecord,
 };
 
 pub(crate) fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<Node> {
@@ -940,6 +941,150 @@ pub fn get_all_indexed_files(conn: &Connection) -> Result<Vec<String>> {
     let mut results = Vec::new();
     for row in rows {
         results.push(row.map_err(|e| CartographError::Database(format!("Failed to map indexed file: {e}")))?);
+    }
+
+    Ok(results)
+}
+
+pub fn get_symbol_coupling_metrics(
+    conn: &Connection,
+    symbol_ids: &[String],
+) -> Result<Vec<RawSymbolCouplingRecord>> {
+    let mut results = Vec::new();
+    if symbol_ids.is_empty() {
+        let sql = r#"
+            WITH in_deg AS (
+                SELECT target_id AS id, COUNT(*) AS in_degree
+                FROM edges
+                WHERE kind IN ('calls', 'references', 'imports', 'extends', 'implements')
+                GROUP BY target_id
+            ),
+            out_deg AS (
+                SELECT source_id AS id, COUNT(*) AS out_degree
+                FROM edges
+                WHERE kind IN ('calls', 'references', 'imports', 'extends', 'implements')
+                GROUP BY source_id
+            )
+            SELECT 
+                n.id AS symbol_id,
+                COALESCE(i.in_degree, 0) AS in_degree,
+                COALESCE(o.out_degree, 0) AS out_degree
+            FROM nodes n
+            LEFT JOIN in_deg i ON n.id = i.id
+            LEFT JOIN out_deg o ON n.id = o.id
+            WHERE i.in_degree IS NOT NULL OR o.out_degree IS NOT NULL
+        "#;
+        let mut stmt = conn
+            .prepare(sql)
+            .map_err(|e| CartographError::Database(format!("Failed to prepare get_symbol_coupling_metrics: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(RawSymbolCouplingRecord {
+                    symbol_id: row.get(0)?,
+                    in_degree: row.get::<_, usize>(1)?,
+                    out_degree: row.get::<_, usize>(2)?,
+                })
+            })
+            .map_err(|e| CartographError::Database(format!("Failed to execute get_symbol_coupling_metrics: {e}")))?;
+        for r in rows {
+            results.push(r.map_err(|e| CartographError::Database(format!("Failed to map coupling record: {e}")))?);
+        }
+    } else {
+        for chunk in symbol_ids.chunks(900) {
+            let placeholders = chunk.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            let sql = format!(
+                r#"
+                WITH in_deg AS (
+                    SELECT target_id AS id, COUNT(*) AS in_degree
+                    FROM edges
+                    WHERE kind IN ('calls', 'references', 'imports', 'extends', 'implements')
+                    GROUP BY target_id
+                ),
+                out_deg AS (
+                    SELECT source_id AS id, COUNT(*) AS out_degree
+                    FROM edges
+                    WHERE kind IN ('calls', 'references', 'imports', 'extends', 'implements')
+                    GROUP BY source_id
+                )
+                SELECT 
+                    n.id AS symbol_id,
+                    COALESCE(i.in_degree, 0) AS in_degree,
+                    COALESCE(o.out_degree, 0) AS out_degree
+                FROM nodes n
+                LEFT JOIN in_deg i ON n.id = i.id
+                LEFT JOIN out_deg o ON n.id = o.id
+                WHERE n.id IN ({placeholders})
+                "#
+            );
+            let mut stmt = conn
+                .prepare(&sql)
+                .map_err(|e| CartographError::Database(format!("Failed to prepare get_symbol_coupling_metrics chunk: {e}")))?;
+            let params = rusqlite::params_from_iter(chunk);
+            let rows = stmt
+                .query_map(params, |row| {
+                    Ok(RawSymbolCouplingRecord {
+                        symbol_id: row.get(0)?,
+                        in_degree: row.get::<_, usize>(1)?,
+                        out_degree: row.get::<_, usize>(2)?,
+                    })
+                })
+                .map_err(|e| CartographError::Database(format!("Failed to execute get_symbol_coupling_metrics chunk: {e}")))?;
+            for r in rows {
+                results.push(r.map_err(|e| CartographError::Database(format!("Failed to map coupling record chunk: {e}")))?);
+            }
+        }
+    }
+
+    Ok(results)
+}
+
+pub fn get_class_member_graph(
+    conn: &Connection,
+    class_id: &str,
+) -> Result<Vec<RawClassMemberRecord>> {
+    let sql = r#"
+        SELECT id, name, kind, start_line, end_line, metadata
+        FROM nodes
+        WHERE id IN (
+            SELECT target_id FROM edges WHERE source_id = ?1 AND kind IN ('defines', 'contains')
+        )
+        OR (
+            filepath = (SELECT filepath FROM nodes WHERE id = ?1)
+            AND start_line >= (SELECT start_line FROM nodes WHERE id = ?1)
+            AND end_line <= (SELECT end_line FROM nodes WHERE id = ?1)
+            AND id != ?1
+        )
+        ORDER BY start_line ASC
+    "#;
+
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| CartographError::Database(format!("Failed to prepare get_class_member_graph: {e}")))?;
+
+    let rows = stmt
+        .query_map([class_id], |row| {
+            let id: String = row.get(0)?;
+            let name: String = row.get(1)?;
+            let kind: String = row.get(2)?;
+            let start_line: Option<u32> = row.get(3)?;
+            let end_line: Option<u32> = row.get(4)?;
+            let metadata_str: Option<String> = row.get(5)?;
+            let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
+
+            Ok(RawClassMemberRecord {
+                id,
+                name,
+                kind,
+                start_line,
+                end_line,
+                metadata,
+            })
+        })
+        .map_err(|e| CartographError::Database(format!("Failed to execute get_class_member_graph: {e}")))?;
+
+    let mut results = Vec::new();
+    for r in rows {
+        results.push(r.map_err(|e| CartographError::Database(format!("Failed to map class member record: {e}")))?);
     }
 
     Ok(results)

@@ -701,3 +701,151 @@ impl Default for LintArchConfig {
     }
 }
 
+/// Project-level configuration for cartograph complexity in cartograph.toml
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ComplexityConfig {
+    /// Scoring weights for composite hotspot score (must sum to ~1.0)
+    #[serde(default = "default_weight_cyclomatic")]
+    pub weight_cyclomatic: f64,
+    #[serde(default = "default_weight_cognitive")]
+    pub weight_cognitive: f64,
+    #[serde(default = "default_weight_loc")]
+    pub weight_loc: f64,
+    #[serde(default = "default_weight_coupling")]
+    pub weight_coupling: f64,
+    #[serde(default = "default_weight_churn")]
+    pub weight_churn: f64,
+
+    /// Thresholds for functions/methods
+    #[serde(default = "default_max_function_cyclomatic")]
+    pub max_function_cyclomatic: u32,
+    #[serde(default = "default_max_function_cognitive")]
+    pub max_function_cognitive: u32,
+    #[serde(default = "default_max_function_loc")]
+    pub max_function_loc: u32,
+    #[serde(default = "default_max_nesting_depth")]
+    pub max_nesting_depth: u32,
+    #[serde(default = "default_max_parameters")]
+    pub max_parameters: u32,
+
+    /// Thresholds for classes/structs (God-Class detection)
+    #[serde(default = "default_max_class_wmc")]
+    pub max_class_wmc: u32,
+    #[serde(default = "default_max_class_loc")]
+    pub max_class_loc: u32,
+    #[serde(default = "default_max_class_methods")]
+    pub max_class_methods: usize,
+    #[serde(default = "default_min_lcom4")]
+    pub min_lcom4: usize,
+    #[serde(default = "default_max_god_class_index")]
+    pub max_god_class_index: f64,
+
+    /// AI Context Reasonability Limits
+    #[serde(default = "default_max_ai_tokens")]
+    pub max_ai_tokens: usize,
+    #[serde(default = "default_max_ai_cognitive")]
+    pub max_ai_cognitive: u32,
+
+    /// Git Churn Mining Settings
+    #[serde(default = "default_churn_window_days")]
+    pub churn_window_days: u32,
+    #[serde(default = "default_churn_max_commits")]
+    pub churn_max_commits: usize,
+
+    /// Default top N items to display
+    #[serde(default = "default_top_n")]
+    pub default_top_n: usize,
+}
+
+fn default_weight_cyclomatic() -> f64 {
+    0.35
+}
+fn default_weight_cognitive() -> f64 {
+    0.25
+}
+fn default_weight_loc() -> f64 {
+    0.15
+}
+fn default_weight_coupling() -> f64 {
+    0.15
+}
+fn default_weight_churn() -> f64 {
+    0.10
+}
+
+fn default_max_function_cyclomatic() -> u32 {
+    15
+}
+fn default_max_function_cognitive() -> u32 {
+    20
+}
+fn default_max_function_loc() -> u32 {
+    100
+}
+fn default_max_nesting_depth() -> u32 {
+    4
+}
+fn default_max_parameters() -> u32 {
+    5
+}
+
+fn default_max_class_wmc() -> u32 {
+    50
+}
+fn default_max_class_loc() -> u32 {
+    500
+}
+fn default_max_class_methods() -> usize {
+    20
+}
+fn default_min_lcom4() -> usize {
+    2
+}
+fn default_max_god_class_index() -> f64 {
+    75.0
+}
+
+fn default_max_ai_tokens() -> usize {
+    2500
+}
+fn default_max_ai_cognitive() -> u32 {
+    30
+}
+
+fn default_churn_window_days() -> u32 {
+    90
+}
+fn default_churn_max_commits() -> usize {
+    100
+}
+fn default_top_n() -> usize {
+    15
+}
+
+impl Default for ComplexityConfig {
+    fn default() -> Self {
+        Self {
+            weight_cyclomatic: default_weight_cyclomatic(),
+            weight_cognitive: default_weight_cognitive(),
+            weight_loc: default_weight_loc(),
+            weight_coupling: default_weight_coupling(),
+            weight_churn: default_weight_churn(),
+            max_function_cyclomatic: default_max_function_cyclomatic(),
+            max_function_cognitive: default_max_function_cognitive(),
+            max_function_loc: default_max_function_loc(),
+            max_nesting_depth: default_max_nesting_depth(),
+            max_parameters: default_max_parameters(),
+            max_class_wmc: default_max_class_wmc(),
+            max_class_loc: default_max_class_loc(),
+            max_class_methods: default_max_class_methods(),
+            min_lcom4: default_min_lcom4(),
+            max_god_class_index: default_max_god_class_index(),
+            max_ai_tokens: default_max_ai_tokens(),
+            max_ai_cognitive: default_max_ai_cognitive(),
+            churn_window_days: default_churn_window_days(),
+            churn_max_commits: default_churn_max_commits(),
+            default_top_n: default_top_n(),
+        }
+    }
+}
+

@@ -1,3 +1,4 @@
+pub mod complexity;
 pub mod error;
 pub mod hash;
 pub mod languages;
@@ -11,6 +12,7 @@ pub mod trivia;
 // Re-export core types for ergonomic AST use
 pub use cartograph_core::{build_uri, parse_uri, CanonicalUri, Edge, EdgeKind, Node, NodeKind};
 
+pub use complexity::{AstComplexityAnalyzer, ClassComplexity, FileComplexityResult, SymbolComplexity};
 pub use error::{AstError, Result};
 pub use hash::{compute_composite_hash, compute_node_checksum};
 pub use line_index::LineIndex;
