@@ -176,9 +176,14 @@ Modern software engineering and AI-assisted development suffer from a critical c
 ### Phase 3: AI Augmentation & Logic Synthesis (v1.2)
 *Objective: Empower AI coding agents with contract-aware reviews, business rule extraction, and diagnostic capabilities.*
 
-- [ ] **3.1 Business Logic & Validation Rule Extractor (`cartograph extract-logic`)**
-  - AST-level node extraction focusing on conditional statements, assertions, validation routines, and calculations.
-  - Synthesizes concise natural language summaries of business constraints for specified domain concepts.
+- [x] **3.1 Business Logic & Validation Rule Extractor (`cartograph extract-logic`)**
+  - AST-level node extraction focusing on conditional statements, assertions, validation routines, schema constraints, and calculations across Rust, TypeScript, Python, Go, and Ruby.
+  - Intra-procedural backward def-use provenance slicing tracking variable origins (parameters, fields, calls, locals).
+  - Zero-LLM deterministic verbalizer synthesizing natural language summaries, BDD/Gherkin specifications, and Decision Tables.
+  - Inter-procedural call-tree BFS tracing (`--deep`) traversing downstream domain rules across functions.
+  - Concept taxonomy search (`--concept`) matching domain entities and business operations with synonym expansion.
+  - Git PR rule diff gating (`--branch`, `--fail-on-relaxed`, `--fail-on-removed`) preventing silent rule regressions.
+  - Multi-engine output: rich ANSI terminal, Gherkin features, Markdown decision tables, AI prompt XML (`<business_logic_rules>`), and machine-readable JSON.
 
 - [ ] **3.2 Contract-Aware AI PR Reviewer (`cartograph ai-review`)**
   - Analyzes pull request diffs against structural graph dependencies.
@@ -232,7 +237,7 @@ cartograph deadcode [--min-lines 20]
 
 # AI & Diagnostics
 cartograph ai-review --source <branch> --target <branch>
-cartograph extract-logic "<domain_concept>"
+cartograph extract-logic [<query>] [--symbol <name>] [--concept <entity>] [--file <path>] [--deep] [--branch <base>] [--fail-on-relaxed] [--fail-on-removed] [--gherkin] [--table] [--xml] [--json]
 cartograph diagnose "<stacktrace_or_log>"
 cartograph diagram "<symbol_or_concept>" [--format mermaid|svg]
 

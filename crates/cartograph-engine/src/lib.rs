@@ -2,6 +2,7 @@ pub mod complexity;
 pub mod deadcode;
 pub mod discovery;
 pub mod error;
+pub mod extract_logic;
 pub mod hasher;
 pub mod impact;
 pub mod linker;
@@ -23,6 +24,10 @@ pub use discovery::{
     DiscoveredGitRepo, DiscoveryConfig, FileWalker, GitWorkspaceResolver, ZeroCopyBuffer,
 };
 pub use error::{EngineError, Result};
+pub use extract_logic::{
+    ConceptTaxonomyMatcher, InterProceduralTracer, LogicExtractionEngine, LogicOutputFormat,
+    RuleDiffEngine, RuleVerbalizer,
+};
 pub use hasher::{DiscoveredFile, FileStatus, IncrementalChangeSet, IncrementalDetector};
 pub use impact::{ImpactAnalyzer, ImpactOutputFormat, ImpactQuery, SemVerGuard};
 pub use linker::ReferenceResolver;

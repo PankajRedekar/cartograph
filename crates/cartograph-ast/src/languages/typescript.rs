@@ -6,8 +6,8 @@ use crate::error::{AstError, Result};
 use crate::hash::compute_node_checksum;
 use crate::line_index::LineIndex;
 use crate::model::{
-    AstDiagnostic, CallFidelity, DiagnosticSeverity, ParseContext, ParsedFile, UnresolvedReference,
-    Visibility,
+    AstDiagnostic, CallFidelity, DiagnosticSeverity, ParseContext, ParsedFile, Span,
+    UnresolvedReference, Visibility,
 };
 use crate::traits::LanguageParser;
 use crate::trivia::{SignatureNormalizer, TriviaBinder};
@@ -693,12 +693,7 @@ impl<'a> TypeScriptExtractor<'a> {
         }
     }
 
-    fn visit_call(&mut self, node: TsNode) {
-        let fn_node = match node.child_by_field_name("function") {
-            Some(n) => n,
-            None => return,
-        };
-
+    fn extract_call_base_name(&self, fn_node: TsNode) -> &'a str {
         let mut base_node = fn_node;
         while base_node.kind() == "call_expression" {
             if let Some(inner) = base_node.child_by_field_name("function") {
@@ -707,109 +702,121 @@ impl<'a> TypeScriptExtractor<'a> {
                 break;
             }
         }
-        let fn_base_name = if base_node.kind() == "member_expression" {
+        if base_node.kind() == "member_expression" {
             base_node
                 .child_by_field_name("object")
                 .map(|o| self.node_text(o))
                 .unwrap_or_else(|| self.node_text(base_node))
         } else {
             self.node_text(base_node)
+        }
+    }
+
+    fn try_visit_test_suite(&mut self, node: TsNode, fn_node: TsNode, fn_base_name: &str) -> bool {
+        if fn_base_name != "describe" && fn_base_name != "suite" {
+            return false;
+        }
+
+        let mut suite_name = String::new();
+        if let Some(args) = node.child_by_field_name("arguments")
+            && let Some(first_arg) = args.named_child(0)
+        {
+            suite_name = self
+                .node_text(first_arg)
+                .trim_matches(['\'', '"', '`'])
+                .to_string();
+        }
+
+        if !suite_name.is_empty() {
+            self.scope_stack.push(suite_name.clone());
+        }
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.id() != fn_node.id() {
+                self.visit_node(child);
+            }
+        }
+
+        if !suite_name.is_empty() {
+            self.scope_stack.pop();
+        }
+        true
+    }
+
+    fn try_visit_test_case(&mut self, node: TsNode, fn_node: TsNode, fn_base_name: &str) -> bool {
+        if fn_base_name != "it" && fn_base_name != "test" {
+            return false;
+        }
+
+        let mut test_name = String::new();
+        if let Some(args) = node.child_by_field_name("arguments")
+            && let Some(first_arg) = args.named_child(0)
+        {
+            test_name = self
+                .node_text(first_arg)
+                .trim_matches(['\'', '"', '`'])
+                .to_string();
+        }
+
+        if test_name.is_empty() {
+            return false;
+        }
+
+        let scope = self.current_scope();
+        let span = self.line_index.span_for_node(&node, self.content);
+        let uri = build_uri(self.filepath, &scope, &test_name, &NodeKind::Function);
+
+        let framework = if self.filepath.contains("vitest") {
+            "vitest"
+        } else {
+            "jest"
         };
 
-        // Check if this is a test suite: describe("...", () => { ... }) or suite("...", ...)
-        if fn_base_name == "describe" || fn_base_name == "suite" {
-            let mut suite_name = String::new();
-            if let Some(args) = node.child_by_field_name("arguments")
-                && let Some(first_arg) = args.named_child(0)
-            {
-                suite_name = self
-                    .node_text(first_arg)
-                    .trim_matches(['\'', '"', '`'])
-                    .to_string();
-            }
+        let test_type = if self.filepath.contains("e2e") {
+            "e2e"
+        } else if self.filepath.contains("integration") {
+            "integration"
+        } else {
+            "unit"
+        };
 
-            if !suite_name.is_empty() {
-                self.scope_stack.push(suite_name.clone());
-            }
+        self.nodes.push(Node {
+            id: uri,
+            name: test_name,
+            kind: NodeKind::Function,
+            filepath: self.filepath.to_string(),
+            scope,
+            start_line: Some(span.start_line),
+            start_col: Some(span.start_col),
+            end_line: Some(span.end_line),
+            end_col: Some(span.end_col),
+            signature: Some(format!("test {fn_base_name}()")),
+            docstring: None,
+            checksum: None,
+            metadata: Some(serde_json::json!({
+                "is_test": true,
+                "framework": framework,
+                "test_type": test_type,
+                "span": span,
+            })),
+        });
 
-            let mut cursor = node.walk();
-            for child in node.children(&mut cursor) {
-                if child.id() != fn_node.id() {
-                    self.visit_node(child);
-                }
-            }
-
-            if !suite_name.is_empty() {
-                self.scope_stack.pop();
-            }
-            return;
-        }
-
-        // Check if this is a test case: it("...", () => { ... }) or test("...", () => { ... })
-        if fn_base_name == "it" || fn_base_name == "test" {
-            let mut test_name = String::new();
-            if let Some(args) = node.child_by_field_name("arguments")
-                && let Some(first_arg) = args.named_child(0)
-            {
-                test_name = self
-                    .node_text(first_arg)
-                    .trim_matches(['\'', '"', '`'])
-                    .to_string();
-            }
-
-            if !test_name.is_empty() {
-                let scope = self.current_scope();
-                let span = self.line_index.span_for_node(&node, self.content);
-                let uri = build_uri(self.filepath, &scope, &test_name, &NodeKind::Function);
-
-                let framework = if self.filepath.contains("vitest") {
-                    "vitest"
-                } else {
-                    "jest"
-                };
-
-                let test_type = if self.filepath.contains("e2e") {
-                    "e2e"
-                } else if self.filepath.contains("integration") {
-                    "integration"
-                } else {
-                    "unit"
-                };
-
-                self.nodes.push(Node {
-                    id: uri,
-                    name: test_name,
-                    kind: NodeKind::Function,
-                    filepath: self.filepath.to_string(),
-                    scope,
-                    start_line: Some(span.start_line),
-                    start_col: Some(span.start_col),
-                    end_line: Some(span.end_line),
-                    end_col: Some(span.end_col),
-                    signature: Some(format!("test {fn_base_name}()")),
-                    docstring: None,
-                    checksum: None,
-                    metadata: Some(serde_json::json!({
-                        "is_test": true,
-                        "framework": framework,
-                        "test_type": test_type,
-                        "span": span,
-                    })),
-                });
-
-                let mut cursor = node.walk();
-                for child in node.children(&mut cursor) {
-                    if child.id() != fn_node.id() {
-                        self.visit_node(child);
-                    }
-                }
-                return;
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.id() != fn_node.id() {
+                self.visit_node(child);
             }
         }
+        true
+    }
 
-        let span = self.line_index.span_for_node(&node, self.content);
-        let caller_id = self.nodes.last().map(|n| n.id.clone()).unwrap_or_default();
-
+    fn try_visit_clientside_http_call(
+        &mut self,
+        node: TsNode,
+        fn_node: TsNode,
+        fn_base_name: &str,
+    ) {
         // 1. Clientside fetch calls: fetch('/api/users', { method: 'POST' })
         if (fn_base_name == "fetch" || fn_base_name == "window.fetch")
             && let Some(args) = node.child_by_field_name("arguments")
@@ -854,103 +861,127 @@ impl<'a> TypeScriptExtractor<'a> {
                 self.record_frontend_api_call(node, "axios", &method_name.to_uppercase(), &url);
             }
         }
+    }
 
-        // 3. Express / router route registration: app.get('/users', handler), router.post('/users', auth, handler)
-        if fn_node.kind() == "member_expression"
-            && let (Some(obj), Some(prop)) = (
-                fn_node.child_by_field_name("object"),
-                fn_node.child_by_field_name("property"),
-            )
-        {
-            let obj_name = self.node_text(obj);
-            let method_name = self.node_text(prop).to_lowercase();
-            let http_methods = [
-                "get", "post", "put", "patch", "delete", "options", "head", "all",
-            ];
-            if http_methods.contains(&method_name.as_str())
-                && let Some(args) = node.child_by_field_name("arguments")
-                && let Some(first_arg) = args.named_child(0)
-                && let Some(route_path) = self.extract_string_content(first_arg)
-                && (route_path.starts_with('/')
-                    || route_path.starts_with('*')
-                    || obj_name.contains("app")
-                    || obj_name.contains("router")
-                    || obj_name.contains("server"))
-            {
-                let http_method = method_name.to_uppercase();
-                let span = self.line_index.span_for_node(&node, self.content);
-                let route_name = format!("{http_method} {route_path}");
-                let uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
+    fn try_visit_express_route(&mut self, node: TsNode, fn_node: TsNode) {
+        if fn_node.kind() != "member_expression" {
+            return;
+        }
+        let (Some(obj), Some(prop)) = (
+            fn_node.child_by_field_name("object"),
+            fn_node.child_by_field_name("property"),
+        ) else {
+            return;
+        };
 
-                let mut middlewares = Vec::new();
-                let mut handler_name = None;
-                let mut cursor = args.walk();
-                for (i, child) in args
-                    .children(&mut cursor)
-                    .filter(|c| c.is_named())
-                    .enumerate()
-                {
-                    if i == 0 {
-                        continue;
-                    }
-                    let text = self.node_text(child).trim();
-                    if child.kind() == "identifier" || child.kind() == "member_expression" {
-                        middlewares.push(text.to_string());
-                    }
-                }
-                if !middlewares.is_empty() {
-                    handler_name = middlewares.pop();
-                }
-
-                let is_protected = middlewares.iter().any(|m| {
-                    let l = m.to_lowercase();
-                    l.contains("auth")
-                        || l.contains("guard")
-                        || l.contains("jwt")
-                        || l.contains("session")
-                        || l.contains("protect")
-                });
-
-                self.nodes.push(Node {
-                    id: uri.clone(),
-                    name: route_name.clone(),
-                    kind: NodeKind::Route,
-                    filepath: self.filepath.to_string(),
-                    scope: "routes".to_string(),
-                    start_line: Some(span.start_line),
-                    start_col: Some(span.start_col),
-                    end_line: Some(span.end_line),
-                    end_col: Some(span.end_col),
-                    signature: Some(format!("{http_method} {route_path}")),
-                    docstring: None,
-                    checksum: None,
-                    metadata: Some(serde_json::json!({
-                        "http_method": http_method,
-                        "raw_pattern": route_path,
-                        "framework": "express",
-                        "middlewares": middlewares,
-                        "handler": handler_name,
-                        "auth": if is_protected { "protected" } else { "public" },
-                        "span": span,
-                    })),
-                });
-
-                if let Some(ref handler) = handler_name {
-                    self.unresolved_references.push(UnresolvedReference {
-                        source_node_id: uri,
-                        target_symbol: handler.clone(),
-                        import_source: None,
-                        kind: EdgeKind::MapsTo,
-                        span,
-                        call_fidelity: CallFidelity::Definite,
-                        receiver_type_hint: None,
-                        receiver_var: None,
-                        arg_count: None,
-                    });
-                }
-            }
+        let obj_name = self.node_text(obj);
+        let method_name = self.node_text(prop).to_lowercase();
+        let http_methods = [
+            "get", "post", "put", "patch", "delete", "options", "head", "all",
+        ];
+        if !http_methods.contains(&method_name.as_str()) {
+            return;
         }
 
+        let Some(args) = node.child_by_field_name("arguments") else {
+            return;
+        };
+        let Some(first_arg) = args.named_child(0) else {
+            return;
+        };
+        let Some(route_path) = self.extract_string_content(first_arg) else {
+            return;
+        };
+
+        if !(route_path.starts_with('/')
+            || route_path.starts_with('*')
+            || obj_name.contains("app")
+            || obj_name.contains("router")
+            || obj_name.contains("server"))
+        {
+            return;
+        }
+
+        let http_method = method_name.to_uppercase();
+        let span = self.line_index.span_for_node(&node, self.content);
+        let route_name = format!("{http_method} {route_path}");
+        let uri = build_uri(self.filepath, "routes", &route_name, &NodeKind::Route);
+
+        let mut middlewares = Vec::new();
+        let mut handler_name = None;
+        let mut cursor = args.walk();
+        for (i, child) in args
+            .children(&mut cursor)
+            .filter(|c| c.is_named())
+            .enumerate()
+        {
+            if i == 0 {
+                continue;
+            }
+            let text = self.node_text(child).trim();
+            if child.kind() == "identifier" || child.kind() == "member_expression" {
+                middlewares.push(text.to_string());
+            }
+        }
+        if !middlewares.is_empty() {
+            handler_name = middlewares.pop();
+        }
+
+        let is_protected = middlewares.iter().any(|m| {
+            let l = m.to_lowercase();
+            l.contains("auth")
+                || l.contains("guard")
+                || l.contains("jwt")
+                || l.contains("session")
+                || l.contains("protect")
+        });
+
+        self.nodes.push(Node {
+            id: uri.clone(),
+            name: route_name.clone(),
+            kind: NodeKind::Route,
+            filepath: self.filepath.to_string(),
+            scope: "routes".to_string(),
+            start_line: Some(span.start_line),
+            start_col: Some(span.start_col),
+            end_line: Some(span.end_line),
+            end_col: Some(span.end_col),
+            signature: Some(format!("{http_method} {route_path}")),
+            docstring: None,
+            checksum: None,
+            metadata: Some(serde_json::json!({
+                "http_method": http_method,
+                "raw_pattern": route_path,
+                "framework": "express",
+                "middlewares": middlewares,
+                "handler": handler_name,
+                "auth": if is_protected { "protected" } else { "public" },
+                "span": span,
+            })),
+        });
+
+        if let Some(ref handler) = handler_name {
+            self.unresolved_references.push(UnresolvedReference {
+                source_node_id: uri,
+                target_symbol: handler.clone(),
+                import_source: None,
+                kind: EdgeKind::MapsTo,
+                span,
+                call_fidelity: CallFidelity::Definite,
+                receiver_type_hint: None,
+                receiver_var: None,
+                arg_count: None,
+            });
+        }
+    }
+
+    fn record_function_or_method_call(
+        &mut self,
+        node: TsNode,
+        fn_node: TsNode,
+        caller_id: String,
+        span: Span,
+    ) {
         if fn_node.kind() == "member_expression" {
             if let (Some(obj), Some(prop)) = (
                 fn_node.child_by_field_name("object"),
@@ -998,6 +1029,37 @@ impl<'a> TypeScriptExtractor<'a> {
                 arg_count: self.count_arguments(node),
             });
         }
+    }
+
+    fn visit_call(&mut self, node: TsNode) {
+        let fn_node = match node.child_by_field_name("function") {
+            Some(n) => n,
+            None => return,
+        };
+
+        let fn_base_name = self.extract_call_base_name(fn_node);
+
+        // Check if this is a test suite: describe("...", () => { ... }) or suite("...", ...)
+        if self.try_visit_test_suite(node, fn_node, fn_base_name) {
+            return;
+        }
+
+        // Check if this is a test case: it("...", () => { ... }) or test("...", () => { ... })
+        if self.try_visit_test_case(node, fn_node, fn_base_name) {
+            return;
+        }
+
+        let span = self.line_index.span_for_node(&node, self.content);
+        let caller_id = self.nodes.last().map(|n| n.id.clone()).unwrap_or_default();
+
+        // 1. Clientside fetch / axios calls
+        self.try_visit_clientside_http_call(node, fn_node, fn_base_name);
+
+        // 2. Express / router route registration: app.get('/users', handler), router.post('/users', auth, handler)
+        self.try_visit_express_route(node, fn_node);
+
+        // 3. Record call reference
+        self.record_function_or_method_call(node, fn_node, caller_id, span);
 
         // Recursively visit call expression arguments to discover nested calls/callbacks
         let mut cursor = node.walk();
