@@ -3,6 +3,7 @@ pub mod error;
 pub mod hash;
 pub mod languages;
 pub mod line_index;
+pub mod logic;
 pub mod model;
 pub mod query;
 pub mod registry;
@@ -18,6 +19,7 @@ pub use complexity::{
 pub use error::{AstError, Result};
 pub use hash::{compute_composite_hash, compute_node_checksum};
 pub use line_index::LineIndex;
+pub use logic::{AstLogicExtractor, AstLogicVisitor, NoiseFilter, SymbolicProvenanceSlicer};
 pub use model::{
     AstDiagnostic, CallFidelity, DiagnosticSeverity, ParseContext, ParseOptions, ParsedFile, Span,
     UnresolvedReference, Visibility,

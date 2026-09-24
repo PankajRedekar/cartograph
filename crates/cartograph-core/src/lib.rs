@@ -1,6 +1,7 @@
 pub mod backend;
 pub mod config;
 pub mod error;
+pub mod logic;
 pub mod model;
 pub mod uri;
 
@@ -8,11 +9,16 @@ pub use backend::GraphStoreBackend;
 pub use config::{
     ArchExemptionRule, ArchExemptionsConfig, ArchLayerConfig, ArchRuleConfig, ArchSeverity,
     ComplexityConfig, CouplingFilter, CycleGranularity, DeadCodeCategoryFilter, DeadCodeConfig,
-    GitDiffMode, IndexConfig, LintArchConfig, MemoryConfig, PackageEncapsulationConfig,
-    ProfileConfig, ProjectConfig, ProjectInfoConfig, ProjectProfile, RuleAction, SqliteConfig,
-    StorageConfig, WatchConfig,
+    ExtractLogicConfig, GitDiffMode, IndexConfig, LintArchConfig, MemoryConfig,
+    PackageEncapsulationConfig, ProfileConfig, ProjectConfig, ProjectInfoConfig, ProjectProfile,
+    RuleAction, SqliteConfig, StorageConfig, WatchConfig,
 };
 pub use error::{CartographError, Result};
+pub use logic::{
+    BusinessRule, ComparisonOp, Consequence, DecisionRow, DecisionTable, DiffSeverity,
+    InvariantCondition, LogicStats, LogicalOp, Operand, PredicateExpr, ProvenanceSource, RuleDiff,
+    RuleKind, RuleModification, RuleSpan, UnaryOp, VariableProvenance,
+};
 pub use model::{
     AiContextFrictionMetric, ArchBaseline, BaselineCycleEntry, BaselineDeadItemEntry,
     BaselineHotspotEntry, BaselineViolationEntry, BoundaryViolation, ChurnMetric,

@@ -974,6 +974,135 @@ impl Default for DeadCodeConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 3.1: Business Logic & Validation Rule Extractor (`cartograph extract-logic`)
+// ---------------------------------------------------------------------------
+
+/// Business logic and validation rule extraction settings
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExtractLogicConfig {
+    /// Minimum confidence threshold (0.0 to 1.0) to filter technical boilerplate
+    #[serde(default = "default_extract_logic_min_confidence")]
+    pub min_confidence: f32,
+
+    /// Default inter-procedural call tracing depth
+    #[serde(default = "default_extract_logic_max_depth")]
+    pub max_depth: usize,
+
+    /// Whether to include technical hygiene checks (null checks, generic error wrappers)
+    #[serde(default)]
+    pub include_technical_guards: bool,
+
+    /// Custom domain keywords to boost rule confidence
+    #[serde(default = "default_extract_logic_domain_keywords")]
+    pub domain_keywords: Vec<String>,
+
+    /// Excluded symbol name globs (e.g. test mocks, harness utilities)
+    #[serde(default = "default_extract_logic_ignore_symbols")]
+    pub ignore_symbols: Vec<String>,
+
+    /// Concept aliases and taxonomy synonyms (e.g. discount -> [rebate, coupon, promo])
+    #[serde(default = "default_extract_logic_concept_aliases")]
+    pub concept_aliases: HashMap<String, Vec<String>>,
+}
+
+fn default_extract_logic_min_confidence() -> f32 {
+    0.60
+}
+
+fn default_extract_logic_max_depth() -> usize {
+    3
+}
+
+fn default_extract_logic_domain_keywords() -> Vec<String> {
+    vec![
+        "discount".to_string(),
+        "rebate".to_string(),
+        "tax".to_string(),
+        "fee".to_string(),
+        "price".to_string(),
+        "credit".to_string(),
+        "balance".to_string(),
+        "quota".to_string(),
+        "limit".to_string(),
+        "kyc".to_string(),
+        "subscription".to_string(),
+        "plan".to_string(),
+        "rate".to_string(),
+        "age".to_string(),
+        "status".to_string(),
+        "role".to_string(),
+        "permission".to_string(),
+    ]
+}
+
+fn default_extract_logic_ignore_symbols() -> Vec<String> {
+    vec![
+        "*_test".to_string(),
+        "test_*".to_string(),
+        "mock_*".to_string(),
+        "Mock*".to_string(),
+        "*Harness".to_string(),
+    ]
+}
+
+fn default_extract_logic_concept_aliases() -> HashMap<String, Vec<String>> {
+    let mut map = HashMap::new();
+    map.insert(
+        "discount".to_string(),
+        vec![
+            "rebate".to_string(),
+            "coupon".to_string(),
+            "promo".to_string(),
+            "voucher".to_string(),
+            "markdown".to_string(),
+        ],
+    );
+    map.insert(
+        "tax".to_string(),
+        vec![
+            "vat".to_string(),
+            "gst".to_string(),
+            "sales_tax".to_string(),
+            "duty".to_string(),
+            "withholding".to_string(),
+        ],
+    );
+    map.insert(
+        "auth".to_string(),
+        vec![
+            "role".to_string(),
+            "permission".to_string(),
+            "scope".to_string(),
+            "tenant".to_string(),
+            "acl".to_string(),
+        ],
+    );
+    map.insert(
+        "inventory".to_string(),
+        vec![
+            "stock".to_string(),
+            "quantity".to_string(),
+            "sku".to_string(),
+            "warehouse".to_string(),
+        ],
+    );
+    map
+}
+
+impl Default for ExtractLogicConfig {
+    fn default() -> Self {
+        Self {
+            min_confidence: default_extract_logic_min_confidence(),
+            max_depth: default_extract_logic_max_depth(),
+            include_technical_guards: false,
+            domain_keywords: default_extract_logic_domain_keywords(),
+            ignore_symbols: default_extract_logic_ignore_symbols(),
+            concept_aliases: default_extract_logic_concept_aliases(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Phase 2.7: Master Unified Project Configuration (`cartograph.toml`)
 // ---------------------------------------------------------------------------
 
@@ -1055,6 +1184,10 @@ pub struct ProjectConfig {
     /// Dead code, abandoned component, and ghost dependency settings
     #[serde(default)]
     pub deadcode: DeadCodeConfig,
+
+    /// Business logic, validation rule, and invariant extraction settings
+    #[serde(default)]
+    pub extract_logic: ExtractLogicConfig,
 }
 
 impl ProjectConfig {
@@ -1328,6 +1461,22 @@ frameworks = [
 ]
 ai_ignore_file = ".contextignore"
 fail_on_new_deadcode = false
+
+[extract_logic]
+min_confidence = 0.60              # Filter low-level technical boilerplate
+max_depth = 3                      # Inter-procedural call tracing depth
+include_technical_guards = false   # Keep false to extract pure domain logic
+domain_keywords = [
+    "discount", "rebate", "tax", "fee", "price", "credit",
+    "balance", "quota", "limit", "kyc", "subscription", "plan"
+]
+ignore_symbols = ["*_test", "test_*", "mock_*", "Mock*", "*Harness"]
+
+[extract_logic.concept_aliases]
+discount = ["rebate", "coupon", "promo", "voucher", "markdown"]
+tax = ["vat", "gst", "sales_tax", "duty"]
+auth = ["role", "permission", "tenant", "privilege"]
+inventory = ["stock", "quantity", "sku", "warehouse"]
 "#
         )
     }

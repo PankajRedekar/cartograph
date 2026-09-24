@@ -23,3 +23,27 @@ The system SHALL expose an MCP server endpoint providing sub-graph search, blast
 #### Scenario: AI Agent invoking MCP tools
 - **WHEN** an AI assistant calls `cartograph_locate` via MCP
 - **THEN** cartograph returns JSON-structured AST context in sub-3ms.
+
+### Requirement: Business Logic & Validation Rule Extractor
+The system SHALL extract AST-level validation rules, mathematical calculations, state machine guards, and authorization constraints, synthesizing natural language summaries, decision tables, BDD feature files, and diffing PR rule modifications.
+
+#### Scenario: Extracting rules from a domain symbol
+- **WHEN** `cartograph extract-logic --symbol "OrderService::checkout"` is executed
+- **THEN** cartograph extracts guard clauses, assertions, calculations, and invariants with confidence scores and source coordinates in <5ms.
+
+#### Scenario: Deep inter-procedural call-tree tracing
+- **WHEN** `cartograph extract-logic --symbol "checkout" --deep --max-depth 3` is executed
+- **THEN** cartograph traverses the AST call graph to aggregate transitive business constraints from downstream validation subroutines.
+
+#### Scenario: Whole-repository concept rule harvesting
+- **WHEN** `cartograph extract-logic --concept "discount"` is executed
+- **THEN** cartograph discovers and correlates all discount, coupon, and pricing calculation rules across all files.
+
+#### Scenario: BDD and Decision Table synthesis
+- **WHEN** `cartograph extract-logic --symbol "calculate_fee" --format table` or `--format gherkin` is executed
+- **THEN** cartograph outputs executable Gherkin feature blocks or tabular condition-action decision matrices.
+
+#### Scenario: Pull request business rule gating
+- **WHEN** `cartograph extract-logic --branch "origin/main...HEAD" --fail-on-relaxed` is executed
+- **THEN** cartograph evaluates semantic diffs and fails if any existing validation constraint is loosened or deleted.
+

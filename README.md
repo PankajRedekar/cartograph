@@ -39,6 +39,7 @@ Modern software development with AI agents (Claude Code, Cursor, Windsurf, Copil
 | **🛡️ Hierarchical AI Token Budgeting** | Guarantees hard token limits (`--max-tokens <N>`) with 3-tier degradation: preserves root symbols and type contracts, then collapses neighbor bodies to signatures, retaining 100% graph topology. | Zero token blowup |
 | **🎨 Quad-Engine Presentation Layer** | Emits **Terminal UI** (ANSI badges, clickable `file:line` links), **Markdown** (with embedded Mermaid `graph LR` / `graph TD`), **MCP JSON** (AI tool format), and **Agent XML** (`<code_context>`, `<blast_radius_analysis>`). | Native |
 | **⚡ Real-Time Incremental Watcher** | Real-time file system watcher (`cartograph watch`) with CST caching, SHA-256 Merkle diffing, and sub-0.5ms reverse blast-radius impact warnings on save. | **< 10ms** |
+| **📋 Business Logic & Rule Extractor** | AST-grounded validation rule extractor with variable def-use provenance slicing, zero-LLM natural language verbalizer, Gherkin/BDD synthesizer, decision tables, inter-procedural deep tracing, and Git PR rule diff gating. | **< 15ms** |
 | **🌐 Polyglot Language Engine** | Native Tree-Sitter parsing for **Rust, TypeScript / TSX, Python, Ruby / Rails, Go, SQL, Markdown**. | Zero daemon required |
 
 ---
@@ -657,7 +658,51 @@ cartograph deadcode --sarif > deadcode.sarif
 
 ---
 
-### 11. `cartograph config` — Unified Configuration & Polyrepo Management
+### 11. `cartograph extract-logic` — Business Logic & Validation Rule Extractor (<15ms)
+Extracts AST-grounded validation rules, business constraints, invariant conditions, and calculations across polyglot source code (Rust, TypeScript/JavaScript, Python, Go, Ruby). Features intra-procedural backward def-use provenance slicing, deterministic zero-LLM natural language verbalization, BDD/Gherkin feature generation, Markdown decision tables, inter-procedural call-tree BFS tracing (`--deep`), concept taxonomy search (`--concept`), and Git PR rule diff gating (`--fail-on-relaxed`, `--fail-on-removed`).
+
+```bash
+# 1. Extract rules from a specific file
+cartograph extract-logic --file src/billing/discount.rs
+
+# 2. Extract rules from a specific symbol (e.g., function, method)
+cartograph extract-logic --symbol calculate_discount --file src/billing/discount.rs
+
+# 3. Inter-procedural deep call-tree tracing (traverses callees up to depth 3)
+cartograph extract-logic --symbol checkout_cart --deep --depth 3
+
+# 4. Search domain logic by business concept taxonomy (with synonym expansion)
+cartograph extract-logic --concept "discount"
+cartograph extract-logic "discount"
+
+# 5. Emit BDD / Gherkin feature scenarios
+cartograph extract-logic --file src/billing/discount.rs --gherkin
+
+# 6. Emit Markdown Decision Table
+cartograph extract-logic --file src/billing/discount.rs --table
+
+# 7. Emit structured AI agent XML (<business_logic_rules> with <provenance>)
+cartograph extract-logic --file src/billing/discount.rs --xml
+
+# 8. Machine-readable JSON output
+cartograph extract-logic --file src/billing/discount.rs --json
+
+# 9. Git PR review & CI quality gating (fail if rules are relaxed or deleted)
+cartograph extract-logic --branch "origin/main" --fail-on-relaxed --fail-on-removed
+```
+
+#### Key Capabilities
+- **Polyglot AST Extraction**: Native tree-sitter AST queries extracting guard statements, range limits, schema constraints (Pydantic, Zod, Go tags, ActiveRecord validations), invariant assertions, and computational mutations.
+- **Intra-Procedural Def-Use Provenance Slicing**: Slices backward from predicates to isolate variable origins—classifying parameters (with index and type), struct/class fields, local declarations, and callee return values.
+- **Deterministic Zero-LLM Verbalizer**: Translates AST predicates, conditions, and consequences into natural English rules without calling any external LLM or API.
+- **Inter-Procedural Deep Tracing (`--deep`)**: Traverses call-graphs via BFS up to bounded depth $N$, discovering validation logic enforced by downstream helper functions.
+- **Concept Taxonomy Matcher (`--concept`)**: Expands business concepts (e.g. `discount`, `auth`, `order`, `rate_limit`) with synonyms to scan the workspace for relevant business invariants.
+- **Git PR Rule Diff Gating (`--branch`)**: Compares rules against base branches, alerting on modified thresholds, relaxed constraints, or deleted business invariants to prevent silent regressions.
+- **Quad-Engine Presentation**: Rich ANSI terminal output, Gherkin BDD scenarios, Markdown decision tables, AI prompt XML (`<business_logic_rules>`), and JSON.
+
+---
+
+### 12. `cartograph config` — Unified Configuration & Polyrepo Management
 
 Cartograph Phase 2.7 introduces centralized project configuration (`cartograph.toml`), eliminating repetitive CLI flags across team members and CI pipelines.
 
@@ -905,7 +950,7 @@ Cartograph is structured across three major evolutionary milestones:
   - [x] 2.6 Dead Code & Abandoned Component Detector (`cartograph deadcode`)
   - [x] 2.7 Consolidated Configuration, Multi-Git Polyrepo Support & Production CI/CD (`cartograph config`)
 - [ ] **Phase 3: AI Augmentation & Logic Synthesis (v1.2)**
-  - [ ] 3.1 Business Logic & Validation Rule Extractor (`cartograph extract-logic`)
+  - [x] 3.1 Business Logic & Validation Rule Extractor (`cartograph extract-logic`)
   - [ ] 3.2 Contract-Aware AI PR Reviewer (`cartograph ai-review`)
   - [ ] 3.3 Topological Root-Cause Detective (`cartograph diagnose`)
 
