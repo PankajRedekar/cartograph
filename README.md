@@ -40,6 +40,7 @@ Modern software development with AI agents (Claude Code, Cursor, Windsurf, Copil
 | **🎨 Quad-Engine Presentation Layer** | Emits **Terminal UI** (ANSI badges, clickable `file:line` links), **Markdown** (with embedded Mermaid `graph LR` / `graph TD`), **MCP JSON** (AI tool format), and **Agent XML** (`<code_context>`, `<blast_radius_analysis>`). | Native |
 | **⚡ Real-Time Incremental Watcher** | Real-time file system watcher (`cartograph watch`) with CST caching, SHA-256 Merkle diffing, and sub-0.5ms reverse blast-radius impact warnings on save. | **< 10ms** |
 | **📋 Business Logic & Rule Extractor** | AST-grounded validation rule extractor with variable def-use provenance slicing, zero-LLM natural language verbalizer, Gherkin/BDD synthesizer, decision tables, inter-procedural deep tracing, and Git PR rule diff gating. | **< 15ms** |
+| **🤖 Contract-Aware AI Reviewer** | Zero-lockin Git-native PR review (<50ms offline), AST public contract breaks, 2nd-hop caller side-effects, risk scoring (0-100), cognitive ΔCC spikes, review memory, in-code pragma suppressions, Keep-a-Changelog synthesis, safe patch application (`git apply --check --unidiff-zero`), and interactive split-pane review TUI. | **< 50ms offline** |
 | **🌐 Polyglot Language Engine** | Native Tree-Sitter parsing for **Rust, TypeScript / TSX, Python, Ruby / Rails, Go, SQL, Markdown**. | Zero daemon required |
 
 ---
@@ -728,6 +729,81 @@ cartograph config show --json
 - **Single Source of Truth (`cartograph.toml`)**: Centralizes storage backend, file ignore patterns, test selection depth/runners, architectural layers/rules, complexity thresholds, and dead code profiles.
 - **Multi-Git Polyrepo Workspace Support**: Seamlessly discovers and aggregates changes across multi-microservice workspaces where individual sibling folders contain independent `.git` repositories (e.g. `~/workspace/auth-service/.git`, `~/workspace/billing-service/.git`). Aggregated diff headers (`a/auth-service/...`) enable unified impact, test selection, and complexity diffing from the workspace root.
 - **Turn-Key Production CI/CD (`.github/workflows/cartograph-ci.yml`)**: Ready-to-use GitHub Actions workflow enforcing test suite parity, zero-warning Clippy/Rustfmt, architectural cycle guards, PR dead code blocking, complexity hotspot gating, and predictive test selection.
+
+---
+
+### 13. `cartograph ai-review` — Contract-Aware AI Reviewer (<50ms offline, zero-vendor-lockin PR review)
+
+Performs deterministic, contract-aware code review across Git changesets. Unifies AST public contract break detection, 2nd-hop caller call-site slicing with hazard detection, quantitative 0–100 PR risk scoring, cognitive complexity delta spikes ($\Delta CC$), review memory (`.cartograph/review_history.json`), in-code pragma suppressions (`// cartograph:ignore(...)`), Keep-a-Changelog Markdown synthesis, safe one-step patch application (`git apply --check --unidiff-zero`), and an interactive split-pane review playground.
+
+Completely decoupled from vendor platforms: runs on **any** Git repository, local branch diffs, uncommitted staged changes, commits, or standard stdin diff streams with zero mandatory cloud accounts or API keys.
+
+```bash
+# 1. Deterministic offline structural review of uncommitted staged changes (<50ms)
+cartograph ai-review --staged --offline
+
+# 2. Review git branch diff against base (e.g. main...HEAD)
+cartograph ai-review --branch main...HEAD
+
+# 3. Explicit source and target commit/ref comparison
+cartograph ai-review --source feature-branch --target-ref main
+
+# 4. Review a specific commit or external patch file
+cartograph ai-review --commit HEAD~1
+cartograph ai-review --patch /path/to/diff.patch
+
+# 5. Review via standard input (seamless unix pipe integration)
+git diff HEAD~2 | cartograph ai-review
+
+# 6. LLM-augmented review using configured or specified provider
+cartograph ai-review --branch main...HEAD --provider anthropic --model claude-3-5-sonnet-20241022
+cartograph ai-review --staged --provider ollama --model llama3
+
+# 7. Incremental review (hide findings previously reviewed, show only new findings)
+cartograph ai-review --branch main...HEAD --only-new
+
+# 8. Synthesize PR changelog summary and Keep-a-Changelog markdown
+cartograph ai-review --branch main...HEAD --summarize
+
+# 9. Export unified patch file of all suggested AI fixes
+cartograph ai-review --branch main...HEAD --export-patch review.patch
+
+# 10. Safely apply all suggested fixes with dry-run conflict pre-check
+cartograph ai-review --branch main...HEAD --apply-patch
+
+# 11. Launch interactive split-pane TUI review playground
+cartograph ai-review -i
+cartograph ai-review --branch main...HEAD -i
+
+# 12. Multi-publisher CI/CD exports
+cartograph ai-review --branch main...HEAD --publish terminal,git-notes,sarif,json
+cartograph ai-review --branch main...HEAD --sarif > review.sarif
+cartograph ai-review --branch main...HEAD --markdown > review.md
+
+# 13. CI/CD Quality Gates (deterministic zero-token blocking)
+cartograph ai-review --branch main...HEAD \
+  --fail-on-breaking \
+  --fail-on-side-effects \
+  --fail-on-risk 70 \
+  --fail-on-complexity-spike 15 \
+  --fail-on-untested \
+  --fail-on-blocker
+```
+
+#### Key Capabilities
+- **Decoupled Git-Native Architecture**: Zero proprietary SaaS lock-in or GitHub/GitLab runtime dependencies. Analyzes arbitrary Git diffs via `--branch`, `--source/--target_ref`, `--staged`, `--commit`, `--patch`, or unix stdin pipes.
+- **Offline-First Deterministic Analysis (<50ms)**: Operates 100% offline without network or API keys by querying the local AST code graph (`cartograph.db`) for public API breaks, caller call-site hazards, complexity deltas, and risk scores.
+- **AST Public Contract Break Detection**: Identifies removed exports, visibility reductions, modified parameter counts/types, and return type modifications across polyglot symbols via `SemVerGuard`.
+- **2nd-Hop Caller Call-Site Slicing**: Slices upstream call sites across 1st- and 2nd-degree callers, extracting 5-line contextual code snippets and tagging downstream hazards (unhandled Results/Options, arity mismatches, precondition violations).
+- **Quantitative PR Risk Assessment (0–100)**: Evaluates composite risk blending blast-radius dependency fan-out, critical topological degree centrality, and historical commit churn velocity.
+- **Cognitive Complexity Delta Spikes ($\Delta CC$)**: Flags methods that introduce cognitive complexity spikes ($\Delta CC > +15$ or crossing 20) using native AST complexity extraction.
+- **Review Memory & In-Code Pragma Suppression**:
+  - Persistent state in `.cartograph/review_history.json` tracks resolved vs active findings via SHA-256 fingerprints (`--only-new` prevents comment fatigue on push updates).
+  - In-code pragmas (`// cartograph:ignore(category, "reason")` or `# cartograph:ignore(...)`) allow developers to permanently suppress deliberate structural changes directly at the code level.
+- **Safe One-Step Patch Application (`--apply-patch`)**: Validates generated diff hunks with `git apply --check --unidiff-zero` before applying, completely eliminating malformed edits and recursive hallucination loops.
+- **Polyglot LLM Integration**: Pluggable support for Anthropic Claude, OpenAI GPT-4o, Google Gemini, Ollama (local private models), and LiteLLM proxies with strict token budgeting (<1,500 token `<review_context>` XML).
+- **Universal Publisher Ecosystem**: Emits reports to ANSI terminals with OSC-8 hyperlinks, GitHub/GitLab comments, local `refs/notes/cartograph-review` Git notes, SARIF 2.1.0 for GitHub Code Scanning, Markdown summaries, and generic HTTP Webhooks.
+- **Interactive Split-Pane TUI (`-i`)**: Terminal user interface allowing developers to browse findings, inspect unified patch diffs side-by-side, trigger `[A]` Apply Patch, or `[I]` Ignore findings interactively.
 
 ---
 

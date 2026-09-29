@@ -1807,3 +1807,358 @@ pub async fn handle_extract_logic(
     println!("{output_str}");
     Ok(())
 }
+
+/// Handle `cartograph ai-review` command
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_ai_review(
+    target: Option<String>,
+    path: PathBuf,
+    db: String,
+    branch: Option<String>,
+    source: Option<String>,
+    target_ref: Option<String>,
+    staged: bool,
+    commit: Option<String>,
+    patch: Option<String>,
+    offline: bool,
+    provider: Option<String>,
+    model: Option<String>,
+    only_new: bool,
+    summarize: bool,
+    export_patch: Option<PathBuf>,
+    apply_patch: Option<PathBuf>,
+    publish: Vec<String>,
+    json: bool,
+    sarif: bool,
+    markdown: bool,
+    fail_on_blocker: bool,
+    fail_on_warning: bool,
+    fail_on_breaking: bool,
+    fail_on_side_effects: bool,
+    fail_on_risk: Option<f64>,
+    fail_on_complexity_spike: Option<i32>,
+    fail_on_untested: bool,
+    interactive: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut target = target;
+    let mut root_path = if path.is_absolute() {
+        path
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+
+    if let Some(ref t) = target
+        && Path::new(t).is_dir()
+    {
+        root_path = if Path::new(t).is_absolute() {
+            PathBuf::from(t)
+        } else {
+            std::env::current_dir()?.join(t)
+        };
+        target = None;
+    }
+
+    // 1. Safe patch application mode
+    if let Some(ref patch_file) = apply_patch {
+        let full_patch_path = if patch_file.is_absolute() {
+            patch_file.clone()
+        } else {
+            root_path.join(patch_file)
+        };
+        cartograph_engine::PatchApplier::apply_patch(&root_path, &full_patch_path)
+            .map_err(|e| e.to_string())?;
+        println!(
+            "{}",
+            "Patch applied successfully with 0 conflicts!"
+                .green()
+                .bold()
+        );
+        return Ok(());
+    }
+
+    // 2. Resolve Git Diff Source
+    let diff_source = if let Some(p) = patch {
+        cartograph_core::review::GitDiffSource::Patch(p)
+    } else if let Some(c) = commit {
+        cartograph_core::review::GitDiffSource::Commit(c)
+    } else if staged {
+        cartograph_core::review::GitDiffSource::Staged
+    } else if let (Some(s), Some(t)) = (source, target_ref) {
+        cartograph_core::review::GitDiffSource::BranchRange { base: s, head: t }
+    } else if let Some(b) = branch {
+        if let Some((s, t)) = b.split_once("...") {
+            cartograph_core::review::GitDiffSource::BranchRange {
+                base: s.to_string(),
+                head: t.to_string(),
+            }
+        } else if let Some((s, t)) = b.split_once("..") {
+            cartograph_core::review::GitDiffSource::BranchRange {
+                base: s.to_string(),
+                head: t.to_string(),
+            }
+        } else {
+            cartograph_core::review::GitDiffSource::BranchRange {
+                base: b,
+                head: "HEAD".to_string(),
+            }
+        }
+    } else if let Some(t) = target {
+        if let Some((s, e)) = t.split_once("...") {
+            cartograph_core::review::GitDiffSource::BranchRange {
+                base: s.to_string(),
+                head: e.to_string(),
+            }
+        } else if let Some((s, e)) = t.split_once("..") {
+            cartograph_core::review::GitDiffSource::BranchRange {
+                base: s.to_string(),
+                head: e.to_string(),
+            }
+        } else if Path::new(&t).is_file() {
+            cartograph_core::review::GitDiffSource::Patch(t)
+        } else {
+            cartograph_core::review::GitDiffSource::BranchRange {
+                base: t,
+                head: "HEAD".to_string(),
+            }
+        }
+    } else {
+        cartograph_core::review::GitDiffSource::WorkingTree
+    };
+
+    // 3. Load Project Config & Apply CLI Overrides
+    let mut proj_config = ProjectConfig::find_and_load(&root_path);
+    if let Some(p) = provider {
+        proj_config.ai_review.provider = p;
+    }
+    if let Some(m) = model {
+        proj_config.ai_review.model = m;
+    }
+    if summarize {
+        proj_config.ai_review.summarize = true;
+    }
+    if let Some(spike) = fail_on_complexity_spike {
+        proj_config.ai_review.max_complexity_delta = spike;
+    }
+    if let Some(max_r) = fail_on_risk {
+        proj_config.ai_review.max_risk_score = max_r;
+    }
+
+    // 4. Initialize Database Backend
+    let (storage_config, _) = resolve_storage_config(&root_path, &db);
+    let backend = create_backend(&storage_config)?;
+
+    // 5. Run AI Review Pipeline
+    let engine = cartograph_engine::AiReviewEngine::new(
+        root_path.clone(),
+        backend,
+        proj_config.ai_review.clone(),
+    );
+
+    let report = engine
+        .run_review(diff_source, offline, only_new, summarize)
+        .await
+        .map_err(|e| format!("{e}"))?;
+
+    // 6. Export patch if requested
+    if let Some(ref exp_path) = export_patch {
+        let patch_pub = cartograph_engine::PatchPublisher::new(Some(exp_path.clone()));
+        cartograph_engine::ReviewPublisher::publish(&patch_pub, &report, &root_path)
+            .await
+            .map_err(|e| format!("{e}"))?;
+        println!(
+            "{} Unified review patch saved to {}",
+            "✔".green().bold(),
+            exp_path.display().to_string().cyan()
+        );
+    }
+
+    // 7. Dispatch Publishers
+    if !publish.is_empty() {
+        for p in &publish {
+            match p.trim().to_lowercase().as_str() {
+                "terminal" => {
+                    let publ = cartograph_engine::TerminalPublisher::new();
+                    cartograph_engine::ReviewPublisher::publish(&publ, &report, &root_path)
+                        .await
+                        .map_err(|e| format!("{e}"))?;
+                }
+                "markdown" | "md" => {
+                    let publ = cartograph_engine::MarkdownPublisher::new(None);
+                    cartograph_engine::ReviewPublisher::publish(&publ, &report, &root_path)
+                        .await
+                        .map_err(|e| format!("{e}"))?;
+                }
+                "sarif" => {
+                    let publ = cartograph_engine::SarifPublisher::new(None);
+                    cartograph_engine::ReviewPublisher::publish(&publ, &report, &root_path)
+                        .await
+                        .map_err(|e| format!("{e}"))?;
+                }
+                "json" => {
+                    let publ = cartograph_engine::JsonPublisher::new(None);
+                    cartograph_engine::ReviewPublisher::publish(&publ, &report, &root_path)
+                        .await
+                        .map_err(|e| format!("{e}"))?;
+                }
+                "patch" => {
+                    let publ = cartograph_engine::PatchPublisher::new(None);
+                    cartograph_engine::ReviewPublisher::publish(&publ, &report, &root_path)
+                        .await
+                        .map_err(|e| format!("{e}"))?;
+                }
+                "git-notes" | "git_notes" => {
+                    let publ = cartograph_engine::GitNotesPublisher::new(None);
+                    cartograph_engine::ReviewPublisher::publish(&publ, &report, &root_path)
+                        .await
+                        .map_err(|e| format!("{e}"))?;
+                    println!(
+                        "{} Review recorded to git notes refs/notes/cartograph-review",
+                        "✔".green()
+                    );
+                }
+                "webhook" => {
+                    if let Some(ref url) = proj_config.ai_review.publishers.webhook_url {
+                        let publ = cartograph_engine::WebhookPublisher::new(url.clone(), None);
+                        cartograph_engine::ReviewPublisher::publish(&publ, &report, &root_path)
+                            .await
+                            .map_err(|e| format!("{e}"))?;
+                        println!(
+                            "{} Dispatched review payload to webhook: {}",
+                            "✔".green(),
+                            url
+                        );
+                    } else {
+                        eprintln!(
+                            "{} Webhook URL not configured in cartograph.toml",
+                            "WARNING:".yellow()
+                        );
+                    }
+                }
+                "github" => {
+                    let publ =
+                        cartograph_engine::ai_review::publishers::adapters::GitHubPublisher::new(
+                            None, None, None,
+                        );
+                    cartograph_engine::ReviewPublisher::publish(&publ, &report, &root_path)
+                        .await
+                        .map_err(|e| format!("{e}"))?;
+                    println!("{} Posted review comment to GitHub PR", "✔".green());
+                }
+                "gitlab" => {
+                    let publ =
+                        cartograph_engine::ai_review::publishers::adapters::GitLabPublisher::new(
+                            None, None, None, None,
+                        );
+                    cartograph_engine::ReviewPublisher::publish(&publ, &report, &root_path)
+                        .await
+                        .map_err(|e| format!("{e}"))?;
+                    println!("{} Posted review comment to GitLab MR", "✔".green());
+                }
+                other => {
+                    eprintln!("{} Unknown publisher '{}'", "WARNING:".yellow(), other);
+                }
+            }
+        }
+    } else if json {
+        let publ = cartograph_engine::JsonPublisher::new(None);
+        cartograph_engine::ReviewPublisher::publish(&publ, &report, &root_path)
+            .await
+            .map_err(|e| format!("{e}"))?;
+    } else if sarif {
+        let sarif_val = cartograph_engine::SarifPublisher::generate_sarif(&report);
+        println!("{}", serde_json::to_string_pretty(&sarif_val)?);
+    } else if markdown {
+        println!(
+            "{}",
+            cartograph_engine::MarkdownPublisher::render_markdown(&report)
+        );
+    } else if interactive {
+        crate::review_tui::ReviewTui::run_interactive(&report, &root_path)?;
+    } else {
+        let publ = cartograph_engine::TerminalPublisher::new();
+        cartograph_engine::ReviewPublisher::publish(&publ, &report, &root_path)
+            .await
+            .map_err(|e| format!("{e}"))?;
+    }
+
+    // 8. CI Quality Gating
+    let mut failed = false;
+
+    if fail_on_blocker && report.metrics.total_blockers > 0 {
+        eprintln!(
+            "{} CI Gating Failed: {} blocking findings detected.",
+            "FAIL:".red().bold(),
+            report.metrics.total_blockers
+        );
+        failed = true;
+    }
+
+    if fail_on_warning && (report.metrics.total_blockers > 0 || report.metrics.total_warnings > 0) {
+        eprintln!(
+            "{} CI Gating Failed: {} blockers and {} warnings detected.",
+            "FAIL:".red().bold(),
+            report.metrics.total_blockers,
+            report.metrics.total_warnings
+        );
+        failed = true;
+    }
+
+    if fail_on_breaking && report.metrics.breaking_contract_count > 0 {
+        eprintln!(
+            "{} CI Gating Failed: {} public API contract breaks detected.",
+            "FAIL:".red().bold(),
+            report.metrics.breaking_contract_count
+        );
+        failed = true;
+    }
+
+    if fail_on_side_effects && report.metrics.unhandled_side_effect_count > 0 {
+        eprintln!(
+            "{} CI Gating Failed: {} unhandled downstream side-effects detected.",
+            "FAIL:".red().bold(),
+            report.metrics.unhandled_side_effect_count
+        );
+        failed = true;
+    }
+
+    if fail_on_untested && report.metrics.untested_symbol_count > 0 {
+        eprintln!(
+            "{} CI Gating Failed: {} untested modified symbols detected.",
+            "FAIL:".red().bold(),
+            report.metrics.untested_symbol_count
+        );
+        failed = true;
+    }
+
+    if let Some(max_r) = fail_on_risk
+        && report.risk_assessment.score > max_r
+    {
+        eprintln!(
+            "{} CI Gating Failed: PR Risk score ({:.1}) exceeds threshold ({:.1}).",
+            "FAIL:".red().bold(),
+            report.risk_assessment.score,
+            max_r
+        );
+        failed = true;
+    }
+
+    if let Some(spike_limit) = fail_on_complexity_spike
+        && report
+            .complexity_deltas
+            .iter()
+            .any(|d| d.delta > spike_limit)
+    {
+        eprintln!(
+            "{} CI Gating Failed: Cognitive complexity spike exceeds +{}.",
+            "FAIL:".red().bold(),
+            spike_limit
+        );
+        failed = true;
+    }
+
+    if failed {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}

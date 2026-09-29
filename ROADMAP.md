@@ -185,10 +185,17 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - Git PR rule diff gating (`--branch`, `--fail-on-relaxed`, `--fail-on-removed`) preventing silent rule regressions.
   - Multi-engine output: rich ANSI terminal, Gherkin features, Markdown decision tables, AI prompt XML (`<business_logic_rules>`), and machine-readable JSON.
 
-- [ ] **3.2 Contract-Aware AI PR Reviewer (`cartograph ai-review`)**
-  - Analyzes pull request diffs against structural graph dependencies.
-  - Highlights breaking API changes, unhandled downstream side-effects, and missing tests.
-  - Generates GitHub/GitLab compatible markdown review comments.
+- [x] **3.2 Contract-Aware AI Reviewer (`cartograph ai-review`)**
+  - Git-native, decoupled review architecture analyzing universal diff sources: `--branch`, `--source/--target`, `--staged`, `--commit`, stdin piped diffs, and external `--patch` files.
+  - Public API contract break detection (`SemVerGuard`), visibility reduction flags, and removed export blockers.
+  - Downstream 1st- and 2nd-hop caller call-site slicing with 5-line contextual snippets and hazard pattern detection (unhandled `Result`/`Option`, arity drift, precondition breaks).
+  - Topological PR Risk Scoring (0–100) combining degree centrality, blast radius size, and cross-boundary architectural crossings.
+  - Cognitive complexity delta budgeting (`--fail-on-complexity-spike <delta>`) preventing hotspot regressions.
+  - Safe single-step patch generation and application (`--export-patch`, `--apply-patch`, `[A] Apply Patch`) with dry-run conflict pre-check (`git apply --check --unidiff-zero`).
+  - Persistent Review Memory (`.cartograph/review_history.json`, `--only-new`) and in-code suppression pragmas (`// cartograph:ignore(category, "reason")`).
+  - Keep-a-Changelog Markdown synthesis and semantic PR overview generation (`--summarize`).
+  - Pluggable publishing: rich colorized ANSI terminal (OSC-8 hyperlinks), standalone Markdown reports, OASIS SARIF 2.1.0, raw JSON, unified Git patches (`review.patch`), Git Notes (`refs/notes/cartograph-review`), generic Webhooks, and GitHub/GitLab PR/MR adapters.
+  - Interactive split-pane TUI review playground (`cartograph ai-review -i`).
 
 - [ ] **3.3 Topological Root-Cause Detective (`cartograph diagnose`)**
   - Parses stack traces, Sentry crash logs, or test failures.
@@ -203,18 +210,12 @@ Modern software engineering and AI-assisted development suffer from a critical c
 ### Phase 4: Integrations & Ecosystem Expansion (v2.0)
 *Objective: Seamless integration across developer tools, IDEs, CI/CD, and multi-language bindings.*
 
-- [ ] **4.1 Model Context Protocol (MCP) Server (`cartograph-mcp`)**
-  - Standalone MCP server exposing `locate`, `impact`, `routes`, `test_selector`, `lint_arch` tools to AI assistants (Antigravity, Claude Desktop, Cursor).
-
-- [ ] **4.2 Language Bindings (`pyo3` / `napi-rs`)**
+- [ ] **4.1 Language Bindings (`pyo3` / `napi-rs`)**
   - Native Python wheel (`pip install cartograph`) via PyO3.
   - Native Node.js package (`npm install cartograph`) via NAPI-RS.
 
-- [ ] **4.3 Extended Language Support**
-  - Java, C#, Go, Kotlin, Swift, PHP, C/C++, Terraform/HCL.
-
-- [ ] **4.4 CI/CD Pipeline Action & GitHub Apps**
-  - GitHub Action (`cartograph-action`) for automated PR impact analysis and arch linting.
+- [ ] **4.2 AI Agents skills for IDEs**
+  - Add skills to make catrograph compatile with all coding agents
 
 ---
 
@@ -236,7 +237,7 @@ cartograph complexity [--top 15] [--danger-zone] [--prompt-refactor <symbol>] [-
 cartograph deadcode [--min-lines 20]
 
 # AI & Diagnostics
-cartograph ai-review --source <branch> --target <branch>
+cartograph ai-review [<target>] [--branch <range>] [--staged] [--commit <sha>] [--patch <file>] [--offline] [--export-patch <path>] [--apply-patch <path>] [--publish <targets>] [--only-new] [--summarize] [-i]
 cartograph extract-logic [<query>] [--symbol <name>] [--concept <entity>] [--file <path>] [--deep] [--branch <base>] [--fail-on-relaxed] [--fail-on-removed] [--gherkin] [--table] [--xml] [--json]
 cartograph diagnose "<stacktrace_or_log>"
 cartograph diagram "<symbol_or_concept>" [--format mermaid|svg]
