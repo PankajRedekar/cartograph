@@ -3,15 +3,17 @@ pub mod config;
 pub mod error;
 pub mod logic;
 pub mod model;
+pub mod review;
 pub mod uri;
 
 pub use backend::GraphStoreBackend;
 pub use config::{
-    ArchExemptionRule, ArchExemptionsConfig, ArchLayerConfig, ArchRuleConfig, ArchSeverity,
-    ComplexityConfig, CouplingFilter, CycleGranularity, DeadCodeCategoryFilter, DeadCodeConfig,
-    ExtractLogicConfig, GitDiffMode, IndexConfig, LintArchConfig, MemoryConfig,
-    PackageEncapsulationConfig, ProfileConfig, ProjectConfig, ProjectInfoConfig, ProjectProfile,
-    RuleAction, SqliteConfig, StorageConfig, WatchConfig,
+    AiReviewConfig, AiReviewPublishersConfig, ArchExemptionRule, ArchExemptionsConfig,
+    ArchLayerConfig, ArchRuleConfig, ArchSeverity, ComplexityConfig, CouplingFilter,
+    CycleGranularity, DeadCodeCategoryFilter, DeadCodeConfig, ExtractLogicConfig, GitDiffMode,
+    IndexConfig, LintArchConfig, MemoryConfig, PackageEncapsulationConfig, PlatformPublisherConfig,
+    ProfileConfig, ProjectConfig, ProjectInfoConfig, ProjectProfile, RuleAction, SqliteConfig,
+    StorageConfig, WatchConfig,
 };
 pub use error::{CartographError, Result};
 pub use logic::{
@@ -32,6 +34,12 @@ pub use model::{
     RawDeadSymbolRecord, RawFrontendCallerRecord, RawImpactRecord, RawInterFileEdgeRecord,
     RawRouteModelRecord, RawRouteTraceRecord, RawSymbolCouplingRecord, RawTestRecord, SearchResult,
     TestDeficitMetric, TrendDirection, ZombieFileReport,
+};
+pub use review::{
+    ComplexityDeltaFinding, DiffSide, DownstreamHazardType, FindingCategory, FindingSeverity,
+    FindingSpan, GitDiffSource, KeepAChangelog, PrChangelogSummary, PrRiskAssessment,
+    ReviewExecutionMode, ReviewFinding, ReviewMetrics, ReviewReport, ReviewVerdict,
+    StructuralEvidence, SuggestedFix,
 };
 pub use uri::{CanonicalUri, URI_SCHEME, build_uri, parse_uri};
 

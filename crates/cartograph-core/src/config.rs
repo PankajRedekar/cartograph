@@ -1103,6 +1103,215 @@ impl Default for ExtractLogicConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 3.2: Contract-Aware AI Reviewer Configuration
+// ---------------------------------------------------------------------------
+
+/// Contract-aware code review settings
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AiReviewConfig {
+    /// Default execution mode: "offline" or "ai"
+    #[serde(default = "default_ai_review_mode")]
+    pub mode: String,
+
+    /// AI provider: "anthropic", "openai", "gemini", "ollama", "custom"
+    #[serde(default = "default_ai_review_provider")]
+    pub provider: String,
+
+    /// Model name
+    #[serde(default = "default_ai_review_model")]
+    pub model: String,
+
+    /// Optional API base endpoint (e.g. for Ollama or LiteLLM)
+    #[serde(default)]
+    pub api_base: Option<String>,
+
+    /// Sampling temperature (lower for deterministic code review)
+    #[serde(default = "default_ai_review_temperature")]
+    pub temperature: f32,
+
+    /// Maximum token budget for completions
+    #[serde(default = "default_ai_review_max_tokens")]
+    pub max_tokens: usize,
+
+    /// Fallback to offline deterministic engine if API call fails or times out
+    #[serde(default = "default_true")]
+    pub fallback_to_offline: bool,
+
+    /// Default target branch if omitted
+    #[serde(default = "default_ai_review_target")]
+    pub default_target: String,
+
+    /// CI gating severities (e.g. ["blocker"])
+    #[serde(default = "default_ai_review_fail_on")]
+    pub fail_on: Vec<String>,
+
+    /// Fail if public SemVer breaking change detected
+    #[serde(default = "default_true")]
+    pub fail_on_breaking: bool,
+
+    /// Fail if unhandled downstream side-effects detected
+    #[serde(default = "default_true")]
+    pub fail_on_side_effects: bool,
+
+    /// Fail if untested functional symbols exceed threshold
+    #[serde(default)]
+    pub fail_on_untested: bool,
+
+    /// Minimum test coverage ratio (0.0 to 1.0)
+    #[serde(default = "default_ai_review_min_coverage")]
+    pub min_test_coverage: f64,
+
+    /// Maximum tolerable PR risk score before failing (0.0 to 100.0)
+    #[serde(default = "default_ai_review_max_risk_score")]
+    pub max_risk_score: f64,
+
+    /// Cognitive complexity delta spike threshold (e.g. 15)
+    #[serde(default = "default_ai_review_max_complexity_delta")]
+    pub max_complexity_delta: i32,
+
+    /// Call-graph slicing depth for downstream caller discovery
+    #[serde(default = "default_ai_review_caller_depth")]
+    pub caller_depth: usize,
+
+    /// Maximum downstream call-site snippets to include per modified symbol
+    #[serde(default = "default_ai_review_max_call_sites")]
+    pub max_call_sites: usize,
+
+    /// Whether to track review findings across multi-commit pushes
+    #[serde(default = "default_true")]
+    pub review_memory: bool,
+
+    /// Path to review history file
+    #[serde(default = "default_ai_review_history_path")]
+    pub history_path: String,
+
+    /// Whether to generate Keep-a-Changelog Markdown and semantic PR summary
+    #[serde(default)]
+    pub summarize: bool,
+
+    /// Publisher configuration
+    #[serde(default)]
+    pub publishers: AiReviewPublishersConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct AiReviewPublishersConfig {
+    #[serde(default)]
+    pub git_notes: bool,
+
+    #[serde(default)]
+    pub webhook_url: Option<String>,
+
+    #[serde(default)]
+    pub github: Option<PlatformPublisherConfig>,
+
+    #[serde(default)]
+    pub gitlab: Option<PlatformPublisherConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlatformPublisherConfig {
+    #[serde(default = "default_true")]
+    pub auto_detect: bool,
+
+    #[serde(default = "default_true")]
+    pub inline_comments: bool,
+
+    #[serde(default = "default_true")]
+    pub step_summary: bool,
+}
+
+impl Default for PlatformPublisherConfig {
+    fn default() -> Self {
+        Self {
+            auto_detect: true,
+            inline_comments: true,
+            step_summary: true,
+        }
+    }
+}
+
+fn default_ai_review_mode() -> String {
+    "ai".to_string()
+}
+
+fn default_ai_review_provider() -> String {
+    "anthropic".to_string()
+}
+
+fn default_ai_review_model() -> String {
+    "claude-3-7-sonnet".to_string()
+}
+
+fn default_ai_review_temperature() -> f32 {
+    0.1
+}
+
+fn default_ai_review_max_tokens() -> usize {
+    2048
+}
+
+fn default_ai_review_target() -> String {
+    "origin/main".to_string()
+}
+
+fn default_ai_review_fail_on() -> Vec<String> {
+    vec!["blocker".to_string()]
+}
+
+fn default_ai_review_min_coverage() -> f64 {
+    0.80
+}
+
+fn default_ai_review_max_risk_score() -> f64 {
+    80.0
+}
+
+fn default_ai_review_max_complexity_delta() -> i32 {
+    15
+}
+
+fn default_ai_review_caller_depth() -> usize {
+    2
+}
+
+fn default_ai_review_max_call_sites() -> usize {
+    8
+}
+
+fn default_ai_review_history_path() -> String {
+    ".cartograph/review_history.json".to_string()
+}
+
+impl Default for AiReviewConfig {
+    fn default() -> Self {
+        Self {
+            mode: default_ai_review_mode(),
+            provider: default_ai_review_provider(),
+            model: default_ai_review_model(),
+            api_base: None,
+            temperature: default_ai_review_temperature(),
+            max_tokens: default_ai_review_max_tokens(),
+            fallback_to_offline: true,
+            default_target: default_ai_review_target(),
+            fail_on: default_ai_review_fail_on(),
+            fail_on_breaking: true,
+            fail_on_side_effects: true,
+            fail_on_untested: false,
+            min_test_coverage: default_ai_review_min_coverage(),
+            max_risk_score: default_ai_review_max_risk_score(),
+            max_complexity_delta: default_ai_review_max_complexity_delta(),
+            caller_depth: default_ai_review_caller_depth(),
+            max_call_sites: default_ai_review_max_call_sites(),
+            review_memory: true,
+            history_path: default_ai_review_history_path(),
+            summarize: false,
+            publishers: AiReviewPublishersConfig::default(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Phase 2.7: Master Unified Project Configuration (`cartograph.toml`)
 // ---------------------------------------------------------------------------
 
@@ -1188,6 +1397,10 @@ pub struct ProjectConfig {
     /// Business logic, validation rule, and invariant extraction settings
     #[serde(default)]
     pub extract_logic: ExtractLogicConfig,
+
+    /// Contract-aware code review settings
+    #[serde(default)]
+    pub ai_review: AiReviewConfig,
 }
 
 impl ProjectConfig {

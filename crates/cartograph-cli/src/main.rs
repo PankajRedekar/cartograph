@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 mod commands;
 pub mod deadcode_formatters;
+pub mod review_tui;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
@@ -820,6 +821,122 @@ enum Commands {
         #[arg(long)]
         xml: bool,
     },
+
+    /// Contract-Aware AI Reviewer (<50ms offline, zero-vendor-lockin PR review)
+    #[command(name = "ai-review", alias = "review", alias = "cr")]
+    AiReview {
+        /// Target branch range (e.g. main...HEAD or origin/main) or commit or patch file
+        #[arg(value_name = "TARGET")]
+        target: Option<String>,
+
+        /// Root directory of repository
+        #[arg(short, long, value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Database profile or SQLite file path
+        #[arg(short, long, default_value = "default")]
+        db: String,
+
+        /// Compare against git branch (e.g. "main...HEAD" or "origin/main")
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Base revision for comparison (e.g. "main")
+        #[arg(long)]
+        source: Option<String>,
+
+        /// Head revision for comparison (e.g. "feature")
+        #[arg(long)]
+        target_ref: Option<String>,
+
+        /// Review git staged changes in index
+        #[arg(long)]
+        staged: bool,
+
+        /// Review specific commit SHA
+        #[arg(long)]
+        commit: Option<String>,
+
+        /// Read diff from external patch file or stdin ("-")
+        #[arg(long)]
+        patch: Option<String>,
+
+        /// Run in pure offline deterministic mode (no LLM calls)
+        #[arg(long)]
+        offline: bool,
+
+        /// LLM provider (anthropic, openai, gemini, ollama, custom)
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// LLM model name
+        #[arg(long)]
+        model: Option<String>,
+
+        /// Review only new findings not acknowledged in history or code pragmas
+        #[arg(long)]
+        only_new: bool,
+
+        /// Synthesize Keep-a-Changelog Markdown and semantic PR summary
+        #[arg(long)]
+        summarize: bool,
+
+        /// Export executable unified review patch to file
+        #[arg(long)]
+        export_patch: Option<PathBuf>,
+
+        /// Apply suggested fixes from review patch with dry-run conflict pre-check
+        #[arg(long)]
+        apply_patch: Option<PathBuf>,
+
+        /// Publishers to dispatch: terminal, markdown, sarif, json, patch, git-notes, webhook, github, gitlab
+        #[arg(long, value_delimiter = ',')]
+        publish: Vec<String>,
+
+        /// Output results formatted as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Output results formatted as SARIF 2.1.0 for GitHub Code Scanning
+        #[arg(long)]
+        sarif: bool,
+
+        /// Output results formatted as Markdown
+        #[arg(long)]
+        markdown: bool,
+
+        /// CI/CD Gate: Fail with exit code 1 if any blocker findings exist
+        #[arg(long)]
+        fail_on_blocker: bool,
+
+        /// CI/CD Gate: Fail with exit code 1 if any warning findings exist
+        #[arg(long)]
+        fail_on_warning: bool,
+
+        /// CI/CD Gate: Fail if public API contract break detected
+        #[arg(long)]
+        fail_on_breaking: bool,
+
+        /// CI/CD Gate: Fail if unhandled downstream side-effects detected
+        #[arg(long)]
+        fail_on_side_effects: bool,
+
+        /// CI/CD Gate: Fail if PR risk score exceeds threshold (0-100)
+        #[arg(long)]
+        fail_on_risk: Option<f64>,
+
+        /// CI/CD Gate: Fail if cognitive complexity spike exceeds delta
+        #[arg(long)]
+        fail_on_complexity_spike: Option<i32>,
+
+        /// CI/CD Gate: Fail if untested functional symbols exist
+        #[arg(long)]
+        fail_on_untested: bool,
+
+        /// Interactive terminal review mode
+        #[arg(short = 'i', long)]
+        interactive: bool,
+    },
 }
 
 #[tokio::main]
@@ -1208,6 +1325,68 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 gherkin,
                 table,
                 xml,
+            )
+            .await
+        }
+        Commands::AiReview {
+            target,
+            path,
+            db,
+            branch,
+            source,
+            target_ref,
+            staged,
+            commit,
+            patch,
+            offline,
+            provider,
+            model,
+            only_new,
+            summarize,
+            export_patch,
+            apply_patch,
+            publish,
+            json,
+            sarif,
+            markdown,
+            fail_on_blocker,
+            fail_on_warning,
+            fail_on_breaking,
+            fail_on_side_effects,
+            fail_on_risk,
+            fail_on_complexity_spike,
+            fail_on_untested,
+            interactive,
+        } => {
+            commands::handle_ai_review(
+                target,
+                path,
+                db,
+                branch,
+                source,
+                target_ref,
+                staged,
+                commit,
+                patch,
+                offline,
+                provider,
+                model,
+                only_new,
+                summarize,
+                export_patch,
+                apply_patch,
+                publish,
+                json,
+                sarif,
+                markdown,
+                fail_on_blocker,
+                fail_on_warning,
+                fail_on_breaking,
+                fail_on_side_effects,
+                fail_on_risk,
+                fail_on_complexity_spike,
+                fail_on_untested,
+                interactive,
             )
             .await
         }

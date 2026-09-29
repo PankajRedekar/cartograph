@@ -1,3 +1,4 @@
+pub mod ai_review;
 pub mod complexity;
 pub mod deadcode;
 pub mod discovery;
@@ -16,6 +17,12 @@ pub mod test_selector;
 pub mod watcher;
 
 // Re-export core abstractions
+pub use ai_review::{
+    AiReviewEngine, ChangelogGenerator, ComplexityGate, ContextCompiler, ContractAnalyzer,
+    GitNotesPublisher, JsonPublisher, LlmClient, MarkdownPublisher, PatchApplier, PatchPublisher,
+    ReviewMemoryManager, ReviewPublisher, RiskEvaluator, SarifPublisher, SideEffectAnalyzer,
+    StructuralGates, TerminalPublisher, WebhookPublisher,
+};
 pub use complexity::{ComplexityAnalysisOptions, ComplexityEngine};
 pub use deadcode::{
     BaselineManager, DeadCodeEngine, DeadCodeRunOptions, PruneAdvisor, export_ai_ignore_mask,
