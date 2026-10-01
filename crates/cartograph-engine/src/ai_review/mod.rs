@@ -82,16 +82,23 @@ impl AiReviewEngine {
             GitDiffMapper::map_hunks_to_nodes(self.backend.as_ref(), &hunks).await?;
 
         // 4. Contract Analysis (public API breaks, signature alterations, removed exports)
+        let is_fast = self.config.fast;
+        let caller_depth = if is_fast {
+            1
+        } else {
+            self.config.caller_depth.max(1)
+        };
+
         let mut findings = Vec::new();
         let contract_findings = ContractAnalyzer::analyze(&mapped_symbols, &self.repo_root);
         findings.extend(contract_findings);
 
-        // 5. Downstream Side-Effect Analysis (1st- and 2nd-hop callers)
+        // 5. Downstream Side-Effect Analysis (1st- or 2nd-hop callers)
         let side_effect_findings = SideEffectAnalyzer::analyze(
             &self.backend,
             &mapped_symbols,
             &self.repo_root,
-            2, // 2-hop traversal
+            caller_depth,
         )
         .await;
         findings.extend(side_effect_findings);
@@ -117,9 +124,63 @@ impl AiReviewEngine {
                 .await;
         findings.extend(arch_findings);
 
-        // 9. Apply Review Memory & in-code suppression pragmas
-        let memory_manager = ReviewMemoryManager::new(&self.repo_root);
+        // Extended Structural Gates (skipped in fast mode for <10ms execution)
+        if !is_fast {
+            // 8b. Predictive Test Deficit Gate
+            let test_selector = crate::test_selector::TestSelector::new(self.backend.as_ref());
+            let selector_opts = crate::test_selector::TestSelectorOptions {
+                repo_root: self.repo_root.clone(),
+                diff_content: Some(raw_diff.clone()),
+                ..Default::default()
+            };
+            if let Ok(selection_report) = test_selector.select_tests(&selector_opts).await {
+                let test_findings = StructuralGates::evaluate_test_deficits(
+                    &mapped_symbols,
+                    &selection_report.selected_tests,
+                    self.config.fail_on_untested,
+                );
+                findings.extend(test_findings);
+            }
+
+            // 8c. Business Logic & Validation Invariant Rule Diff Gate
+            if let Some(ref base) = base_ref {
+                let logic_config = cartograph_core::config::ExtractLogicConfig::default();
+                let logic_engine = crate::extract_logic::LogicExtractionEngine::new(
+                    Some(self.backend.as_ref()),
+                    &logic_config,
+                );
+                let target_paths: Vec<&Path> = modified_files.iter().map(Path::new).collect();
+                if let Ok(rule_diff) =
+                    logic_engine.diff_with_git(&self.repo_root, base, Some(&target_paths))
+                {
+                    let rule_findings = StructuralGates::evaluate_rule_diff(&rule_diff);
+                    findings.extend(rule_findings);
+                }
+            }
+
+            // 8d. Newly Authored Dead Code Gate
+            let deadcode_findings = StructuralGates::evaluate_deadcode(
+                self.backend.clone(),
+                &self.repo_root,
+                base_ref.as_deref(),
+                matches!(diff_source, GitDiffSource::Staged),
+            )
+            .await;
+            findings.extend(deadcode_findings);
+        }
+
+        // 9. Apply Review Memory, calculate iteration delta & in-code suppression pragmas
+        let mut memory_manager = ReviewMemoryManager::new(&self.repo_root);
+        let iteration_summary = memory_manager.compute_iteration_delta(&findings);
         memory_manager.apply_memory_and_pragmas(&mut findings, &self.repo_root, only_new);
+
+        if self.config.review_memory {
+            let commit_sha = match &diff_source {
+                GitDiffSource::Commit(sha) => Some(sha.clone()),
+                _ => head_ref.clone(),
+            };
+            let _ = memory_manager.save_review_round(&findings, commit_sha);
+        }
 
         // 10. Generate Changelog Summary if requested or enabled
         let mut changelog_summary = if summarize || self.config.summarize {
@@ -141,9 +202,10 @@ impl AiReviewEngine {
             &raw_diff,
         );
 
+        let effective_offline = offline || is_fast;
         let llm_client = LlmClient::new(self.config.clone());
         let (execution_mode, ai_changelog) = llm_client
-            .review_and_augment(&context_xml, &mut findings, offline)
+            .review_and_augment(&context_xml, &mut findings, effective_offline)
             .await;
 
         if changelog_summary.is_none() && ai_changelog.is_some() {
@@ -178,7 +240,9 @@ impl AiReviewEngine {
             }
         }
 
-        let verdict = if metrics.total_blockers > 0 {
+        let verdict = if metrics.total_blockers > 0
+            || (self.config.fail_on_untested && metrics.untested_symbol_count > 0)
+        {
             ReviewVerdict::RequestChanges
         } else if metrics.total_warnings > 0 {
             ReviewVerdict::Comment
@@ -205,6 +269,7 @@ impl AiReviewEngine {
             changelog_summary,
             findings,
             complexity_deltas,
+            iteration_summary,
             execution_mode,
             analysis_duration_ms: start_time.elapsed().as_millis() as u64,
         };

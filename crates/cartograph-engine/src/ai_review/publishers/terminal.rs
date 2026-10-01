@@ -86,6 +86,38 @@ impl TerminalPublisher {
             ));
         }
 
+        // Iteration Review Delta
+        if let Some(ref iter) = report.iteration_summary {
+            let prev_str = iter.previous_commit.as_deref().unwrap_or("prior round");
+            out.push_str(&format!(
+                "\n  {} (vs `{}`)\n",
+                "Review Iteration Delta:".bold().underline(),
+                prev_str.cyan()
+            ));
+            out.push_str(&format!(
+                "    {} {} findings resolved by author\n",
+                "✔".green().bold(),
+                iter.resolved_findings.len().to_string().green().bold()
+            ));
+            out.push_str(&format!(
+                "    {} {} findings unresolved\n",
+                "⚠️".yellow(),
+                iter.unresolved_count.to_string().yellow()
+            ));
+            if iter.new_regressions_count > 0 {
+                out.push_str(&format!(
+                    "    {} {} new regressions introduced in latest push\n",
+                    "🚨".red().bold(),
+                    iter.new_regressions_count.to_string().red().bold()
+                ));
+            } else {
+                out.push_str(&format!(
+                    "    {} 0 new regressions introduced\n",
+                    "✔".green()
+                ));
+            }
+        }
+
         // Findings
         out.push_str(&format!(
             "\n  {} (Total: {}, Blockers: {}, Warnings: {})\n",

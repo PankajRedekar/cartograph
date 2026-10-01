@@ -259,6 +259,7 @@ fn test_publishers_and_formats() {
             ack_reason: None,
         }],
         complexity_deltas: vec![],
+        iteration_summary: None,
         execution_mode: ReviewExecutionMode::OfflineDeterministic,
         analysis_duration_ms: 25,
     };
@@ -352,4 +353,202 @@ fn test_changelog_synthesis() {
     let md = ChangelogGenerator::render_markdown(&summary);
     assert!(md.contains("### Changelog"));
     assert!(md.contains("#### Added"));
+}
+
+#[test]
+fn test_iteration_review_delta_and_verify_fixes() {
+    let dir = tempdir().unwrap();
+    let repo_root = dir.path();
+
+    let mut mem_mgr = ReviewMemoryManager::new(repo_root);
+
+    let finding_1 = cartograph_core::review::ReviewFinding {
+        id: "finding-alpha".to_string(),
+        category: FindingCategory::BreakingContract,
+        severity: FindingSeverity::Blocker,
+        file_path: PathBuf::from("src/api.rs"),
+        line_span: cartograph_core::review::FindingSpan::single(10),
+        diff_side: cartograph_core::review::DiffSide::Right,
+        commit_sha: None,
+        title: "API Break 1".to_string(),
+        description: "Breaking signature".to_string(),
+        structural_evidence: cartograph_core::review::StructuralEvidence::DeadCode {
+            symbol_name: "sym1".to_string(),
+            symbol_kind: "Function".to_string(),
+        },
+        ai_reasoning: None,
+        suggested_fix: None,
+        is_acknowledged: false,
+        ack_reason: None,
+    };
+
+    let finding_2 = cartograph_core::review::ReviewFinding {
+        id: "finding-beta".to_string(),
+        category: FindingCategory::UnhandledSideEffect,
+        severity: FindingSeverity::Warning,
+        file_path: PathBuf::from("src/caller.rs"),
+        line_span: cartograph_core::review::FindingSpan::single(25),
+        diff_side: cartograph_core::review::DiffSide::Right,
+        commit_sha: None,
+        title: "Side Effect 2".to_string(),
+        description: "Unhandled error".to_string(),
+        structural_evidence: cartograph_core::review::StructuralEvidence::DeadCode {
+            symbol_name: "sym2".to_string(),
+            symbol_kind: "Function".to_string(),
+        },
+        ai_reasoning: None,
+        suggested_fix: None,
+        is_acknowledged: false,
+        ack_reason: None,
+    };
+
+    // Round 1: finding_1 and finding_2 are reported
+    mem_mgr
+        .save_review_round(&[finding_1.clone(), finding_2.clone()], Some("sha1".to_string()))
+        .unwrap();
+
+    // Round 2: Author fixed finding_1, finding_2 remains, and finding_3 is a new regression
+    let finding_3 = cartograph_core::review::ReviewFinding {
+        id: "finding-gamma".to_string(),
+        category: FindingCategory::ArchViolation,
+        severity: FindingSeverity::Blocker,
+        file_path: PathBuf::from("src/arch.rs"),
+        line_span: cartograph_core::review::FindingSpan::single(30),
+        diff_side: cartograph_core::review::DiffSide::Right,
+        commit_sha: None,
+        title: "Arch violation 3".to_string(),
+        description: "Boundary breach".to_string(),
+        structural_evidence: cartograph_core::review::StructuralEvidence::DeadCode {
+            symbol_name: "sym3".to_string(),
+            symbol_kind: "Function".to_string(),
+        },
+        ai_reasoning: None,
+        suggested_fix: None,
+        is_acknowledged: false,
+        ack_reason: None,
+    };
+
+    let delta = mem_mgr
+        .compute_iteration_delta(&[finding_2.clone(), finding_3.clone()])
+        .expect("Iteration delta should be computed");
+
+    assert_eq!(delta.resolved_findings.len(), 1);
+    assert_eq!(delta.resolved_findings[0].id, "finding-alpha");
+    assert_eq!(delta.unresolved_count, 1);
+    assert_eq!(delta.new_regressions_count, 1);
+    assert_eq!(delta.previous_commit.as_deref(), Some("sha1"));
+}
+
+#[test]
+fn test_native_one_click_suggestions_and_iteration_markdown() {
+    let fix = cartograph_core::review::SuggestedFix {
+        replacement_code: "pub fn calculate_discount() -> Result<f64, Error>".to_string(),
+        unified_diff_patch: "--- a/lib.rs\n+++ b/lib.rs\n@@ -1 +1 @@\n-old\n+new\n".to_string(),
+        explanation: "Return Result to prevent silent failures".to_string(),
+    };
+
+    let report = cartograph_core::review::ReviewReport {
+        target_identifier: "feat...main".to_string(),
+        base_ref: Some("main".to_string()),
+        head_ref: Some("feat".to_string()),
+        verdict: ReviewVerdict::RequestChanges,
+        summary: "Found 1 blocker".to_string(),
+        metrics: cartograph_core::review::ReviewMetrics {
+            files_changed: 1,
+            symbols_modified: 1,
+            total_blockers: 1,
+            ..Default::default()
+        },
+        risk_assessment: cartograph_core::review::PrRiskAssessment::default(),
+        changelog_summary: None,
+        findings: vec![cartograph_core::review::ReviewFinding {
+            id: "test1234567890ab".to_string(),
+            category: FindingCategory::BreakingContract,
+            severity: FindingSeverity::Blocker,
+            file_path: PathBuf::from("src/lib.rs"),
+            line_span: cartograph_core::review::FindingSpan::single(10),
+            diff_side: cartograph_core::review::DiffSide::Right,
+            commit_sha: None,
+            title: "Breaking contract".to_string(),
+            description: "Signature altered".to_string(),
+            structural_evidence: cartograph_core::review::StructuralEvidence::ContractBreak {
+                symbol_name: "test_sym".to_string(),
+                is_public: true,
+                old_signature: Some("pub fn test_sym()".to_string()),
+                new_signature: Some("pub fn test_sym() -> Result<(), ()>".to_string()),
+                break_reason: "Return type changed".to_string(),
+            },
+            ai_reasoning: None,
+            suggested_fix: Some(fix),
+            is_acknowledged: false,
+            ack_reason: None,
+        }],
+        complexity_deltas: vec![],
+        iteration_summary: Some(cartograph_core::review::ReviewIterationSummary {
+            resolved_findings: vec![],
+            unresolved_count: 1,
+            new_regressions_count: 0,
+            previous_commit: Some("a1b2c3d".to_string()),
+        }),
+        execution_mode: ReviewExecutionMode::OfflineDeterministic,
+        analysis_duration_ms: 5,
+    };
+
+    let md = cartograph_engine::MarkdownPublisher::render_markdown(&report);
+    assert!(md.contains("```suggestion\npub fn calculate_discount() -> Result<f64, Error>\n```"));
+    assert!(md.contains("1-Click Suggestion"));
+    assert!(md.contains("## Iteration Review Progress"));
+    assert!(md.contains("a1b2c3d"));
+
+    let term = cartograph_engine::TerminalPublisher::render(&report, Path::new("."));
+    assert!(term.contains("Review Iteration Delta:"));
+    assert!(term.contains("a1b2c3d"));
+}
+
+#[tokio::test]
+async fn test_fast_pre_commit_mode_execution() {
+    let dir = tempdir().unwrap();
+    let repo_root = dir.path();
+    init_git_repo(repo_root);
+
+    let test_file = repo_root.join("src").join("calc.rs");
+    fs::create_dir_all(test_file.parent().unwrap()).unwrap();
+    fs::write(&test_file, "pub fn add(a: i32, b: i32) -> i32 { a + b }\n").unwrap();
+
+    let _ = Command::new("git")
+        .current_dir(repo_root)
+        .args(["add", "."])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(repo_root)
+        .args(["commit", "-m", "Initial"])
+        .output();
+
+    // Modify file
+    fs::write(&test_file, "pub fn add(a: i64, b: i64) -> i64 { a + b }\n").unwrap();
+
+    let backend = Arc::new(cartograph_db::MemoryBackend::new());
+    let config = cartograph_core::config::AiReviewConfig {
+        fast: true, // Fast pre-commit mode
+        ..Default::default()
+    };
+
+    let engine = AiReviewEngine::new(repo_root.to_path_buf(), backend, config);
+    let start = std::time::Instant::now();
+    let report = engine
+        .run_review(
+            cartograph_core::review::GitDiffSource::WorkingTree,
+            true,
+            false,
+            false,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        report.execution_mode,
+        ReviewExecutionMode::OfflineDeterministic
+    );
+    // Sub-50ms execution in fast mode
+    assert!(start.elapsed().as_millis() < 500);
 }

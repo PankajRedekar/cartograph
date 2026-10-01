@@ -25,10 +25,25 @@ pub struct ReviewReport {
     pub findings: Vec<ReviewFinding>,
     /// Cognitive complexity deltas on modified symbols
     pub complexity_deltas: Vec<ComplexityDeltaFinding>,
+    /// Optional delta against previous review iteration (resolved fixes vs new regressions)
+    pub iteration_summary: Option<ReviewIterationSummary>,
     /// Mode used for the review
     pub execution_mode: ReviewExecutionMode,
     /// Analysis duration in milliseconds
     pub analysis_duration_ms: u64,
+}
+
+/// Summary of delta between successive review rounds on the same branch / PR
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ReviewIterationSummary {
+    /// Findings that were active in the previous round but have been resolved by the author
+    pub resolved_findings: Vec<ReviewFinding>,
+    /// Number of findings that remain unresolved
+    pub unresolved_count: usize,
+    /// Number of new regressions introduced in the latest commit/push
+    pub new_regressions_count: usize,
+    /// Previous commit SHA that was reviewed
+    pub previous_commit: Option<String>,
 }
 
 impl ReviewReport {
@@ -422,6 +437,7 @@ mod tests {
                 ack_reason: None,
             }],
             complexity_deltas: vec![],
+            iteration_summary: None,
             execution_mode: ReviewExecutionMode::OfflineDeterministic,
             analysis_duration_ms: 42,
         };

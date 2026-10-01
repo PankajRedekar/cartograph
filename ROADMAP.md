@@ -193,13 +193,24 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - Cognitive complexity delta budgeting (`--fail-on-complexity-spike <delta>`) preventing hotspot regressions.
   - Safe single-step patch generation and application (`--export-patch`, `--apply-patch`, `[A] Apply Patch`) with dry-run conflict pre-check (`git apply --check --unidiff-zero`).
   - Persistent Review Memory (`.cartograph/review_history.json`, `--only-new`) and in-code suppression pragmas (`// cartograph:ignore(category, "reason")`).
+  - Review iteration delta & lifecycle tracking (`--verify-fixes`) distinguishing resolved findings from new regressions across PR pushes.
+  - Extended structural quality gates: predictive test deficits (`--fail-on-untested`), business logic invariant relaxations, and newly authored dead code.
+  - Native 1-click GitHub & GitLab multi-line markdown suggestions (````suggestion`).
+  - Ultra-fast (<10ms) pre-commit hook mode (`--fast`) for frictionless shift-left contract enforcement.
   - Keep-a-Changelog Markdown synthesis and semantic PR overview generation (`--summarize`).
   - Pluggable publishing: rich colorized ANSI terminal (OSC-8 hyperlinks), standalone Markdown reports, OASIS SARIF 2.1.0, raw JSON, unified Git patches (`review.patch`), Git Notes (`refs/notes/cartograph-review`), generic Webhooks, and GitHub/GitLab PR/MR adapters.
   - Interactive split-pane TUI review playground (`cartograph ai-review -i`).
 
 - [ ] **3.3 Topological Root-Cause Detective (`cartograph diagnose`)**
-  - Parses stack traces, Sentry crash logs, or test failures.
-  - Maps traceback frames directly to AST graph nodes and highlights suspected root-cause code blocks.
+  - **Polyglot Traceback & Crash Log Ingestion**: Multi-parser engine supporting Python, TypeScript/JavaScript (V8, Bun, Deno), Rust panic backtraces, Go runtime crashes, Ruby, JVM, Sentry JSON (`event.json`), and piped CI test runner logs (`cargo test`, `pytest`, `npm test`, `go test`).
+  - **Path Normalization & Sourcemap Translation**: Strips Docker container prefixes (`/app/`), translates compiled `.js.map` sourcemaps back to source `.ts`, resolves multi-git polyrepo workspaces, and classifies frames into In-App, Dependency, Framework, and Stdlib.
+  - **AST Graph Anchoring & Call-Path Reconstruction**: Maps stack trace frames directly to indexed Tree-sitter AST nodes (`cartograph-ast`), statement spans, and verifies topological edges against the static call graph in `cartograph-db`.
+  - **Topological Fault Localization (TFL) & Suspicion Scoring**: Mathematical suspicion score (0.0 to 1.0) combining variable def-use backward slicing (35%), Git blame & PR churn recency (25%), contract & boundary invariant violations (20%), cognitive complexity hotspots (10%), and execution position decay (10%).
+  - **Variable Def-Use Provenance & Taint Slicer**: Intra- and inter-procedural backward slicing tracking tainted variables from the panic site back to the original injection origin (unvalidated query return, unchecked param, or missing guard).
+  - **Semantic Fault Classifier**: Categorizes errors into canonical archetypes (NullDereference, IndexOutOfBounds, TypeMismatch, ArithmeticFault, ContractBreach, UnhandledError, ConcurrencyFault).
+  - **Predictive Regression Test Scaffolding (`--scaffold-test`)**: Generates framework-native unit test reproducers preventing future regressions.
+  - **Dual Diagnostic Synthesis (Deterministic vs. AI-Augmented)**: Zero-LLM offline deterministic rule-based analysis (<15ms) vs. multi-provider AI synthesis (<2.5s for Claude, GPT, Gemini, Ollama) generating executable unified Git patches (`--export-patch`, `--apply-patch`).
+  - **Multi-Engine Presentation Layer**: Rich ANSI terminal with fault heatbars and OSC-8 links, interactive split-pane TUI (`cartograph diagnose -i`), OASIS SARIF 2.1.0 with CodeFlows, GitHub Markdown with Mermaid sequence diagrams, AI XML `<diagnostic_context>`, and machine JSON.
 
 - [ ] **3.4 Visual Diagram Exporter (`cartograph diagram`)**
   - Auto-generates Mermaid.js flowcharts and architecture diagrams.
@@ -237,9 +248,9 @@ cartograph complexity [--top 15] [--danger-zone] [--prompt-refactor <symbol>] [-
 cartograph deadcode [--min-lines 20]
 
 # AI & Diagnostics
-cartograph ai-review [<target>] [--branch <range>] [--staged] [--commit <sha>] [--patch <file>] [--offline] [--export-patch <path>] [--apply-patch <path>] [--publish <targets>] [--only-new] [--summarize] [-i]
+cartograph ai-review [<target>] [--branch <range>] [--staged] [--commit <sha>] [--patch <file>] [--offline] [--fast] [--verify-fixes] [--export-patch <path>] [--apply-patch <path>] [--publish <targets>] [--only-new] [--summarize] [-i]
 cartograph extract-logic [<query>] [--symbol <name>] [--concept <entity>] [--file <path>] [--deep] [--branch <base>] [--fail-on-relaxed] [--fail-on-removed] [--gherkin] [--table] [--xml] [--json]
-cartograph diagnose "<stacktrace_or_log>"
+cartograph diagnose [<trace_or_log>] [--file <path>] [--sentry <json>] [--deep] [--git-blame] [--branch <base>] [--offline] [--export-patch <path>] [--apply-patch] [--scaffold-test] [--provider <name>] [--model <model>] [--format text|markdown|sarif|json|xml] [-i]
 cartograph diagram "<symbol_or_concept>" [--format mermaid|svg]
 
 # Profile & Config Management

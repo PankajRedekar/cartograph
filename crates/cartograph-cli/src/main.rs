@@ -877,6 +877,14 @@ enum Commands {
         #[arg(long)]
         only_new: bool,
 
+        /// Fast pre-commit mode (<10ms): 1st-hop contract checks only, skips LLM and deep sweeps
+        #[arg(long)]
+        fast: bool,
+
+        /// Verify iteration delta against previous review round (resolved findings vs new regressions)
+        #[arg(long)]
+        verify_fixes: bool,
+
         /// Synthesize Keep-a-Changelog Markdown and semantic PR summary
         #[arg(long)]
         summarize: bool,
@@ -1342,6 +1350,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             provider,
             model,
             only_new,
+            fast,
+            verify_fixes,
             summarize,
             export_patch,
             apply_patch,
@@ -1372,6 +1382,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 provider,
                 model,
                 only_new,
+                fast,
+                verify_fixes,
                 summarize,
                 export_patch,
                 apply_patch,

@@ -1824,6 +1824,8 @@ pub async fn handle_ai_review(
     provider: Option<String>,
     model: Option<String>,
     only_new: bool,
+    fast: bool,
+    verify_fixes: bool,
     summarize: bool,
     export_patch: Option<PathBuf>,
     apply_patch: Option<PathBuf>,
@@ -1941,6 +1943,15 @@ pub async fn handle_ai_review(
     }
     if let Some(max_r) = fail_on_risk {
         proj_config.ai_review.max_risk_score = max_r;
+    }
+    if fast {
+        proj_config.ai_review.fast = true;
+    }
+    if verify_fixes {
+        proj_config.ai_review.verify_fixes = true;
+    }
+    if fail_on_untested {
+        proj_config.ai_review.fail_on_untested = true;
     }
 
     // 4. Initialize Database Backend

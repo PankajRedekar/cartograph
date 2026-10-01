@@ -1189,6 +1189,14 @@ pub struct AiReviewConfig {
     #[serde(default)]
     pub summarize: bool,
 
+    /// Fast mode for pre-commit hooks (<10ms): 1st-hop only, skips LLM and deep sweeps
+    #[serde(default)]
+    pub fast: bool,
+
+    /// Verify iteration delta against previous review round (highlighting resolved findings and new regressions)
+    #[serde(default)]
+    pub verify_fixes: bool,
+
     /// Publisher configuration
     #[serde(default)]
     pub publishers: AiReviewPublishersConfig,
@@ -1306,6 +1314,8 @@ impl Default for AiReviewConfig {
             review_memory: true,
             history_path: default_ai_review_history_path(),
             summarize: false,
+            fast: false,
+            verify_fixes: false,
             publishers: AiReviewPublishersConfig::default(),
         }
     }

@@ -1,7 +1,7 @@
-use cartograph_core::review::{FindingCategory, ReviewFinding};
+use cartograph_core::review::{FindingCategory, ReviewFinding, ReviewIterationSummary};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -23,6 +23,8 @@ pub struct ReviewMemoryStore {
     pub version: u32,
     pub last_reviewed_commit: Option<String>,
     pub acknowledged_findings: Vec<AcknowledgedFindingRecord>,
+    #[serde(default)]
+    pub previous_round_findings: Vec<ReviewFinding>,
 }
 
 pub struct ReviewMemoryManager {
@@ -43,6 +45,7 @@ impl ReviewMemoryManager {
                 version: 1,
                 last_reviewed_commit: None,
                 acknowledged_findings: Vec::new(),
+                previous_round_findings: Vec::new(),
             }
         };
 
@@ -148,6 +151,65 @@ impl ReviewMemoryManager {
                 reason,
                 commit_sha,
             });
+    }
+
+    /// Compute iteration delta against previous review round
+    pub fn compute_iteration_delta(
+        &self,
+        current_findings: &[ReviewFinding],
+    ) -> Option<ReviewIterationSummary> {
+        if self.store.previous_round_findings.is_empty() {
+            return None;
+        }
+
+        let current_ids: HashSet<&str> = current_findings.iter().map(|f| f.id.as_str()).collect();
+        let prev_ids: HashSet<&str> = self
+            .store
+            .previous_round_findings
+            .iter()
+            .map(|f| f.id.as_str())
+            .collect();
+
+        // Findings from previous round no longer present in current = Resolved
+        let resolved_findings: Vec<ReviewFinding> = self
+            .store
+            .previous_round_findings
+            .iter()
+            .filter(|f| !current_ids.contains(f.id.as_str()))
+            .cloned()
+            .collect();
+
+        // Findings present in both rounds = Unresolved
+        let unresolved_count = current_findings
+            .iter()
+            .filter(|f| prev_ids.contains(f.id.as_str()))
+            .count();
+
+        // Findings in current round not present previously = New Regressions
+        let new_regressions_count = current_findings
+            .iter()
+            .filter(|f| !prev_ids.contains(f.id.as_str()))
+            .count();
+
+        Some(ReviewIterationSummary {
+            resolved_findings,
+            unresolved_count,
+            new_regressions_count,
+            previous_commit: self.store.last_reviewed_commit.clone(),
+        })
+    }
+
+    /// Save current review round findings for subsequent iteration comparison
+    pub fn save_review_round(
+        &mut self,
+        current_findings: &[ReviewFinding],
+        commit_sha: Option<String>,
+    ) -> std::io::Result<()> {
+        self.store.previous_round_findings = current_findings.to_vec();
+        if let Some(sha) = commit_sha {
+            self.store.last_reviewed_commit = Some(sha);
+        }
+        self.save()
     }
 
     /// Save review store to disk
