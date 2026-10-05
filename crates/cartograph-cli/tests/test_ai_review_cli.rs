@@ -25,6 +25,8 @@ fn test_cli_ai_review_help() {
     assert!(stdout.contains("--json"));
     assert!(stdout.contains("--sarif"));
     assert!(stdout.contains("--markdown"));
+    assert!(stdout.contains("--fast"));
+    assert!(stdout.contains("--verify-fixes"));
     assert!(stdout.contains("--fail-on-breaking"));
     assert!(stdout.contains("--fail-on-side-effects"));
     assert!(stdout.contains("--fail-on-risk"));
@@ -148,4 +150,67 @@ fn test_cli_ai_review_offline_pipeline() {
     );
     let final_lib = fs::read_to_string(&lib_rs).unwrap();
     assert!(final_lib.contains("a + b"));
+}
+
+#[test]
+fn test_cli_ai_review_fast_mode() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    // 1. Initialize git repo
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["init"])
+        .output()
+        .unwrap();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["config", "user.name", "Test User"])
+        .output()
+        .unwrap();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["config", "user.email", "test@example.com"])
+        .output()
+        .unwrap();
+
+    fs::create_dir_all(root.join("src")).unwrap();
+    let lib_rs = root.join("src/lib.rs");
+    fs::write(
+        &lib_rs,
+        "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n",
+    )
+    .unwrap();
+
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["add", "."])
+        .output()
+        .unwrap();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["commit", "-m", "Initial"])
+        .output()
+        .unwrap();
+
+    // 2. Index repo
+    let index_out = Command::new(cartograph_bin())
+        .arg("index")
+        .arg(root)
+        .output()
+        .expect("Failed to index repo");
+    assert!(index_out.status.success());
+
+    // 3. Fast mode execution
+    let review_out = Command::new(cartograph_bin())
+        .arg("ai-review")
+        .arg(root)
+        .arg("--fast")
+        .arg("--json")
+        .output()
+        .expect("Failed to execute ai-review --fast");
+
+    assert!(review_out.status.success());
+    let stdout = String::from_utf8_lossy(&review_out.stdout);
+    assert!(stdout.contains("\"execution_mode\":"));
 }

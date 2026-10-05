@@ -509,6 +509,21 @@ pub fn process_payment(req: PaymentRequest) -> Result<Receipt, Error> { ... }
 def calculate_vat_rate(country_code: str) -> float: ...
 ```
 
+### 6.3 Review Iteration Delta & Lifecycle Tracking (`--verify-fixes`)
+On multi-commit PRs, when authors push new commits in response to review comments, Cartograph tracks iteration progress:
+$$\Delta_{\text{iteration}} = \text{Compare}(\text{Findings}_{N-1}, \text{Findings}_N)$$
+- **Resolved Findings**: Active in round $N-1$, but resolved in round $N$.
+- **Unresolved Findings**: Still present in round $N$.
+- **New Regressions**: Introduced in the latest push, not present in round $N-1$.
+
+Exposed in CLI ANSI tables, Markdown summaries, and terminal output:
+```text
+  ─── Review Iteration Delta (vs `commit-abc`) ──────────────────────────────
+  ✔ 2 findings resolved by author
+  ⚠️ 1 finding unresolved
+  ✔ 0 new regressions introduced
+```
+
 ---
 
 ## 7. Pluggable Discussion, Git Notes & Universal Publishing Layer
@@ -555,6 +570,22 @@ cartograph ai-review --apply-patch
 - Performs a dry-run first (`git apply --check`).
 - If conflicts exist, it aborts cleanly without mutating the working directory and leaves `review.patch` for manual inspection.
 - In the interactive TUI (`-i`), pressing `[A]` applies the patch for the highlighted finding with instant visual confirmation.
+
+### 7.2 Native 1-Click Multi-Line GitHub & GitLab Suggestions
+Rather than requiring authors to copy/paste diff snippets, Cartograph formats suggested remediations using native GitHub/GitLab suggestion markdown:
+````markdown
+```suggestion
+let discount = calculate_discount(&order)?;
+```
+````
+In the GitHub and GitLab PR conversation UI, authors can accept Cartograph's suggested fix with **a single button click** ("Commit suggestion").
+
+### 7.3 Fast-Path Pre-Commit Hook Mode (`--fast` / `<10ms`)
+For pre-commit and pre-push Git hooks, `--fast` executes purely deterministic 1st-hop contract verification (SemVer breaking changes, removed exports, visibility reductions) while bypassing LLM synthesis and deep transitive graph sweeps.
+```bash
+# Recommended .git/hooks/pre-commit
+cartograph ai-review --staged --fast --fail-on-breaking
+```
 
 ---
 
@@ -631,6 +662,8 @@ max_complexity_delta = 15
 # Review memory: whether to track historical findings across commits
 review_memory = true
 history_path = ".cartograph/review_history.json"
+fast = false
+verify_fixes = false
 
 # Pluggable publishers configuration
 [ai_review.publishers]
@@ -657,6 +690,7 @@ cartograph ai-review
 
 # Review staged changes prior to running git commit
 cartograph ai-review --staged
+cartograph ai-review --staged --fast                 # Ultra-fast (<10ms) pre-commit hook mode
 
 # Review explicit branch comparison
 cartograph ai-review --branch "origin/main...HEAD"
@@ -669,10 +703,11 @@ cartograph ai-review --commit 4a3f91b
 git diff | cartograph ai-review -
 cartograph ai-review --patch my_changes.patch
 
-# Intelligence, Risk Scoring & Changelog Flags
+# Intelligence, Risk Scoring, Iteration Tracking & Changelog Flags
 cartograph ai-review --summarize                     # Synthesize AST PR description
 cartograph ai-review --changelog                     # Synthesize Keep-a-Changelog Markdown
 cartograph ai-review --only-new                      # Filter to net-new findings
+cartograph ai-review --verify-fixes                  # Iteration delta: resolved findings vs new regressions
 cartograph ai-review --apply-patch                   # Safe single-shot git apply
 
 # 100% Offline review (Zero LLM, sub-50ms, air-gapped)

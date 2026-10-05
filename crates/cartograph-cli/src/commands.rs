@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
@@ -1824,6 +1824,8 @@ pub async fn handle_ai_review(
     provider: Option<String>,
     model: Option<String>,
     only_new: bool,
+    fast: bool,
+    verify_fixes: bool,
     summarize: bool,
     export_patch: Option<PathBuf>,
     apply_patch: Option<PathBuf>,
@@ -1941,6 +1943,15 @@ pub async fn handle_ai_review(
     }
     if let Some(max_r) = fail_on_risk {
         proj_config.ai_review.max_risk_score = max_r;
+    }
+    if fast {
+        proj_config.ai_review.fast = true;
+    }
+    if verify_fixes {
+        proj_config.ai_review.verify_fixes = true;
+    }
+    if fail_on_untested {
+        proj_config.ai_review.fail_on_untested = true;
     }
 
     // 4. Initialize Database Backend
@@ -2162,3 +2173,110 @@ pub async fn handle_ai_review(
 
     Ok(())
 }
+
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_diagnose(
+    input: Option<String>,
+    file: Option<PathBuf>,
+    sentry: Option<PathBuf>,
+    path: PathBuf,
+    db: String,
+    deep: bool,
+    git_blame: bool,
+    branch: Option<String>,
+    offline: bool,
+    provider: Option<String>,
+    model: Option<String>,
+    export_patch: Option<PathBuf>,
+    apply_patch: bool,
+    scaffold_test: bool,
+    json: bool,
+    sarif: bool,
+    markdown: bool,
+    xml: bool,
+    interactive: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let root_path = path.canonicalize().unwrap_or(path);
+    let config = ProjectConfig::find_and_load(&root_path);
+
+    // Read crash input
+    let crash_text = if let Some(sentry_file) = sentry {
+        fs::read_to_string(&sentry_file)
+            .map_err(|e| format!("Failed to read sentry file {}: {e}", sentry_file.display()))?
+    } else if let Some(crash_file) = file {
+        fs::read_to_string(&crash_file)
+            .map_err(|e| format!("Failed to read crash file {}: {e}", crash_file.display()))?
+    } else if let Some(ref s) = input {
+        if s == "-" {
+            let mut buf = String::new();
+            io::stdin().read_to_string(&mut buf)?;
+            buf
+        } else if Path::new(s).is_file() {
+            fs::read_to_string(s)?
+        } else {
+            s.clone()
+        }
+    } else if !io::stdin().is_terminal() {
+        let mut buf = String::new();
+        io::stdin().read_to_string(&mut buf)?;
+        buf
+    } else {
+        return Err("No crash input provided. Please provide a stack trace, --file, --sentry, or pipe via stdin.".into());
+    };
+
+    if crash_text.trim().is_empty() {
+        return Err("Crash input is empty.".into());
+    }
+
+    // Storage backend
+    let (storage_cfg, _db_path) = resolve_storage_config(&root_path, &db);
+    let backend = create_backend(&storage_cfg)?;
+
+    // Merge CLI flags into DiagnoseConfig
+    let mut diag_config = config.diagnose.clone();
+    diag_config.offline = offline || diag_config.offline;
+    diag_config.deep = deep || diag_config.deep;
+    diag_config.git_blame = git_blame;
+    if let Some(b) = branch {
+        diag_config.branch = Some(b);
+    }
+    if let Some(p) = provider {
+        diag_config.provider = p;
+        diag_config.offline = false;
+    }
+    if let Some(m) = model {
+        diag_config.model = m;
+    }
+    if let Some(ep) = export_patch {
+        diag_config.export_patch = Some(ep);
+    }
+    diag_config.apply_patch = apply_patch || diag_config.apply_patch;
+    diag_config.scaffold_test = scaffold_test || diag_config.scaffold_test;
+
+    let engine = cartograph_engine::diagnose::DiagnoseEngine::new(
+        root_path.clone(),
+        backend,
+        diag_config,
+    )
+    .with_lint_config(config.lint_arch.clone());
+
+    let report = engine.run_diagnose(&crash_text).await?;
+
+    // Output formatting & presentation
+    if interactive {
+        crate::diagnose_tui::DiagnoseTui::run_interactive(&report, &root_path)?;
+    } else if json {
+        println!("{}", cartograph_engine::diagnose::publishers::JsonPublisher::render(&report));
+    } else if sarif {
+        println!("{}", cartograph_engine::diagnose::publishers::SarifPublisher::render(&report));
+    } else if markdown {
+        println!("{}", cartograph_engine::diagnose::publishers::MarkdownPublisher::render(&report));
+    } else if xml {
+        println!("{}", cartograph_engine::diagnose::publishers::XmlPublisher::render(&report));
+    } else {
+        print!("{}", cartograph_engine::diagnose::publishers::TerminalPublisher::render(&report));
+    }
+
+    Ok(())
+}
+

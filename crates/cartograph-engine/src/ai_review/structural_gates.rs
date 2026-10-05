@@ -159,20 +159,12 @@ impl StructuralGates {
         findings
     }
 
-    /// Evaluate business invariant and rule relaxations
-    pub fn evaluate_rule_diffs(
-        base_ref: &str,
-        head_ref: &str,
-        base_rules: &[BusinessRule],
-        head_rules: &[BusinessRule],
-    ) -> Vec<ReviewFinding> {
+    /// Evaluate business invariant and rule relaxations directly from RuleDiff
+    pub fn evaluate_rule_diff(rule_diff: &cartograph_core::RuleDiff) -> Vec<ReviewFinding> {
         let mut findings = Vec::new();
-        let config = ExtractLogicConfig::default();
-        let engine = RuleDiffEngine::new(&config);
-        let rule_diff = engine.compute_diff(base_ref, head_ref, base_rules, head_rules);
 
         // Check for removed rules or relaxed constraints
-        for mod_rule in rule_diff.modified {
+        for mod_rule in &rule_diff.modified {
             if mod_rule.severity.is_risk() {
                 let start_line = mod_rule.head_rule.span.start_line;
                 let end_line = mod_rule.head_rule.span.end_line;
@@ -202,7 +194,7 @@ impl StructuralGates {
                         mod_rule.head_rule.predicate
                     ),
                     structural_evidence: StructuralEvidence::RuleRelaxation {
-                        rule_title: mod_rule.head_rule.title,
+                        rule_title: mod_rule.head_rule.title.clone(),
                         old_predicate: format!("{:?}", mod_rule.base_rule.predicate),
                         new_predicate: format!("{:?}", mod_rule.head_rule.predicate),
                     },
@@ -214,6 +206,76 @@ impl StructuralGates {
             }
         }
 
+        findings
+    }
+
+    /// Evaluate business invariant and rule relaxations
+    pub fn evaluate_rule_diffs(
+        base_ref: &str,
+        head_ref: &str,
+        base_rules: &[BusinessRule],
+        head_rules: &[BusinessRule],
+    ) -> Vec<ReviewFinding> {
+        let config = ExtractLogicConfig::default();
+        let engine = RuleDiffEngine::new(&config);
+        let rule_diff = engine.compute_diff(base_ref, head_ref, base_rules, head_rules);
+        Self::evaluate_rule_diff(&rule_diff)
+    }
+
+    /// Evaluate dead code introduced or orphaned by this changeset
+    pub async fn evaluate_deadcode(
+        backend: Arc<dyn GraphStoreBackend>,
+        repo_root: &std::path::Path,
+        branch: Option<&str>,
+        staged: bool,
+    ) -> Vec<ReviewFinding> {
+        let mut findings = Vec::new();
+        let engine = crate::deadcode::DeadCodeEngine::new(
+            backend,
+            cartograph_core::config::DeadCodeConfig::default(),
+            repo_root.to_path_buf(),
+        );
+        let opts = crate::deadcode::DeadCodeRunOptions {
+            git_branch: branch.map(|s| s.to_string()),
+            git_staged: staged,
+            ..Default::default()
+        };
+        if let Ok(cartograph_core::model::DeadCodeReport {
+            pr_delta: Some(delta),
+            ..
+        }) = engine.run(opts).await
+        {
+            for item in delta.newly_introduced {
+                    let finding_id = ContractAnalyzer::compute_finding_id(
+                        &item.filepath,
+                        item.start_line as usize,
+                        FindingCategory::DeadCode,
+                        &format!("deadcode_{}", item.name),
+                    );
+                    findings.push(ReviewFinding {
+                        id: finding_id,
+                        category: FindingCategory::DeadCode,
+                        severity: FindingSeverity::Warning,
+                        file_path: PathBuf::from(&item.filepath),
+                        line_span: FindingSpan::new(item.start_line as usize, item.end_line as usize),
+                        diff_side: DiffSide::Right,
+                        commit_sha: None,
+                        title: format!("Newly authored dead code: `{}`", item.name),
+                        description: format!(
+                            "Symbol `{}` in `{}` was introduced in this change but has 0 living callers in the AST graph.",
+                            item.name, item.filepath
+                        ),
+                        structural_evidence: StructuralEvidence::DeadCode {
+                            symbol_name: item.name.clone(),
+                            symbol_kind: format!("{:?}", item.category),
+                        },
+                        ai_reasoning: None,
+                        suggested_fix: None,
+                        is_acknowledged: false,
+                        ack_reason: None,
+                    });
+                }
+            }
         findings
     }
 }

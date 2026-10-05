@@ -57,6 +57,46 @@ impl MarkdownPublisher {
             let _ = writeln!(md, "### Executive Summary\n{}\n", report.summary);
         }
 
+        // Iteration Review Progress
+        if let Some(ref iter) = report.iteration_summary {
+            let _ = writeln!(md, "## Iteration Review Progress\n");
+            let prev_str = iter.previous_commit.as_deref().unwrap_or("prior round");
+            let _ = writeln!(
+                md,
+                "Comparing against previous review iteration (`{}`):\n",
+                prev_str
+            );
+            let _ = writeln!(
+                md,
+                "- ✅ **{}** findings resolved by author",
+                iter.resolved_findings.len()
+            );
+            let _ = writeln!(
+                md,
+                "- ⚠️ **{}** findings unresolved",
+                iter.unresolved_count
+            );
+            let _ = writeln!(
+                md,
+                "- 🚨 **{}** new regressions introduced\n",
+                iter.new_regressions_count
+            );
+
+            if !iter.resolved_findings.is_empty() {
+                let _ = writeln!(md, "<details><summary>Resolved Findings Checklist</summary>\n");
+                for rf in &iter.resolved_findings {
+                    let _ = writeln!(
+                        md,
+                        "- [x] `{}:{}`: {}",
+                        rf.file_path.display(),
+                        rf.line_span.start_line,
+                        rf.title
+                    );
+                }
+                let _ = writeln!(md, "\n</details>\n");
+            }
+        }
+
         // Findings
         let _ = writeln!(md, "## Actionable Findings\n");
         if report.findings.is_empty() {
@@ -142,10 +182,15 @@ impl MarkdownPublisher {
                 }
 
                 if let Some(ref fix) = f.suggested_fix {
-                    let _ = writeln!(md, "<details><summary>💡 Suggested Remediation</summary>\n");
+                    let _ = writeln!(md, "<details open><summary>💡 Suggested Remediation (1-Click Suggestion)</summary>\n");
                     let _ = writeln!(md, "{}\n", fix.explanation);
                     if !fix.replacement_code.is_empty() {
-                        let _ = writeln!(md, "```rust\n{}\n```\n", fix.replacement_code);
+                        let _ = writeln!(md, "```suggestion\n{}\n```\n", fix.replacement_code.trim());
+                    }
+                    if !fix.unified_diff_patch.is_empty() {
+                        let _ = writeln!(md, "<details><summary>Unified Diff Patch</summary>\n");
+                        let _ = writeln!(md, "```diff\n{}\n```\n", fix.unified_diff_patch.trim());
+                        let _ = writeln!(md, "</details>\n");
                     }
                     let _ = writeln!(md, "</details>\n");
                 }

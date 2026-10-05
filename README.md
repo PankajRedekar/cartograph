@@ -807,6 +807,67 @@ cartograph ai-review --branch main...HEAD \
 
 ---
 
+### 14. `cartograph diagnose` — Topological Root-Cause Detective (<15ms offline, AST-grounded root-cause pinpointing)
+
+Overcomes the **"Panic Site vs. Root Cause" Fallacy** by parsing crash logs and stack traces, anchoring frames directly to Tree-sitter AST nodes, tracing backward def-use variable provenance, and computing mathematical suspicion scores to pinpoint the true origin of defects.
+
+Completely language-agnostic and platform-independent: supports Python, TypeScript/JavaScript, Rust, Go, Java, Sentry/Datadog APM JSON, and piped CI test runner logs (`cargo test | cartograph diagnose -`).
+
+```bash
+# 1. Diagnose raw traceback string (<15ms deterministic offline)
+cartograph diagnose "Traceback (most recent call last)..."
+
+# 2. Ingest from file or Sentry / Datadog APM JSON payload
+cartograph diagnose --file crash.log
+cartograph diagnose --sentry event.json
+
+# 3. Stream from piped test runner output
+cargo test | cartograph diagnose -
+pytest | cartograph diagnose -
+
+# 4. Deep mode: traverse callers beyond stack frames into upstream orchestrators
+cartograph diagnose "<trace>" --deep
+
+# 5. Weight lines by Git blame recency and active PR branch diff
+cartograph diagnose "<trace>" --git-blame --branch origin/main
+
+# 6. Synthesize framework-native unit test reproducer (pytest, cargo test, vitest, go test)
+cartograph diagnose "<trace>" --scaffold-test
+
+# 7. Generate executable unified Git remediation patch
+cartograph diagnose "<trace>" --export-patch fix.patch
+
+# 8. Safely apply remediation patch directly to codebase
+cartograph diagnose "<trace>" --apply-patch
+
+# 9. AI-augmented diagnosis with multi-provider LLMs (<2.5s)
+cartograph diagnose "<trace>" --provider anthropic --model claude-3-7-sonnet
+cartograph diagnose "<trace>" --provider openai --model gpt-4o
+cartograph diagnose "<trace>" --provider gemini --model gemini-2.5-flash
+cartograph diagnose "<trace>" --provider ollama --model qwen2.5-coder
+
+# 10. Universal output formats & interactive split-pane TUI
+cartograph diagnose "<trace>" -i                # Interactive terminal failure explorer
+cartograph diagnose "<trace>" --markdown        # GitHub Issue / PR Markdown with Mermaid
+cartograph diagnose "<trace>" --sarif           # OASIS SARIF 2.1.0 with CodeFlows
+cartograph diagnose "<trace>" --json            # Structured machine-readable JSON
+cartograph diagnose "<trace>" --xml             # AI agent prompt context XML (<1,500 tokens)
+```
+
+#### Key Capabilities
+- **Polyglot Traceback & Crash Log Ingestion**: Ingests Python tracebacks, Node/TS V8 stack traces, Rust panic backtraces, Go runtime crashes, Java stack traces, Sentry/Datadog APM JSON events, and stdin pipes.
+- **Path & Container Normalization**: Strips container prefixes (`/app/`, `/workspace/`, `/root/`), resolves relative paths to repo root, and loads contextual source code snippets.
+- **AST Frame Anchoring**: Anchors frames directly to Tree-sitter AST nodes and canonical symbol IDs in `cartograph.db`.
+- **Call-Path Graph Reconstruction**: Reconstructs the directed call path and verifies edge transitions against the AST call graph.
+- **Backward Def-Use Variable Provenance Slicing**: Traces tainted variables (`user`, `null`, `None`) backwards up the call stack to locate where invalid state was introduced.
+- **Topological Fault Localization (TFL) & Suspicion Scoring**: Computes normalized suspicion scores (0.0 to 1.0) and assigns roles: 🔴 `RootCause`, 🟠 `Propagator`, ⚪ `PanicSite`, 🔵 `Caller`.
+- **Semantic Fault Classification**: Standardizes crashes into archetypes (`NullDeref`, `OutOfBounds`, `TypeDrift`, `MissingGuard`, `StateInvariantViolation`, `ResourceLeak`, `ConcurrencyPanic`).
+- **Framework-Native Regression Test Scaffolding (`--scaffold-test`)**: Generates runnable unit tests preventing future regressions.
+- **Executable Patch Generation & Safe Application (`--export-patch`, `--apply-patch`)**: Synthesizes clean defensive guard patches ready to apply.
+- **Interactive Split-Pane TUI (`-i`)**: Browse candidate rankings, inspect code snippets, view def-use chains, and apply fixes directly in the terminal.
+
+---
+
 ## 🌐 Supported Languages & AST Constructs
 
 Cartograph embeds native Tree-Sitter grammars and declarative `.scm` query definitions:
@@ -1027,8 +1088,8 @@ Cartograph is structured across three major evolutionary milestones:
   - [x] 2.7 Consolidated Configuration, Multi-Git Polyrepo Support & Production CI/CD (`cartograph config`)
 - [ ] **Phase 3: AI Augmentation & Logic Synthesis (v1.2)**
   - [x] 3.1 Business Logic & Validation Rule Extractor (`cartograph extract-logic`)
-  - [ ] 3.2 Contract-Aware AI PR Reviewer (`cartograph ai-review`)
-  - [ ] 3.3 Topological Root-Cause Detective (`cartograph diagnose`)
+  - [x] 3.2 Contract-Aware AI PR Reviewer (`cartograph ai-review`)
+  - [x] 3.3 Topological Root-Cause Detective (`cartograph diagnose`)
 
 See [ROADMAP.md](ROADMAP.md) for full architectural specifications.
 
