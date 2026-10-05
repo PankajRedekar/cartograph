@@ -1,5 +1,6 @@
 pub mod backend;
 pub mod config;
+pub mod diagnose;
 pub mod error;
 pub mod logic;
 pub mod model;
@@ -10,10 +11,14 @@ pub use backend::GraphStoreBackend;
 pub use config::{
     AiReviewConfig, AiReviewPublishersConfig, ArchExemptionRule, ArchExemptionsConfig,
     ArchLayerConfig, ArchRuleConfig, ArchSeverity, ComplexityConfig, CouplingFilter,
-    CycleGranularity, DeadCodeCategoryFilter, DeadCodeConfig, ExtractLogicConfig, GitDiffMode,
-    IndexConfig, LintArchConfig, MemoryConfig, PackageEncapsulationConfig, PlatformPublisherConfig,
-    ProfileConfig, ProjectConfig, ProjectInfoConfig, ProjectProfile, RuleAction, SqliteConfig,
-    StorageConfig, WatchConfig,
+    CycleGranularity, DeadCodeCategoryFilter, DeadCodeConfig, DiagnoseConfig, ExtractLogicConfig,
+    GitDiffMode, IndexConfig, LintArchConfig, MemoryConfig, PackageEncapsulationConfig,
+    PlatformPublisherConfig, ProfileConfig, ProjectConfig, ProjectInfoConfig, ProjectProfile,
+    RuleAction, SqliteConfig, StorageConfig, WatchConfig,
+};
+pub use diagnose::{
+    DiagnosisReport, DiagnosisVerdict, DiagnosticExecutionMode, FaultCandidate, FaultCategory,
+    FaultRole, ProvenanceSlice, ProvenanceStep, RegressionTestReproducer, TracebackFrame,
 };
 pub use error::{CartographError, Result};
 pub use logic::{

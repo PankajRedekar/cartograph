@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 mod commands;
 pub mod deadcode_formatters;
+pub mod diagnose_tui;
 pub mod review_tui;
 use clap::{Parser, Subcommand};
 
@@ -945,6 +946,86 @@ enum Commands {
         #[arg(short = 'i', long)]
         interactive: bool,
     },
+
+    /// Topological Root-Cause Detective & Crash Log Analyzer (<15ms offline, AST-grounded root-cause pinpointing)
+    #[command(name = "diagnose", alias = "diag", alias = "root-cause")]
+    Diagnose {
+        /// Raw traceback string, file path, or "-" for stdin
+        #[arg(value_name = "CRASH_INPUT")]
+        input: Option<String>,
+
+        /// Path to crash log file
+        #[arg(short, long, value_name = "FILE")]
+        file: Option<PathBuf>,
+
+        /// Path to Sentry or Datadog APM JSON payload
+        #[arg(long, value_name = "FILE")]
+        sentry: Option<PathBuf>,
+
+        /// Root directory of repository
+        #[arg(short, long, value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Database profile or SQLite file path
+        #[arg(short, long, default_value = "default")]
+        db: String,
+
+        /// Deep mode: traverse callers beyond stack frames into upstream orchestrators
+        #[arg(long)]
+        deep: bool,
+
+        /// Weight lines by git blame recency (default true)
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        git_blame: bool,
+
+        /// Correlate with active branch/PR diff (e.g. "origin/main")
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Run in pure offline deterministic mode (no LLM calls)
+        #[arg(long)]
+        offline: bool,
+
+        /// LLM provider (anthropic, openai, gemini, ollama, custom)
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// LLM model name
+        #[arg(long)]
+        model: Option<String>,
+
+        /// Export unified remediation patch to file
+        #[arg(long)]
+        export_patch: Option<PathBuf>,
+
+        /// Apply suggested fixes from patch to codebase
+        #[arg(long)]
+        apply_patch: bool,
+
+        /// Synthesize framework-native regression test reproducer
+        #[arg(long)]
+        scaffold_test: bool,
+
+        /// Output results formatted as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Output results formatted as SARIF 2.1.0 for GitHub Code Scanning
+        #[arg(long)]
+        sarif: bool,
+
+        /// Output results formatted as Markdown
+        #[arg(long)]
+        markdown: bool,
+
+        /// Output results formatted as AI prompt XML
+        #[arg(long)]
+        xml: bool,
+
+        /// Interactive terminal TUI mode (split-pane failure explorer)
+        #[arg(short = 'i', long)]
+        interactive: bool,
+    },
 }
 
 #[tokio::main]
@@ -1398,6 +1479,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 fail_on_risk,
                 fail_on_complexity_spike,
                 fail_on_untested,
+                interactive,
+            )
+            .await
+        }
+        Commands::Diagnose {
+            input,
+            file,
+            sentry,
+            path,
+            db,
+            deep,
+            git_blame,
+            branch,
+            offline,
+            provider,
+            model,
+            export_patch,
+            apply_patch,
+            scaffold_test,
+            json,
+            sarif,
+            markdown,
+            xml,
+            interactive,
+        } => {
+            commands::handle_diagnose(
+                input,
+                file,
+                sentry,
+                path,
+                db,
+                deep,
+                git_blame,
+                branch,
+                offline,
+                provider,
+                model,
+                export_patch,
+                apply_patch,
+                scaffold_test,
+                json,
+                sarif,
+                markdown,
+                xml,
                 interactive,
             )
             .await

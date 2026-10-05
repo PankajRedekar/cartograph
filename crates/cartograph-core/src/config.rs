@@ -1322,6 +1322,102 @@ impl Default for AiReviewConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 3.3: Topological Root-Cause Detective (`cartograph diagnose`)
+// ---------------------------------------------------------------------------
+
+/// Configuration for Topological Root-Cause Detective (cartograph diagnose)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DiagnoseConfig {
+    /// Offline deterministic mode (zero-LLM, <15ms)
+    #[serde(default = "default_true")]
+    pub offline: bool,
+
+    /// Deep mode: traverse callers beyond stack frames into upstream orchestrators
+    #[serde(default)]
+    pub deep: bool,
+
+    /// Weight lines by git blame recency
+    #[serde(default = "default_true")]
+    pub git_blame: bool,
+
+    /// Recency decay window in days (default 30)
+    #[serde(default = "default_diagnose_recency_days")]
+    pub recency_days: u64,
+
+    /// Correlate with active branch/PR diff (e.g. "origin/main")
+    #[serde(default)]
+    pub branch: Option<String>,
+
+    /// AI provider: "anthropic", "openai", "gemini", "ollama", "custom"
+    #[serde(default = "default_diagnose_provider")]
+    pub provider: String,
+
+    /// Model name
+    #[serde(default = "default_diagnose_model")]
+    pub model: String,
+
+    /// Optional API base endpoint
+    #[serde(default)]
+    pub api_base: Option<String>,
+
+    /// Fallback to offline deterministic engine if AI call fails
+    #[serde(default = "default_true")]
+    pub fallback_to_offline: bool,
+
+    /// Export unified git patch to file
+    #[serde(default)]
+    pub export_patch: Option<std::path::PathBuf>,
+
+    /// Safe single-shot git apply of patch
+    #[serde(default)]
+    pub apply_patch: bool,
+
+    /// Synthesize framework-native regression test reproducer
+    #[serde(default)]
+    pub scaffold_test: bool,
+
+    /// Output format: "terminal", "markdown", "sarif", "json", "xml"
+    #[serde(default = "default_diagnose_format")]
+    pub format: String,
+}
+
+fn default_diagnose_recency_days() -> u64 {
+    30
+}
+
+fn default_diagnose_provider() -> String {
+    "anthropic".to_string()
+}
+
+fn default_diagnose_model() -> String {
+    "claude-3-7-sonnet".to_string()
+}
+
+fn default_diagnose_format() -> String {
+    "terminal".to_string()
+}
+
+impl Default for DiagnoseConfig {
+    fn default() -> Self {
+        Self {
+            offline: true,
+            deep: false,
+            git_blame: true,
+            recency_days: default_diagnose_recency_days(),
+            branch: None,
+            provider: default_diagnose_provider(),
+            model: default_diagnose_model(),
+            api_base: None,
+            fallback_to_offline: true,
+            export_patch: None,
+            apply_patch: false,
+            scaffold_test: false,
+            format: default_diagnose_format(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Phase 2.7: Master Unified Project Configuration (`cartograph.toml`)
 // ---------------------------------------------------------------------------
 
@@ -1411,6 +1507,10 @@ pub struct ProjectConfig {
     /// Contract-aware code review settings
     #[serde(default)]
     pub ai_review: AiReviewConfig,
+
+    /// Topological root-cause detective and crash analyzer settings
+    #[serde(default)]
+    pub diagnose: DiagnoseConfig,
 }
 
 impl ProjectConfig {

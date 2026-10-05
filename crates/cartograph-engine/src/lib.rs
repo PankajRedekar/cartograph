@@ -1,6 +1,7 @@
 pub mod ai_review;
 pub mod complexity;
 pub mod deadcode;
+pub mod diagnose;
 pub mod discovery;
 pub mod error;
 pub mod extract_logic;
@@ -22,6 +23,11 @@ pub use ai_review::{
     GitNotesPublisher, JsonPublisher, LlmClient, MarkdownPublisher, PatchApplier, PatchPublisher,
     ReviewMemoryManager, ReviewPublisher, RiskEvaluator, SarifPublisher, SideEffectAnalyzer,
     StructuralGates, TerminalPublisher, WebhookPublisher,
+};
+pub use diagnose::{
+    CallPathReconstructor, DiagnoseEngine, FaultClassifier, FrameAnchor, GitCorrelator,
+    InvariantAuditor, PatchSynthesizer, PathNormalizer, ProvenanceSlicer, RegressionTestScaffolder,
+    TopologicalFaultScorer, TracebackParser,
 };
 pub use complexity::{ComplexityAnalysisOptions, ComplexityEngine};
 pub use deadcode::{

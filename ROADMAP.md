@@ -201,7 +201,7 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - Pluggable publishing: rich colorized ANSI terminal (OSC-8 hyperlinks), standalone Markdown reports, OASIS SARIF 2.1.0, raw JSON, unified Git patches (`review.patch`), Git Notes (`refs/notes/cartograph-review`), generic Webhooks, and GitHub/GitLab PR/MR adapters.
   - Interactive split-pane TUI review playground (`cartograph ai-review -i`).
 
-- [ ] **3.3 Topological Root-Cause Detective (`cartograph diagnose`)**
+- [x] **3.3 Topological Root-Cause Detective (`cartograph diagnose`)**
   - **Polyglot Traceback & Crash Log Ingestion**: Multi-parser engine supporting Python, TypeScript/JavaScript (V8, Bun, Deno), Rust panic backtraces, Go runtime crashes, Ruby, JVM, Sentry JSON (`event.json`), and piped CI test runner logs (`cargo test`, `pytest`, `npm test`, `go test`).
   - **Path Normalization & Sourcemap Translation**: Strips Docker container prefixes (`/app/`), translates compiled `.js.map` sourcemaps back to source `.ts`, resolves multi-git polyrepo workspaces, and classifies frames into In-App, Dependency, Framework, and Stdlib.
   - **AST Graph Anchoring & Call-Path Reconstruction**: Maps stack trace frames directly to indexed Tree-sitter AST nodes (`cartograph-ast`), statement spans, and verifies topological edges against the static call graph in `cartograph-db`.
