@@ -1418,6 +1418,81 @@ impl Default for DiagnoseConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 3.4: Visual Diagram Exporter (`cartograph diagram`)
+// ---------------------------------------------------------------------------
+
+/// Configuration for Visual Diagram Exporter (cartograph diagram)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DiagramConfig {
+    /// Default export format: "mermaid", "svg", "html", "text", "d2", "dot", "plantuml", "json", "xml"
+    #[serde(default = "default_diagram_format")]
+    pub default_format: String,
+
+    /// Default visual theme: "dark", "light", "high_contrast"
+    #[serde(default = "default_diagram_theme")]
+    pub default_theme: String,
+
+    /// Default BFS traversal depth
+    #[serde(default = "default_diagram_depth")]
+    pub default_depth: usize,
+
+    /// Maximum nodes before centrality-ranked pruning engages
+    #[serde(default = "default_diagram_max_nodes")]
+    pub max_nodes: usize,
+
+    /// Automatically collapse internal module nodes into package summary boxes
+    #[serde(default = "default_true")]
+    pub collapse_modules: bool,
+
+    /// Include unit and integration test files in diagrams
+    #[serde(default)]
+    pub include_tests: bool,
+
+    /// Include standard library and vendor dependencies
+    #[serde(default)]
+    pub include_stdlib: bool,
+
+    /// Font family for SVG rendering
+    #[serde(default = "default_diagram_svg_font")]
+    pub svg_font_family: String,
+}
+
+fn default_diagram_format() -> String {
+    "mermaid".to_string()
+}
+
+fn default_diagram_theme() -> String {
+    "dark".to_string()
+}
+
+fn default_diagram_depth() -> usize {
+    2
+}
+
+fn default_diagram_max_nodes() -> usize {
+    35
+}
+
+fn default_diagram_svg_font() -> String {
+    "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif".to_string()
+}
+
+impl Default for DiagramConfig {
+    fn default() -> Self {
+        Self {
+            default_format: default_diagram_format(),
+            default_theme: default_diagram_theme(),
+            default_depth: default_diagram_depth(),
+            max_nodes: default_diagram_max_nodes(),
+            collapse_modules: true,
+            include_tests: false,
+            include_stdlib: false,
+            svg_font_family: default_diagram_svg_font(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Phase 2.7: Master Unified Project Configuration (`cartograph.toml`)
 // ---------------------------------------------------------------------------
 
@@ -1511,6 +1586,10 @@ pub struct ProjectConfig {
     /// Topological root-cause detective and crash analyzer settings
     #[serde(default)]
     pub diagnose: DiagnoseConfig,
+
+    /// Visual diagram exporter and architecture visualizer settings
+    #[serde(default)]
+    pub diagram: DiagramConfig,
 }
 
 impl ProjectConfig {

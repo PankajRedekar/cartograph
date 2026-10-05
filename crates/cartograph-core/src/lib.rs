@@ -1,6 +1,7 @@
 pub mod backend;
 pub mod config;
 pub mod diagnose;
+pub mod diagram;
 pub mod error;
 pub mod logic;
 pub mod model;
@@ -11,14 +12,19 @@ pub use backend::GraphStoreBackend;
 pub use config::{
     AiReviewConfig, AiReviewPublishersConfig, ArchExemptionRule, ArchExemptionsConfig,
     ArchLayerConfig, ArchRuleConfig, ArchSeverity, ComplexityConfig, CouplingFilter,
-    CycleGranularity, DeadCodeCategoryFilter, DeadCodeConfig, DiagnoseConfig, ExtractLogicConfig,
-    GitDiffMode, IndexConfig, LintArchConfig, MemoryConfig, PackageEncapsulationConfig,
-    PlatformPublisherConfig, ProfileConfig, ProjectConfig, ProjectInfoConfig, ProjectProfile,
-    RuleAction, SqliteConfig, StorageConfig, WatchConfig,
+    CycleGranularity, DeadCodeCategoryFilter, DeadCodeConfig, DiagnoseConfig, DiagramConfig,
+    ExtractLogicConfig, GitDiffMode, IndexConfig, LintArchConfig, MemoryConfig,
+    PackageEncapsulationConfig, PlatformPublisherConfig, ProfileConfig, ProjectConfig,
+    ProjectInfoConfig, ProjectProfile, RuleAction, SqliteConfig, StorageConfig, WatchConfig,
 };
 pub use diagnose::{
     DiagnosisReport, DiagnosisVerdict, DiagnosticExecutionMode, FaultCandidate, FaultCategory,
     FaultRole, ProvenanceSlice, ProvenanceStep, RegressionTestReproducer, TracebackFrame,
+};
+pub use diagram::{
+    DiagramAttribute, DiagramCluster, DiagramDiffStatus, DiagramEdge, DiagramEdgeStyle,
+    DiagramFormat, DiagramGraph, DiagramNode, DiagramNodeMetrics, DiagramOptions, DiagramTheme,
+    DiagramType, LayoutBox, Point2D, TraversalDirection,
 };
 pub use error::{CartographError, Result};
 pub use logic::{

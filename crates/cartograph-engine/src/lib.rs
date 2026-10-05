@@ -2,6 +2,7 @@ pub mod ai_review;
 pub mod complexity;
 pub mod deadcode;
 pub mod diagnose;
+pub mod diagram;
 pub mod discovery;
 pub mod error;
 pub mod extract_logic;
@@ -24,6 +25,7 @@ pub use ai_review::{
     ReviewMemoryManager, ReviewPublisher, RiskEvaluator, SarifPublisher, SideEffectAnalyzer,
     StructuralGates, TerminalPublisher, WebhookPublisher,
 };
+pub use diagram::{DiagramEngine, SugiyamaLayoutEngine, render_diagram};
 pub use diagnose::{
     CallPathReconstructor, DiagnoseEngine, FaultClassifier, FrameAnchor, GitCorrelator,
     InvariantAuditor, PatchSynthesizer, PathNormalizer, ProvenanceSlicer, RegressionTestScaffolder,
