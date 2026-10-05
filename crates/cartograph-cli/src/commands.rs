@@ -2280,3 +2280,142 @@ pub async fn handle_diagnose(
     Ok(())
 }
 
+/// Helper to launch the default system browser for HTML/SVG diagram preview
+fn open_in_browser(path: &Path) {
+    #[cfg(target_os = "macos")]
+    let res = std::process::Command::new("open").arg(path).spawn();
+    #[cfg(target_os = "linux")]
+    let res = std::process::Command::new("xdg-open").arg(path).spawn();
+    #[cfg(target_os = "windows")]
+    let res = std::process::Command::new("cmd").args(["/C", "start"]).arg(path).spawn();
+
+    if let Err(e) = res {
+        eprintln!("Warning: Failed to launch browser: {}", e);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_diagram(
+    query: Option<String>,
+    path: PathBuf,
+    db: String,
+    diagram_type: Option<String>,
+    format: Option<String>,
+    theme: Option<String>,
+    depth: Option<usize>,
+    direction: Option<String>,
+    max_nodes: Option<usize>,
+    collapse_modules: bool,
+    include_tests: bool,
+    include_stdlib: bool,
+    concept: Option<String>,
+    branch: Option<String>,
+    staged: bool,
+    out: Option<PathBuf>,
+    open: bool,
+    interactive: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let canonical_root = fs::canonicalize(&path).unwrap_or(path.clone());
+    let proj_config = ProjectConfig::find_and_load(&canonical_root);
+    let (storage_cfg, _db_path) = resolve_storage_config(&canonical_root, &db);
+    let backend = create_backend(&storage_cfg)?;
+
+    let mut options = cartograph_core::diagram::DiagramOptions::default();
+
+    // Apply project config defaults
+    let d_cfg = &proj_config.diagram;
+    if let Ok(fmt) = cartograph_core::diagram::DiagramFormat::from_str(&d_cfg.default_format) {
+        options.format = fmt;
+    }
+    if let Ok(thm) = cartograph_core::diagram::DiagramTheme::from_str(&d_cfg.default_theme) {
+        options.theme = thm;
+    }
+    options.depth = d_cfg.default_depth;
+    options.max_nodes = d_cfg.max_nodes;
+    options.collapse_modules = d_cfg.collapse_modules;
+    options.include_tests = d_cfg.include_tests;
+    options.include_stdlib = d_cfg.include_stdlib;
+
+    // CLI argument overrides
+    options.query = query.clone();
+    options.focus_symbol = query;
+
+    if let Some(dt_str) = diagram_type {
+        options.diagram_type = Some(cartograph_core::diagram::DiagramType::from_str(&dt_str)?);
+    }
+
+    if let Some(fmt_str) = format {
+        options.format = cartograph_core::diagram::DiagramFormat::from_str(&fmt_str)?;
+    } else if open && out.is_none() {
+        options.format = cartograph_core::diagram::DiagramFormat::Html;
+    }
+
+    if let Some(thm_str) = theme {
+        options.theme = cartograph_core::diagram::DiagramTheme::from_str(&thm_str)?;
+    }
+
+    if let Some(d) = depth {
+        options.depth = d;
+    }
+
+    if let Some(dir_str) = direction {
+        options.direction = cartograph_core::diagram::TraversalDirection::from_str(&dir_str)?;
+    }
+
+    if let Some(mn) = max_nodes {
+        options.max_nodes = mn;
+    }
+
+    options.collapse_modules = collapse_modules;
+    options.include_tests = include_tests;
+    options.include_stdlib = include_stdlib;
+    options.concept = concept;
+    options.branch = branch;
+    options.staged = staged;
+    options.open_in_browser = open;
+    options.interactive = interactive;
+
+    let engine = cartograph_engine::diagram::DiagramEngine::new(backend);
+
+    if interactive {
+        let graph = engine.generate_graph(&options).await?;
+        crate::diagram_tui::DiagramTui::run_interactive(&graph, &canonical_root)?;
+        return Ok(());
+    }
+
+    if let Some(out_path) = out {
+        let full_out_path = if out_path.is_absolute() {
+            out_path
+        } else {
+            canonical_root.join(out_path)
+        };
+        options.out_path = Some(full_out_path.to_string_lossy().to_string());
+        engine.export_to_file(&full_out_path, &options).await?;
+        println!("{}", format!("✅ Diagram saved to {}", full_out_path.display()).green().bold());
+
+        if open {
+            open_in_browser(&full_out_path);
+        }
+    } else if open {
+        let default_file = canonical_root.join(".cartograph").join(match options.format {
+            cartograph_core::diagram::DiagramFormat::Svg => "diagram.svg",
+            cartograph_core::diagram::DiagramFormat::Html => "diagram.html",
+            _ => "diagram.html",
+        });
+        if options.format != cartograph_core::diagram::DiagramFormat::Svg && options.format != cartograph_core::diagram::DiagramFormat::Html {
+            options.format = cartograph_core::diagram::DiagramFormat::Html;
+        }
+        engine.export_to_file(&default_file, &options).await?;
+        println!("{}", format!("🚀 Opening diagram in browser: {}", default_file.display()).cyan().bold());
+        open_in_browser(&default_file);
+    } else {
+        let rendered = engine.export_string(&options).await?;
+        print!("{rendered}");
+        if !rendered.ends_with('\n') {
+            println!();
+        }
+    }
+
+    Ok(())
+}
+

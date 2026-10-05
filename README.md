@@ -41,6 +41,7 @@ Modern software development with AI agents (Claude Code, Cursor, Windsurf, Copil
 | **⚡ Real-Time Incremental Watcher** | Real-time file system watcher (`cartograph watch`) with CST caching, SHA-256 Merkle diffing, and sub-0.5ms reverse blast-radius impact warnings on save. | **< 10ms** |
 | **📋 Business Logic & Rule Extractor** | AST-grounded validation rule extractor with variable def-use provenance slicing, zero-LLM natural language verbalizer, Gherkin/BDD synthesizer, decision tables, inter-procedural deep tracing, and Git PR rule diff gating. | **< 15ms** |
 | **🤖 Contract-Aware AI Reviewer** | Zero-lockin Git-native PR review (<50ms offline), AST public contract breaks, 2nd-hop caller side-effects, risk scoring (0-100), cognitive ΔCC spikes, review memory, in-code pragma suppressions, Keep-a-Changelog synthesis, safe patch application (`git apply --check --unidiff-zero`), and interactive split-pane review TUI. | **< 50ms offline** |
+| **📊 Visual Diagram Exporter** | Automated, AST-grounded architectural diagrams, targeted call-graph execution flows, polyglot entity-relationship (ER) schemas, fullstack request sequence traces, business logic flowcharts, PR blast-radius diffs, and DDD concept clusters with a zero-external-dependency pure-Rust Sugiyama layout engine, interactive terminal UI canvas, and universal export formats. | **< 5ms** |
 | **🌐 Polyglot Language Engine** | Native Tree-Sitter parsing for **Rust, TypeScript / TSX, Python, Ruby / Rails, Go, SQL, Markdown**. | Zero daemon required |
 
 ---
@@ -868,6 +869,63 @@ cartograph diagnose "<trace>" --xml             # AI agent prompt context XML (<
 
 ---
 
+### 15. `cartograph diagram` — Visual Diagram Exporter (<5ms pure-Rust layout, 7 archetypes, 9 export formats, interactive TUI)
+
+Generates automated, AST-grounded architectural diagrams, targeted call-graph execution flows, polyglot entity-relationship (ER) schemas, fullstack request sequence traces, business logic flowcharts, PR blast-radius diffs, and DDD concept clusters with a zero-external-dependency pure-Rust Sugiyama layout engine, interactive terminal UI canvas, and universal export formats.
+
+```bash
+# 1. Architecture diagram: packages, modules, coupling metrics (Ca, Ce, Instability I), cycles
+cartograph diagram --type architecture
+
+# 2. Targeted call graph with async edge styling and caller/callee traversal
+cartograph diagram "handle_request" --type callgraph --depth 3 --direction downstream
+
+# 3. Polyglot Entity-Relationship (ER) schema diagram across Rust, TS, Python, Go, Ruby
+cartograph diagram --type er
+
+# 4. Fullstack request route sequence trace (UI -> Route -> Controller -> Service -> Model)
+cartograph diagram "POST /api/v1/orders" --type sequence
+
+# 5. Business logic decision flowchart from AST validation rules and conditions
+cartograph diagram "calculate_discount" --type logic
+
+# 6. Git PR blast-radius diff overlay highlighting modified nodes & hazard halos
+cartograph diagram --type diff --branch origin/main
+cartograph diagram --type diff --staged
+
+# 7. DDD Concept cluster diagram for domain aggregates and boundaries
+cartograph diagram --type concept --concept "Billing"
+
+# 8. Multi-format export: Mermaid, SVG, HTML, Terminal text, D2, DOT, PlantUML, JSON, XML
+cartograph diagram --format mermaid             # Mermaid.js (flowchart, sequence, ER, class)
+cartograph diagram --format svg --theme dark     # Standalone vector SVG with tooltips & links
+cartograph diagram --format html --open          # Interactive HTML viewer with pan/zoom in browser
+cartograph diagram --format text                 # ANSI Unicode tree with OSC-8 hyperlinks
+cartograph diagram --format d2                   # Modern D2 declarative diagram
+cartograph diagram --format dot                  # Graphviz DOT graph
+cartograph diagram --format plantuml             # PlantUML model
+cartograph diagram --format json                 # Machine JSON schema
+cartograph diagram --format xml                  # AI agent prompt context XML
+
+# 9. Save directly to file
+cartograph diagram --out architecture.svg --format svg
+cartograph diagram --out schema.mmd --format mermaid
+
+# 10. Interactive 2D terminal canvas TUI
+cartograph diagram -i
+```
+
+#### Key Capabilities
+- **The Seven Canonical Diagram Archetypes**: Architecture, Call Graphs, Entity-Relationship schemas, Request Route Sequences, Logic Flowcharts, Git PR Diffs, and DDD Concept Clusters.
+- **Pure-Rust Sugiyama Hierarchical Layout**: Zero external dependencies (no Graphviz binary, no Chromium/Puppeteer). Computes greedy cycle removal, layer assignment, crossing reduction via barycenter sweep, Brandes-Köpf horizontal coordinate assignment, and cubic Bézier splines in <5ms.
+- **Multi-Model Mermaid.js Synthesizer**: Produces `flowchart TD/LR`, `sequenceDiagram`, `erDiagram`, or `classDiagram` tailored to each archetype with safe symbol sanitization.
+- **Standalone Vector SVG with Themes**: Emits crisp, self-contained SVG with embedded dark/light CSS variables, drop shadows, gradients, clickable `file:line` OSC-8 links, and interactive hover tooltips.
+- **Self-Contained Interactive HTML Dashboard (`--open`)**: Embedded pan/zoom canvas with keyboard shortcuts, search bar, zoom controls, and 1-click clipboard copy.
+- **Interactive Split-Pane Terminal UI (`-i`)**: 2D terminal navigation canvas with node selection, node inspector sidebar displaying line spans, afferent/efferent coupling metrics, incoming callers and outgoing callees, and 1-key export shortcuts (`[M]`, `[S]`, `[H]`).
+- **Degree Centrality Pruning & Hasse Transitive Reduction**: Automatically prunes large diagrams using degree centrality ($C_D(v) = \text{deg}(v)$) and eliminates redundant shortcut edges while preserving reachability.
+
+---
+
 ## 🌐 Supported Languages & AST Constructs
 
 Cartograph embeds native Tree-Sitter grammars and declarative `.scm` query definitions:
@@ -1090,6 +1148,7 @@ Cartograph is structured across three major evolutionary milestones:
   - [x] 3.1 Business Logic & Validation Rule Extractor (`cartograph extract-logic`)
   - [x] 3.2 Contract-Aware AI PR Reviewer (`cartograph ai-review`)
   - [x] 3.3 Topological Root-Cause Detective (`cartograph diagnose`)
+  - [x] 3.4 Visual Diagram Exporter (`cartograph diagram`)
 
 See [ROADMAP.md](ROADMAP.md) for full architectural specifications.
 

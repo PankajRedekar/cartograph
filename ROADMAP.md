@@ -212,9 +212,16 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - **Dual Diagnostic Synthesis (Deterministic vs. AI-Augmented)**: Zero-LLM offline deterministic rule-based analysis (<15ms) vs. multi-provider AI synthesis (<2.5s for Claude, GPT, Gemini, Ollama) generating executable unified Git patches (`--export-patch`, `--apply-patch`).
   - **Multi-Engine Presentation Layer**: Rich ANSI terminal with fault heatbars and OSC-8 links, interactive split-pane TUI (`cartograph diagnose -i`), OASIS SARIF 2.1.0 with CodeFlows, GitHub Markdown with Mermaid sequence diagrams, AI XML `<diagnostic_context>`, and machine JSON.
 
-- [ ] **3.4 Visual Diagram Exporter (`cartograph diagram`)**
-  - Auto-generates Mermaid.js flowcharts and architecture diagrams.
-  - Supports module dependencies, call graphs, and ER diagrams.
+- [x] **3.4 Visual Diagram Exporter (`cartograph diagram`)**
+  - **The Seven Canonical Diagram Archetypes**: Auto-detects and synthesizes Module Architecture (`--type architecture`), Targeted Call Graphs (`--type callgraph`), Polyglot Entity-Relationship schemas (`--type er`), Fullstack Route Sequences (`--type sequence`), Business Logic Decision Flowcharts (`--type logic`), PR Architectural Impact Diffs (`--type diff`), and DDD Concept Aggregate Clusters (`--concept`).
+  - **Topological Subgraph Extraction & Pruning**: Bidirectional BFS traversal (`--direction upstream|downstream|both`), configurable depth limits (`--depth`), degree/betweenness centrality pruning (`--max-nodes`), and Hasse transitive edge reduction eliminating visual clutter.
+  - **Pure-Rust Hierarchical Layout Engine (Sugiyama Framework)**: Fully native, zero-dependency DAG placement engine implementing Greedy Feedback Arc Set cycle removal, Network Simplex layer assignment, Barycenter crossing reduction, Brandes-Köpf horizontal coordinate assignment, and cubic Bézier edge routing in <5ms.
+  - **Standalone Pure-Rust SVG Vector Generator**: Zero-binary, zero-headless-browser high-resolution vector SVG generation with sleek developer dark/light themes, clickable IDE hyperlinks (`file:///`), rich hover tooltips, and interactive CSS drop-shadow effects.
+  - **Multi-Model Mermaid.js Synthesizer**: Generates robust, standards-compliant GitHub/GitLab markdown diagrams (`flowchart TD/LR`, `sequenceDiagram`, `erDiagram`, `classDiagram`) with automated generic escaping (`Result~T, E~`) and semantic color classes.
+  - **Polyglot Entity-Relationship (ER) & Schema Extractor**: Heuristic schema miner extracting entities, field types, PK/FK, and 1:1, 1:N, N:M associations across Rust (Diesel, SeaORM), TypeScript (Prisma, TypeORM), Python (SQLAlchemy, Django), Go (GORM), and Ruby (ActiveRecord).
+  - **Git PR Architectural Impact Visualizer (`--branch`, `--staged`)**: Overlays git diff hunks onto architectural diagrams; highlights added/modified/deleted nodes, transitive blast-radius hazards, and untested logic markers (`🧪 Missing Test`).
+  - **Interactive Terminal UI Canvas (`cartograph diagram -i`)**: Fullscreen 2D Ratatui canvas supporting smooth panning (WASD/arrows), multi-level zoom, node inspection sidebar, fuzzy symbol search (`/`), edge kind toggling (`[c]`, `[i]`, `[e]`), and 1-key export to Mermaid (`[M]`), SVG (`[S]`), or HTML (`[H]`).
+  - **Full Ecosystem Format Adapters**: Standalone HTML viewer with embedded pan-zoom (`--format html --open`), D2 declarative syntax (`--format d2`), PlantUML (`--format plantuml`), Graphviz DOT (`--format dot`), ANSI Unicode terminal tree (`--format text`), machine JSON graph IR, and LLM spatial context XML (`<architecture_diagram>`).
 
 ---
 
@@ -223,7 +230,6 @@ Modern software engineering and AI-assisted development suffer from a critical c
 
 - [ ] **4.1 Language Bindings (`pyo3` / `napi-rs`)**
   - Native Python wheel (`pip install cartograph`) via PyO3.
-  - Native Node.js package (`npm install cartograph`) via NAPI-RS.
 
 - [ ] **4.2 AI Agents skills for IDEs**
   - Add skills to make catrograph compatile with all coding agents
@@ -251,7 +257,7 @@ cartograph deadcode [--min-lines 20]
 cartograph ai-review [<target>] [--branch <range>] [--staged] [--commit <sha>] [--patch <file>] [--offline] [--fast] [--verify-fixes] [--export-patch <path>] [--apply-patch <path>] [--publish <targets>] [--only-new] [--summarize] [-i]
 cartograph extract-logic [<query>] [--symbol <name>] [--concept <entity>] [--file <path>] [--deep] [--branch <base>] [--fail-on-relaxed] [--fail-on-removed] [--gherkin] [--table] [--xml] [--json]
 cartograph diagnose [<trace_or_log>] [--file <path>] [--sentry <json>] [--deep] [--git-blame] [--branch <base>] [--offline] [--export-patch <path>] [--apply-patch] [--scaffold-test] [--provider <name>] [--model <model>] [--format text|markdown|sarif|json|xml] [-i]
-cartograph diagram "<symbol_or_concept>" [--format mermaid|svg]
+cartograph diagram [<symbol_or_concept>] [--type architecture|callgraph|er|sequence|logic|diff] [--format mermaid|svg|html|text|d2|dot|plantuml|xml|json] [--depth <n>] [--direction upstream|downstream|both] [--max-nodes <n>] [--collapse-modules] [--theme dark|light] [--branch <base>] [--staged] [--out <path>] [--open] [-i]
 
 # Profile & Config Management
 cartograph status
@@ -274,5 +280,6 @@ Cartograph uses **OpenSpec** for all feature specifications and change managemen
   - `fullstack-route-mapper/spec.md`
   - `code-complexity-heatmap/spec.md`
   - `ai-review-and-context/spec.md`
+  - `topological-root-cause-detective/spec.md`
 - `openspec/changes/`: Active change proposals and tasks.
 

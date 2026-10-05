@@ -3,6 +3,7 @@ use std::path::PathBuf;
 mod commands;
 pub mod deadcode_formatters;
 pub mod diagnose_tui;
+pub mod diagram_tui;
 pub mod review_tui;
 use clap::{Parser, Subcommand};
 
@@ -1026,6 +1027,87 @@ enum Commands {
         #[arg(short = 'i', long)]
         interactive: bool,
     },
+
+    /// Generate visual code diagrams (architecture, call graph, ER schema, sequence, logic, diff, concept)
+    #[command(
+        name = "diagram",
+        alias = "visualize",
+        alias = "viz",
+        alias = "graph-export"
+    )]
+    Diagram {
+        /// Target symbol query, route pattern, or keyword
+        #[arg(value_name = "QUERY")]
+        query: Option<String>,
+
+        /// Root directory of repository
+        #[arg(short, long, value_name = "PATH", default_value = ".")]
+        path: PathBuf,
+
+        /// Database profile or SQLite file path
+        #[arg(short, long, default_value = "default")]
+        db: String,
+
+        /// Diagram archetype: architecture, callgraph, er, sequence, logic, diff, concept (auto-detected if omitted)
+        #[arg(short = 't', long = "type")]
+        diagram_type: Option<String>,
+
+        /// Output format: mermaid, svg, html, text, d2, dot, plantuml, json, xml (default: mermaid)
+        #[arg(short, long)]
+        format: Option<String>,
+
+        /// Visual color theme: dark, light, high_contrast (default: dark)
+        #[arg(long)]
+        theme: Option<String>,
+
+        /// Traversal depth (default: 2)
+        #[arg(short = 'D', long)]
+        depth: Option<usize>,
+
+        /// Subgraph traversal direction: upstream (callers), downstream (callees), both (default: both)
+        #[arg(long)]
+        direction: Option<String>,
+
+        /// Maximum number of nodes before pruning by degree centrality (default: 35)
+        #[arg(short = 'n', long)]
+        max_nodes: Option<usize>,
+
+        /// Collapse sibling files into package/module clusters (default: true)
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        collapse_modules: bool,
+
+        /// Include test symbols and test files in diagram
+        #[arg(long)]
+        include_tests: bool,
+
+        /// Include standard library symbols in diagram
+        #[arg(long)]
+        include_stdlib: bool,
+
+        /// Concept taxonomy keyword for concept cluster diagram
+        #[arg(short = 'c', long)]
+        concept: Option<String>,
+
+        /// Git branch or revision for PR blast-radius diff overlay (e.g. main...HEAD)
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Overlay git staged changes onto diagram
+        #[arg(long)]
+        staged: bool,
+
+        /// Save diagram output directly to a file
+        #[arg(short, long, value_name = "FILE")]
+        out: Option<PathBuf>,
+
+        /// Open generated diagram in the default system browser
+        #[arg(long)]
+        open: bool,
+
+        /// Launch interactive terminal split-pane diagram explorer
+        #[arg(short = 'i', long)]
+        interactive: bool,
+    },
 }
 
 #[tokio::main]
@@ -1523,6 +1605,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 sarif,
                 markdown,
                 xml,
+                interactive,
+            )
+            .await
+        }
+        Commands::Diagram {
+            query,
+            path,
+            db,
+            diagram_type,
+            format,
+            theme,
+            depth,
+            direction,
+            max_nodes,
+            collapse_modules,
+            include_tests,
+            include_stdlib,
+            concept,
+            branch,
+            staged,
+            out,
+            open,
+            interactive,
+        } => {
+            commands::handle_diagram(
+                query,
+                path,
+                db,
+                diagram_type,
+                format,
+                theme,
+                depth,
+                direction,
+                max_nodes,
+                collapse_modules,
+                include_tests,
+                include_stdlib,
+                concept,
+                branch,
+                staged,
+                out,
+                open,
                 interactive,
             )
             .await
