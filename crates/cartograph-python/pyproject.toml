@@ -1,0 +1,54 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "cartograph"
+version = "0.2.0"
+description = "Ultra-Fast Native AST Code Graph & Graph Data Science SDK"
+authors = [{ name = "Pankaj Redekar" }]
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT OR Apache-2.0" }
+keywords = ["code-graph", "ast", "pyo3", "networkx", "polars", "ai-agents", "static-analysis"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = []
+
+[project.optional-dependencies]
+networkx = ["networkx>=3.0"]
+igraph = ["python-igraph>=0.10"]
+polars = ["polars>=0.20"]
+pandas = ["pandas>=2.0", "pyarrow>=14.0"]
+all = [
+    "networkx>=3.0",
+    "python-igraph>=0.10",
+    "polars>=0.20",
+    "pandas>=2.0",
+    "pyarrow>=14.0",
+]
+dev = [
+    "pytest>=8.0",
+    "mypy>=1.9",
+    "pyright>=1.1",
+    "ruff>=0.4",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "cartograph._cartograph"
+python-source = "python"
+include = ["python/cartograph/py.typed", "python/cartograph/*.pyi"]
