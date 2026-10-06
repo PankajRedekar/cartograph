@@ -3,5 +3,5 @@ schema: spec-driven
 context: |
   Project: Cartograph
   Description: Ultra-fast native Rust AST code graph, hybrid localization, blast-radius impact analysis, AI PR reviewer, and predictive test selection engine.
-  Tech Stack: Rust (2024), tree-sitter, SQLite (rusqlite), PyO3, NAPI-RS, Model Context Protocol (MCP).
+  Tech Stack: Rust (2024), tree-sitter, SQLite (rusqlite), PyO3, NAPI-RS, Agent Skills.
   Workflow: OpenSpec spec-driven development.

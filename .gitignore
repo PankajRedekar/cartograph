@@ -2,3 +2,9 @@ openspec/changes
 .agent/
 target/
 .cartograph/
+.venv/
+*.egg-info/
+dist/
+__pycache__/
+*.so
+*.dylib

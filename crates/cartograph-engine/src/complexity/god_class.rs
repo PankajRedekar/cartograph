@@ -289,10 +289,13 @@ fn synthesize_cluster_name(class_name: &str, methods: &[String], cluster_id: usi
     }
 
     if let Some(first_method) = methods.first() {
-        let parts: Vec<&str> = first_method.split('_').collect();
+        let parts: Vec<&str> = first_method.split('_').filter(|s| !s.is_empty()).collect();
         if let Some(lead) = parts.first() {
-            let capitalized = format!("{}{}", lead[..1].to_uppercase(), &lead[1..]);
-            return format!("{class_name}{capitalized}Subsystem");
+            let mut chars = lead.chars();
+            if let Some(first_char) = chars.next() {
+                let capitalized = format!("{}{}", first_char.to_uppercase(), chars.as_str());
+                return format!("{class_name}{capitalized}Subsystem");
+            }
         }
     }
 

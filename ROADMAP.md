@@ -17,7 +17,7 @@ Modern software engineering and AI-assisted development suffer from a critical c
 ```
                     ┌─────────────────────────────────────────┐
                     │          Developer & AI Interfaces      │
-                    │  CLI  │  MCP Server  │  PyO3  │  NAPI   │
+                    │  CLI  │ Agent Skills │  PyO3  │  NAPI   │
                     └───────────────────┬─────────────────────┘
                                         │
                     ┌───────────────────▼─────────────────────┐
@@ -41,7 +41,7 @@ Modern software engineering and AI-assisted development suffer from a critical c
 - **AST Parsing Engine**: `tree-sitter` multi-language parsers with custom tree-walk AST extractors
 - **Storage Layer**: Embedded SQLite (`rusqlite`) with WAL mode, FTS5 full-text indexing, and custom graph traversal queries
 - **Concurrency & Parallelism**: `rayon` for parallel file indexing, `notify` for real-time background file watching
-- **AI & Context Protocols**: Built-in Model Context Protocol (MCP) server, PyO3 Python bindings, and NAPI-RS Node.js bindings
+- **AI & Agent Protocols**: Skills-First AI Agent architecture (`.agent/skills`), PyO3 Python bindings, and NAPI-RS Node.js bindings
 
 ---
 
@@ -225,14 +225,63 @@ Modern software engineering and AI-assisted development suffer from a critical c
 
 ---
 
-### Phase 4: Integrations & Ecosystem Expansion (v2.0)
-*Objective: Seamless integration across developer tools, IDEs, CI/CD, and multi-language bindings.*
+### Phase 4: Native Python Bindings, AI Agent Skills & Sphinx Knowledge Portal (v2.0) — IN PROGRESS
+*Objective: Deliver high-performance zero-copy Python bindings via PyO3 for data science and automation, build native Cartograph skills for autonomous AI agents across leading IDEs and agent runtimes, and establish a comprehensive Sphinx documentation portal with automated API references, interactive tutorials, and architectural specs.*
 
-- [ ] **4.1 Language Bindings (`pyo3` / `napi-rs`)**
-  - Native Python wheel (`pip install cartograph`) via PyO3.
+- [x] **4.1 High-Performance Python Bindings & Graph Data Science SDK (`cartograph-py` via PyO3)** — **100% COMPLETE**
+  - **PyO3 Native Extension Architecture (`crates/cartograph-python`)**: Standalone CPython extension module compiled with Rust `pyo3` and `maturin`, producing native wheels (`pip install cartograph` / `cartograph-py`) with zero external runtime dependencies.
+  - **Cross-Platform Pre-Compiled Wheel Distribution**: Automated CI build matrix utilizing `cibuildwheel` targeting `manylinux`, `musllinux`, macOS Universal (Apple Silicon `arm64` and Intel `x86_64`), and Windows x64.
+  - **Zero-Copy Memory Safety & GIL-Release Concurrency**: Releases the Python Global Interpreter Lock (GIL) via `py.allow_threads` during parallel file indexing, AST parsing, and graph BFS traversals, allowing Python multithreading and Celery workers to scale without blocking.
+  - **Pythonic Code Graph API (`cartograph.CodeGraph`)**: Ergonomic Python interface with context manager support (`with CodeGraph.open() as cg:`), exposing full engine capabilities: `cg.locate()`, `cg.impact()`, `cg.test_selector()`, `cg.routes()`, `cg.lint_arch()`, `cg.complexity()`, `cg.deadcode()`, `cg.extract_logic()`, `cg.diagnose()`, and `cg.diagram()`.
+  - **Graph Data Science Interoperability (NetworkX & igraph)**: Direct conversion to **NetworkX** (`cg.to_networkx() -> nx.DiGraph`) and **igraph** (`cg.to_igraph()`), enabling complex network analysis, centrality calculations, community detection (Louvain, Leiden), and custom topological algorithms.
+  - **Tabular Data Science Integration (Pandas & Polars)**: Zero-copy DataFrame export (`cg.nodes_dataframe()`, `cg.edges_dataframe()`, `cg.complexity_dataframe()`) for statistical codebase analysis, technical debt reporting, and repository mining.
+  - **Full Type Stubs & Modern Typing Standards**: 100% typed stub files (`.pyi`) conforming to PEP 484 and PEP 561 (`py.typed` marker), providing instant autocomplete, parameter hints, and type verification under `mypy`, `pyright`, and Cursor/VSCode Pylance.
+  - **Async & Batch Operations**: Native `asyncio` support for non-blocking I/O in web applications (FastAPI, Django, Flask) and high-throughput batch symbol queries.
+  - **Performance SLA**: Sub-1ms in-memory graph query execution from Python, zero memory leaks, and 50x faster execution than pure-Python AST parsers.
 
-- [ ] **4.2 AI Agents skills for IDEs**
-  - Add skills to make catrograph compatile with all coding agents
+- [ ] **4.2 "Skills-First" AI Agent Architecture & Multi-IDE Skill Bundles (`.agent/skills/`, `cartograph skills`)**
+  - **Zero-Token-Overhead "Skills-First" Architecture**: Bypasses heavy background MCP servers and eliminates 1,500+ token per-turn system prompt bloat. Leverages coding agents' native terminal execution tools (`run_command`, `bash`) with on-demand skill execution, consuming **0 tokens** until a skill is explicitly invoked.
+  - **Standardized Multi-Agent Skill Bundles (`.agent/skills/`, `.agents/skills/`)**: Distributable `SKILL.md` skill definitions featuring YAML frontmatter metadata, contextual triggers, task checklists, and parameter mappings for autonomous agents:
+    - `cartograph-locate`: Rapid 1-turn AST subgraph retrieval replacing blind `grep`/`find` loops with exact caller/callee context and inlined type contracts.
+    - `cartograph-impact`: Pre-edit and pre-PR blast-radius calculation detecting affected dependents, breaking changes, and risk scores.
+    - `cartograph-test-selector`: Predictive test selection mapping changed files/symbols to affected test suites with executable runner commands (`cargo test`, `pytest`, `npm test`, `go test`).
+    - `cartograph-routes`: Full-stack HTTP route tracing from URL endpoint through middlewares and handlers to ORM models and database tables.
+    - `cartograph-diagnose`: Stack trace / crash log parser with AST graph anchoring, def-use provenance backward slicing, and reproducer test scaffolding.
+    - `cartograph-complexity`: Cognitive complexity heatmap, God-class detection, LCOM4 decomposition blueprints, and Danger Zone metrics.
+    - `cartograph-lint-arch`: Architectural boundary and circular dependency checker with Minimum Feedback Arc Set cut-edge inversion guidance.
+    - `cartograph-deadcode`: Mark-and-sweep reachability analysis uncovering dead functions, orphaned UI components, unread struct fields, and unused dependencies.
+    - `cartograph-extract-logic`: Business validation rule extractor with Gherkin/BDD scenarios, decision tables, and rule regression diffing.
+    - `cartograph-diagram`: Architectural and callgraph diagram exporter yielding Mermaid.js, SVG, or spatial XML.
+  - **Cross-IDE & Coding Agent Ecosystem Adapters**:
+    - **Claude Code**: Tool configurations, project guidelines in `CLAUDE.md`, and custom slash commands (`/locate`, `/impact`, `/diagnose`, `/review`).
+    - **Cursor & Windsurf**: Rules and cascade skills (`.cursorrules`, `.cursor/rules/*.mdc`, `.windsurfrules`) directing agents to execute Cartograph CLI commands instead of grep loops.
+    - **Google Antigravity IDE**: Custom skills (`.agents/skills/cartograph-assistant/SKILL.md`), plugins, and subagent orchestration recipes.
+    - **Aider, Roo Code, Cline & OpenHands**: Pre-configured system prompts, skill triggers, and diff-aware context injectors.
+  - **Automated Skill Installer CLI (`cartograph skills`)**: Built-in scaffolding command suite (`cartograph skills install [--target <claude|cursor|windsurf|antigravity|all>]`) to auto-install optimized skill files, rules, and slash commands directly into any project repository in 1 click.
+  - **Structured LLM XML & JSON Context Schemas**: Emits dedicated XML prompt blocks (`<cartograph_context>`, `<blast_radius_analysis>`, `<diagnostic_context>`, `<business_rules>`, `<architecture_diagram>`) with exact source coordinates (`file:line:col`) enabling agents to navigate and edit code with zero hallucination.
+  - **Token-Budgeted Context Economizer & Adaptive Degradation**: Implements hierarchical AST token degradation under hard limits (`--max-tokens <N>`). Guarantees zero context window blowup by preserving root definitions and inlined type contracts, compressing 1st- and 2nd-hop neighbors to typed signatures, and collapsing internal function bodies while retaining 100% graph topology.
+  - **Autonomous Multi-Turn Agent Workflows & Action Recipes**: Documented recipes for automated refactoring with impact verification, test-driven bug fixes, architecture boundary enforcement, and PR reviews with single-step patch application (`--export-patch`, `--apply-patch`).
+  - **Performance SLA**: Instant CLI subagent execution and formatted XML/JSON output delivery in **<3ms**.
+
+- [ ] **4.3 Comprehensive Developer Documentation Portal & Knowledge Architecture (Sphinx & ReadTheDocs)**
+  - **Modern Sphinx Documentation Engine (`docs/`)**: Professional documentation portal built with **Sphinx** and modern themes (`furo` / `sphinx-book-theme`), featuring sleek dark/light mode toggles, responsive navigation, and instant client-side full-text search.
+  - **MyST-Parser & GitHub-Flavored Markdown (GFM)**: Full integration of `myst-parser` supporting CommonMark and GitHub-Flavored Markdown (`.md`) alongside reStructuredText (`.rst`), allowing seamless reuse of repository markdown specs and docs.
+  - **Interactive UI Components (`sphinx-design`)**: Responsive UI cards, interactive multi-tab code switchers (comparing CLI vs Python SDK vs Agent Skill vs Agent XML), collapsible dropdowns, and status badges.
+  - **Live Mermaid.js Diagram Integration (`sphinxcontrib-mermaid`)**: Native embedding and live client-side rendering of Mermaid.js AST flowcharts, sequence diagrams, and class hierarchies generated by Cartograph.
+  - **Automated API & CLI Reference Generation**:
+    - **Python API Documentation (`sphinx-autoapi` / `autodoc`)**: Automated extraction of Python docstrings, type annotations, and class hierarchies directly from `cartograph-py`, ensuring docs are never out of sync with code releases.
+    - **CLI Command Reference (`sphinx-click` / `sphinx-argparse` / clap)**: Automated generation of exhaustive CLI manual pages for every command, option, flag, default value, and exit code.
+    - **Configuration & Schema Specification**: Interactive reference for `cartograph.toml` settings, multi-database profiles, architectural boundary rules, and SQLite graph database schema (`nodes`, `edges`, FTS5 tables).
+  - **Living OpenSpec Integration**: Automated publishing of OpenSpec canonical capabilities (`openspec/specs/`), active change proposals (`openspec/changes/`), and architectural decision records directly into the documentation portal.
+  - **Comprehensive Content Architecture & Cookbooks**:
+    - **1. Getting Started Guide**: 5-minute quickstart, binary installation (Cargo, Homebrew, Pip wheels, prebuilt binaries), indexing a first repository, and basic queries.
+    - **2. Core Concepts & Technical Architecture**: AST extraction via Tree-Sitter, the SQLite graph database model, Universal Linker resolution rules, and the pure-Rust Sugiyama layout engine.
+    - **3. Complete CLI Command Cookbooks**: Real-world guides and workflows for `locate`, `impact`, `test-selector`, `routes`, `lint-arch`, `complexity`, `deadcode`, `ai-review`, `extract-logic`, `diagnose`, and `diagram`.
+    - **4. Autonomous AI Agent Integration Guide**: Step-by-step setup for Claude Code, Cursor, Windsurf, Google Antigravity, and Roo Code; 1-click Agent Skills installation (`cartograph skills install`); token budgeting best practices; prompt engineering with Cartograph XML blocks.
+    - **5. Python SDK & Data Science Tutorials**: Jupyter Notebook tutorials on codebase network analysis, extracting God-classes with Pandas/NetworkX, and training code embeddings.
+    - **6. CI/CD & DevOps Automation**: GitHub Actions, GitLab CI, pre-commit hooks, automated PR reviews, architectural gate enforcement, and SARIF code scanning setup.
+    - **7. Polyglot Grammar Reference**: Specific AST parsing nuances, supported frameworks, and idiom mapping for Rust, TypeScript/JS, Python, Ruby, Go, SQL, and Markdown.
+  - **Continuous Documentation CI/CD & Multi-Version Publishing**: Automated GitHub Actions deployment pipeline (`.github/workflows/docs.yml`) building HTML assets and deploying to GitHub Pages or ReadTheDocs on master pushes, with multi-version documentation support (e.g. `v1.0`, `v1.1`, `v1.2`, `v2.0`, `latest`) and automated link checking (`sphinx -b linkcheck`).
 
 ---
 
@@ -259,6 +308,10 @@ cartograph extract-logic [<query>] [--symbol <name>] [--concept <entity>] [--fil
 cartograph diagnose [<trace_or_log>] [--file <path>] [--sentry <json>] [--deep] [--git-blame] [--branch <base>] [--offline] [--export-patch <path>] [--apply-patch] [--scaffold-test] [--provider <name>] [--model <model>] [--format text|markdown|sarif|json|xml] [-i]
 cartograph diagram [<symbol_or_concept>] [--type architecture|callgraph|er|sequence|logic|diff] [--format mermaid|svg|html|text|d2|dot|plantuml|xml|json] [--depth <n>] [--direction upstream|downstream|both] [--max-nodes <n>] [--collapse-modules] [--theme dark|light] [--branch <base>] [--staged] [--out <path>] [--open] [-i]
 
+# AI Agent Skills & Integrations
+cartograph skills install [--target <claude|cursor|windsurf|antigravity|all>] [--path <dir>]
+cartograph skills list
+
 # Profile & Config Management
 cartograph status
 cartograph config init
@@ -281,5 +334,9 @@ Cartograph uses **OpenSpec** for all feature specifications and change managemen
   - `code-complexity-heatmap/spec.md`
   - `ai-review-and-context/spec.md`
   - `topological-root-cause-detective/spec.md`
+  - `visual-diagram-exporter/spec.md`
+  - `python-bindings-and-sdk/spec.md`
+  - `ai-agent-skills/spec.md`
+  - `sphinx-documentation-portal/spec.md`
 - `openspec/changes/`: Active change proposals and tasks.
 
