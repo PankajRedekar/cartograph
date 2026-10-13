@@ -13,7 +13,7 @@ YELLOW := \033[1;33m
 RED := \033[1;31m
 NC := \033[0m
 
-.PHONY: all ci test lint fmt fmt-check build gates index lint-arch deadcode complexity config-validate clean help
+.PHONY: all ci test lint fmt fmt-check build gates index lint-arch deadcode complexity config-validate clean help docs docs-serve docs-check docs-agent docs-man docs-clean
 
 all: ci
 
@@ -78,11 +78,52 @@ complexity: build
 	@echo -e "$(BLUE)==> Analyzing complexity & risk hotspots...$(NC)"
 	$(CARTOGRAPH) complexity --top 10
 
+## docs: Build Sphinx documentation portal into docs/_build/html
+docs:
+	@echo -e "$(BLUE)==> Generating CLI reference & agent endpoints...$(NC)"
+	cargo run -q -p cartograph-cli -- docs generate-cli
+	.venv/bin/python scripts/generate_llms_txt.py
+	@echo -e "$(BLUE)==> Building Cartograph Sphinx documentation portal...$(NC)"
+	.venv/bin/sphinx-build -b html -W --keep-going docs docs/_build/html
+	@echo -e "$(GREEN)✔ Documentation built cleanly in docs/_build/html$(NC)"
+
+## docs-serve: Launch live-reloading local documentation server on http://localhost:8080
+docs-serve:
+	@echo -e "$(BLUE)==> Launching live-reloading documentation server...$(NC)"
+	.venv/bin/sphinx-autobuild docs docs/_build/html --port 8080 --open-browser --ignore "*/_build/*"
+
+## docs-check: Run automated link checker, Python doctests, and CLI snippet tests
+docs-check:
+	@echo -e "$(BLUE)==> Verifying CLI cookbook code snippets...$(NC)"
+	.venv/bin/pytest tests/test_docs_cli.py
+	@echo -e "$(BLUE)==> Running documentation linkcheck...$(NC)"
+	.venv/bin/sphinx-build -b linkcheck docs docs/_build/linkcheck
+	@echo -e "$(BLUE)==> Running documentation doctests...$(NC)"
+	.venv/bin/sphinx-build -b doctest docs docs/_build/doctest
+	@echo -e "$(GREEN)✔ All documentation checks passed cleanly!$(NC)"
+
+## docs-agent: Generate llms.txt and llms-full.txt machine endpoints
+docs-agent:
+	@echo -e "$(BLUE)==> Compiling llms.txt and llms-full.txt agent endpoints...$(NC)"
+	.venv/bin/python scripts/generate_llms_txt.py
+	@echo -e "$(GREEN)✔ Agent documentation endpoints generated.$(NC)"
+
+## docs-man: Generate POSIX UNIX man pages into docs/_build/man/
+docs-man:
+	@echo -e "$(BLUE)==> Building UNIX man pages...$(NC)"
+	.venv/bin/sphinx-build -b man docs docs/_build/man
+	@echo -e "$(GREEN)✔ Man pages generated in docs/_build/man/$(NC)"
+
+## docs-clean: Clean documentation build artifacts
+docs-clean:
+	@echo -e "$(YELLOW)==> Cleaning documentation build artifacts...$(NC)"
+	rm -rf docs/_build/ docs/llms.txt docs/llms-full.txt
+
 ## clean: Remove build artifacts, target folder, and local cartograph database
 clean:
 	@echo -e "$(YELLOW)==> Cleaning build artifacts and local cache...$(NC)"
 	$(CARGO) clean
-	rm -rf .cartograph/
+	rm -rf .cartograph/ docs/_build/ docs/llms.txt docs/llms-full.txt
 
 ## help: Display this help message
 help:

@@ -1,0 +1,2413 @@
+# Cartograph Complete Documentation Corpus
+
+# Cartograph
+
+> Ultra-Fast Native AST Code Graph Intelligence Engine & Autonomous AI Agent Architecture
+
+Cartograph parses 7 polyglot languages (Rust, TypeScript/JS, Python, Ruby, Go, SQL, Markdown) into a unified SQLite code graph with sub-millisecond query latency.
+
+## Key Capabilities
+- **cartograph locate**: 1-turn AST subgraph retrieval replacing grep (<3ms).
+- **cartograph impact**: Blast-radius calculation and breaking change detection (<25ms).
+- **cartograph test-selector**: Predictive test selection and execution (<15ms).
+- **cartograph routes**: Full-stack HTTP route and database ORM mapping.
+- **cartograph lint-arch**: Architectural boundary and circular dependency checker.
+- **cartograph complexity**: Cognitive complexity heatmap and God-class detection.
+- **cartograph deadcode**: Mark-and-sweep reachability and dead code purging.
+- **cartograph ai-review**: Contract-aware PR reviews and patch application.
+- **cartograph extract-logic**: Business validation rules & Gherkin extractor.
+- **cartograph diagnose**: Stack trace AST slicer & test reproducer generator.
+- **cartograph diagram**: Visual architecture and callgraph diagram exporter.
+- **cartograph skills**: Multi-IDE agent skills installer (Claude, Cursor, Windsurf, Antigravity).
+- **cartograph verify**: Pre-commit closed-loop self-healing verification gate (<200ms).
+
+## Documentation Links
+- Full Documentation Corpus: /llms-full.txt
+- CLI Reference: /reference/cli/
+- Python SDK Reference: /reference/python/
+
+
+---
+
+## File: basic-queries.md
+
+# 🔍 Running Your First Graph Queries
+
+## 1. Locate a Symbol
+
+Retrieve the exact file, line number, signature, and callers of any function:
+
+```bash
+cartograph locate "authenticate"
+```
+
+## 2. Calculate Blast Radius
+
+See who calls this function before you edit it:
+
+```bash
+cartograph impact --symbol "authenticate"
+```
+
+## 3. Visualize the Code Graph
+
+Generate an architectural diagram in Mermaid.js:
+
+```bash
+cartograph diagram --type architecture
+```
+
+---
+
+## File: first-index.md
+
+# ⚡ Indexing Your First Repository
+
+Navigate to any project repository and run:
+
+```bash
+cartograph index .
+```
+
+Output:
+```
+Indexing repository at '.'...
+[1/2] Parsing AST files in parallel... (342 files, 58,210 LOC)
+[2/2] Linking cross-file symbols & resolving imports...
+✔ Code graph indexed in 218ms! Database written to .cartograph/cartograph.db
+```
+
+## Continuous Background File Watching
+
+To automatically keep your code graph up to date as you edit files:
+
+```bash
+cartograph watch .
+```
+Updates the graph incrementally in `<10ms` on every file save.
+
+---
+
+## File: index.md
+
+# 🚀 Getting Started with Cartograph
+
+Welcome to Cartograph! Follow the guides below to install Cartograph, index your first repository, and execute your first AST graph queries.
+
+::::{grid} 1 2 2 2
+:gutter: 3
+
+:::{grid-item-card} 📦 Installation
+:link: installation
+:link-type: doc
+
+Install Cartograph via Cargo, Homebrew, Pip wheels, or prebuilt binaries.
+:::
+
+:::{grid-item-card} ⚡ First Repository Index
+:link: first-index
+:link-type: doc
+
+Index a 50,000-line polyglot repository in <250ms into SQLite WAL mode.
+:::
+
+:::{grid-item-card} 🔍 Basic Queries
+:link: basic-queries
+:link-type: doc
+
+Run surgical AST symbol lookups and calculate blast-radius impact.
+:::
+::::
+
+---
+
+## File: installation.md
+
+# 📦 Installation Matrix
+
+Choose your preferred installation method:
+
+## 1. Cargo (Rust)
+
+Install directly from source with native CPU vectorization:
+
+```bash
+cargo install cartograph-cli
+```
+
+## 2. Homebrew (macOS & Linux)
+
+```bash
+brew tap PankajRedekar/cartograph
+brew install cartograph
+```
+
+## 3. Python Wheels (PyPI)
+
+```bash
+pip install cartograph
+```
+
+## 4. Precompiled GitHub Release Binaries
+
+Download precompiled binaries for your architecture:
+- Linux x86_64 / aarch64
+- macOS Apple Silicon (`arm64`) / Intel (`x86_64`)
+- Windows x86_64
+
+Verify installation:
+
+```bash
+cartograph --version
+```
+
+---
+
+## File: ast-engine.md
+
+# 🌲 Tree-Sitter AST Engine & Canonical IR
+
+The **Cartograph AST Engine** (`crates/cartograph-ast`) translates raw source code from 7 polyglot programming languages into a unified, language-agnostic **Canonical Intermediate Representation (Canonical IR)**.
+
+## Architectural Flow
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Polyglot Source Files (.rs, .ts, .js, .py, .rb, .go, .sql, .md)                       │
+└──────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                           │ Rayon Parallel Work Stealing
+                                           ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Tree-Sitter Parser Layer (C FFI Grammars)                                              │
+│ • Concrete Syntax Tree (CST) generation in <1ms per 1,000 LOC                          │
+└──────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                           │ AST Walker & Pattern Extractors
+                                           ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Canonical Intermediate Representation (Canonical IR)                                  │
+│ • CanonicalNode: Symbol ID, Kind, Physical Coordinates, Signature, Visibility          │
+│ • CanonicalEdge: Source, Target, EdgeKind (Calls, Imports, Implements, References)     │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Supported Grammars & Languages
+
+| Language | Tree-Sitter Grammar | AST Constructs Extracted |
+| :--- | :--- | :--- |
+| **Rust** | `tree-sitter-rust` | Functions, methods, structs, enums, traits, `impl` blocks, macros, modules |
+| **TypeScript / JS** | `tree-sitter-typescript` | Functions, classes, interfaces, type aliases, methods, JSX/TSX components, imports/exports |
+| **Python** | `tree-sitter-python` | Functions, async defs, classes, methods, decorators, imports, type annotations |
+| **Ruby** | `tree-sitter-ruby` | Classes, modules, methods, mixins (`include`, `extend`), calls |
+| **Go** | `tree-sitter-go` | Functions, methods, structs, interfaces, type declarations, package imports |
+| **SQL** | `tree-sitter-sql` | `CREATE TABLE`, views, foreign key relationships, `JOIN` queries |
+| **Markdown** | `tree-sitter-markdown` | Headings, document hierarchy, code blocks, cross-references |
+
+## Rayon Parallel Work Stealing
+
+AST extraction is parallelized across all available CPU cores using Rayon's work-stealing threadpool:
+- Files are batched and parsed in parallel with zero lock contention.
+- On a modern multi-core workstation (e.g. Apple M-series or 16-core x86_64), Cartograph parses over **500,000 lines of polyglot code in <1.2 seconds**.
+
+---
+
+## File: index.md
+
+# 🧠 Core Concepts & Technical Architecture
+
+Cartograph is designed as a modular, high-speed software intelligence engine built entirely in Rust. This section explains the foundational design principles, algorithms, and data models that power the engine.
+
+::::{grid} 1 2 2 2
+:gutter: 3
+
+:::{grid-item-card} 🗺️ Living Architecture
+:link: living-architecture
+:link-type: doc
+
+Self-dogfooding live code graph, complexity metrics, and interactive pan-zoom graph explorer of Cartograph itself.
+:::
+
+:::{grid-item-card} 🌲 AST Engine & Canonical IR
+:link: ast-engine
+:link-type: doc
+
+Parallel Tree-Sitter multi-language parsing across 7 polyglot grammars into a unified Canonical IR.
+:::
+
+:::{grid-item-card} 🔗 Universal Linker
+:link: universal-linker
+:link-type: doc
+
+Cross-file symbol resolution, scope hierarchies, trait implementations, and def-use chains.
+:::
+
+:::{grid-item-card} 🗄️ SQLite Graph Model
+:link: sqlite-graph-model
+:link-type: doc
+
+WAL-mode SQLite architecture delivering microsecond query indexing, nodes, edges, and FTS5 search.
+:::
+
+:::{grid-item-card} 📐 Sugiyama Layout Engine
+:link: sugiyama-layout
+:link-type: doc
+
+Pure-Rust hierarchical layered graph drawing with crossing minimization and cycle inversion.
+:::
+
+:::{grid-item-card} 🪙 Token Economizer
+:link: token-economizer
+:link-type: doc
+
+4-tier AST compression algorithm slashing agent token usage by 80-90% under hard ceilings.
+:::
+::::
+
+---
+
+## File: living-architecture.md
+
+# 🗺️ Living Architecture & Self-Dogfooding Graph
+
+Cartograph practices continuous self-dogfooding. This page presents the **live architectural graph and software health metrics of Cartograph analyzing its own codebase**.
+
+## Live Architecture Graph
+
+The diagram below reflects Cartograph's active workspace architecture, generated directly by `cartograph diagram --type architecture`:
+
+```{mermaid}
+graph TD
+    CLI["cartograph-cli (CLI & Commands)"] --> ENGINE["cartograph-engine (Analyzers & Linker)"]
+    CLI --> CORE["cartograph-core (Canonical IR)"]
+    CLI --> AST["cartograph-ast (Tree-Sitter Polyglot)"]
+    CLI --> DB["cartograph-db (SQLite WAL)"]
+
+    PYTHON["cartograph-python (PyO3 & Arrow)"] --> ENGINE
+    PYTHON --> CORE
+    PYTHON --> DB
+
+    ENGINE --> AST
+    ENGINE --> DB
+    ENGINE --> CORE
+
+    AST --> CORE
+    DB --> CORE
+
+    classDef cli fill:#3b82f6,stroke:#1d4ed8,stroke-width:2px,color:#fff;
+    classDef engine fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff;
+    classDef core fill:#8b5cf6,stroke:#6d28d9,stroke-width:2px,color:#fff;
+
+    class CLI,PYTHON cli;
+    class ENGINE,AST engine;
+    class CORE,DB core;
+```
+
+---
+
+## Interactive SVG Architecture Explorer
+
+Use the controls below to pan, zoom, and explore the internal module hierarchy:
+
+
+  <svg viewBox="0 0 800 450" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background grid -->
+    <defs>
+      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(150,150,150,0.1)" stroke-width="1"/>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#grid)" />
+
+    <!-- Modules Group -->
+    <g transform="translate(60, 40)">
+      <!-- cartograph-cli -->
+      <rect x="220" y="20" width="240" height="60" rx="8" fill="#3b82f6" />
+      <text x="340" y="55" font-family="sans-serif" font-size="16" font-weight="bold" fill="#fff" text-anchor="middle">cartograph-cli</text>
+
+      <!-- cartograph-engine -->
+      <rect x="220" y="140" width="240" height="60" rx="8" fill="#10b981" />
+      <text x="340" y="175" font-family="sans-serif" font-size="16" font-weight="bold" fill="#fff" text-anchor="middle">cartograph-engine</text>
+
+      <!-- cartograph-python -->
+      <rect x="520" y="80" width="200" height="60" rx="8" fill="#f59e0b" />
+      <text x="620" y="115" font-family="sans-serif" font-size="15" font-weight="bold" fill="#fff" text-anchor="middle">cartograph-python</text>
+
+      <!-- cartograph-ast -->
+      <rect x="40" y="260" width="180" height="60" rx="8" fill="#06b6d4" />
+      <text x="130" y="295" font-family="sans-serif" font-size="15" font-weight="bold" fill="#fff" text-anchor="middle">cartograph-ast</text>
+
+      <!-- cartograph-db -->
+      <rect x="260" y="260" width="180" height="60" rx="8" fill="#ec4899" />
+      <text x="350" y="295" font-family="sans-serif" font-size="15" font-weight="bold" fill="#fff" text-anchor="middle">cartograph-db</text>
+
+      <!-- cartograph-core -->
+      <rect x="480" y="260" width="180" height="60" rx="8" fill="#8b5cf6" />
+      <text x="570" y="295" font-family="sans-serif" font-size="15" font-weight="bold" fill="#fff" text-anchor="middle">cartograph-core</text>
+
+      <!-- Connecting arrows -->
+      <line x1="340" y1="80" x2="340" y2="140" stroke="#94a3b8" stroke-width="3" marker-end="url(#arrow)" />
+      <line x1="520" y1="120" x2="460" y2="150" stroke="#94a3b8" stroke-width="2" />
+      <line x1="280" y1="200" x2="150" y2="260" stroke="#94a3b8" stroke-width="2" />
+      <line x1="340" y1="200" x2="350" y2="260" stroke="#94a3b8" stroke-width="2" />
+      <line x1="400" y1="200" x2="550" y2="260" stroke="#94a3b8" stroke-width="2" />
+    </g>
+  </svg>
+</div>
+
+---
+
+## Workspace Health & Quality Metrics
+
+- **Circular Dependencies**: `0` (Enforced by `cartograph lint-arch --strict`)
+- **Total Workspace Crates**: `6`
+- **Supported Languages**: `7` (Rust, TypeScript, JavaScript, Python, Ruby, Go, SQL)
+- **Average CLI Query Latency**: `<2.5ms`
+- **Dead Code Count**: `0` (Verified via `cartograph deadcode`)
+
+---
+
+## File: sqlite-graph-model.md
+
+# 🗄️ SQLite Graph Database Model
+
+Cartograph utilizes an embedded **SQLite** engine operating in Write-Ahead Logging (**WAL**) mode (`crates/cartograph-db`). 
+
+## Why Embedded SQLite over Dedicated Graph Databases?
+
+Dedicated graph databases (Neo4j, Memgraph) require background daemon processes, consume hundreds of megabytes of idle memory, introduce socket connection overhead, and complicate local developer workflows.
+
+By implementing graph traversal primitives (recursive CTEs, BFS, Tarjan's SCC, Dijkstra) directly over an in-memory or WAL-mode SQLite database via `rusqlite`:
+- **Microsecond Latency**: Single-hop lookups execute in **<15µs**; complex multi-hop graph walks execute in **<3ms**.
+- **Zero Daemon Overhead**: Zero background processes, zero open network ports, zero memory leaks.
+- **ACID Integrity**: Multi-process shared read concurrency with non-blocking single-writer execution.
+
+## Database Schema
+
+```sql
+-- Nodes Table: Canonical AST Symbols
+CREATE TABLE nodes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    start_line INTEGER NOT NULL,
+    start_col INTEGER NOT NULL,
+    end_line INTEGER NOT NULL,
+    end_col INTEGER NOT NULL,
+    signature TEXT,
+    visibility TEXT NOT NULL,
+    docstring TEXT
+);
+
+-- Edges Table: Directed Relationships
+CREATE TABLE edges (
+    source_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    metadata TEXT,
+    PRIMARY KEY (source_id, target_id, kind)
+);
+
+-- Full-Text Search Virtual Table
+CREATE VIRTUAL TABLE symbols_fts USING fts5(
+    name,
+    file_path,
+    content='nodes',
+    content_rowid='rowid'
+);
+```
+
+---
+
+## File: sugiyama-layout.md
+
+# 📐 Sugiyama Topological Layout Engine
+
+Cartograph includes a pure-Rust implementation of the **Sugiyama hierarchical layered graph drawing framework** (`crates/cartograph-engine/src/diagram`).
+
+## The 4-Phase Pipeline
+
+```
+┌─────────────────────────┐
+│ 1. Cycle Removal (MFAS) │ Inverts back-edges to form a Directed Acyclic Graph (DAG)
+└───────────┬─────────────┘
+            ▼
+┌─────────────────────────┐
+│ 2. Layer Assignment     │ Longest-path topological ranking with dummy node insertion
+└───────────┬─────────────┘
+            ▼
+┌─────────────────────────┐
+│ 3. Crossing Reduction   │ Iterative barycentric heuristic ordering across adjacent layers
+└───────────┬─────────────┘
+            ▼
+┌─────────────────────────┐
+│ 4. Coordinate Assignment│ Brandes-Köpf algorithm assigning smooth X/Y spatial coordinates
+└─────────────────────────┘
+```
+
+## Export Formats
+
+The resulting topological layout is exported with zero third-party dependencies into:
+- **Mermaid.js**: Standard Markdown flowcharts for GitHub, GitLab, and documentation.
+- **Standalone SVG**: Scalable vector graphics with embedded dark/light CSS.
+- **Spatial XML**: Coordinate-annotated `<architecture_diagram>` blocks for AI vision models.
+- **DOT / Graphviz**: For integration with external rendering engines.
+
+---
+
+## File: token-economizer.md
+
+# 🪙 Token Economizer & AST Degradation
+
+In enterprise repositories with high-degree symbols, returning full function bodies for every caller and callee causes catastrophic context window starvation for AI coding agents.
+
+The **Token Economizer** (`crates/cartograph-engine/src/skills/budget.rs`) enforces strict token ceilings (`--max-tokens <N>`) through a dynamic 4-tier AST degradation algorithm.
+
+## 4-Tier Degradation Algorithm
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ Tier 1: Target Root Symbol (Guaranteed 100% Fidelity)                  │
+│ • Full source code body, inlined parameter types, and docstrings       │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Budget > 75%
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ Tier 2: Inlined Type Contracts (100% Retained)                         │
+│ • Complete signatures of parameter structs, interfaces, and enums      │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Budget < 50%
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ Tier 3: Neighbor Signatures (Body Collapsing)                          │
+│ • Function bodies collapsed to single-line typed signatures:          │
+│   fn verify(token: &str) -> bool /* [42 lines collapsed] */           │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Budget < 20%
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ Tier 4: Edge Metadata Compression                                      │
+│ • Secondary callers grouped into comma-separated coordinate IDs        │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+This guarantees **zero hallucination** and preserves 100% graph topology while slashing token consumption by **80% to 90%**.
+
+---
+
+## File: universal-linker.md
+
+# 🔗 The Universal Linker
+
+The **Universal Linker** (`crates/cartograph-engine`) resolves cross-file dependencies, imports, and call sites across polyglot languages, connecting isolated AST fragments into a globally unified code graph.
+
+## Symbol Resolution Mechanics
+
+When an identifier (e.g. `authenticate(user, token)`) is referenced in a file, the Universal Linker executes a multi-stage resolution pipeline:
+
+1. **Local Scope Lookup**: Checks function parameters, local variable bindings, and closures within the current AST scope block.
+2. **File-Level & Module Scope**: Resolves items defined within the same file or sibling submodule.
+3. **Explicit Import Resolution**: Follows explicit language imports (`use crate::auth::authenticate;`, `import { authenticate } from './auth';`, `from auth import authenticate`).
+4. **Global Symbol Index & FTS5**: For ambiguous or unqualified references, queries SQLite's FTS5 identifier table with heuristic confidence scoring (`0.0` - `1.0`).
+
+## Edge Kinds & Semantic Confidence
+
+Every resolved link is assigned an `EdgeKind` and a confidence score:
+
+| Edge Kind | Description | Confidence Default |
+| :--- | :--- | :--- |
+| `Calls` | Direct function, method, or constructor invocation | `1.0` (static) / `0.85` (dynamic) |
+| `Imports` | Module import or namespace re-export | `1.0` |
+| `Implements` | Trait or interface implementation block | `1.0` |
+| `References` | Type annotation or struct field usage | `0.95` |
+| `Tests` | Unit or integration test asserting a symbol | `0.90` |
+| `MapsTo` | HTTP route mapping to controller handler | `0.95` |
+
+---
+
+## File: ai-review.md
+
+# 🤖 `cartograph ai-review` Cookbook
+
+The `cartograph ai-review` command executes **contract-aware code reviews**, detecting breaking changes and downstream side-effects, generating unified executable patches with 1-click application.
+
+## Common Workflows
+
+### 1. Offline Deterministic Code Review (<10ms)
+
+Review staged Git modifications with zero LLM API dependency:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph ai-review --staged --offline --fast
+```
+:::
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+with cartograph.open() as cg:
+    review = cg.review(staged=True, offline=True)
+    for finding in review.findings:
+        print(f"[{finding.severity}] {finding.file}:{finding.line} - {finding.message}")
+```
+:::
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Review staged modifications before commit -->
+Invoke: `cartograph ai-review --staged --offline --fast`
+Action: If blocker findings exist, apply suggested patch before committing.
+```
+:::
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<ai_review_report status="PASSED" findings_count="0" offline="true">
+  <summary contract_checks_passed="18" regression_risk="NONE"/>
+</ai_review_report>
+```
+:::
+::::
+
+### 2. Exporting and Applying Unified Remediation Patches
+
+Export suggested fixes to a patch file and apply them atomically:
+
+```bash
+# Export patch
+cartograph ai-review --branch "origin/main...HEAD" --export-patch fix.patch
+
+# Apply patch
+cartograph ai-review --apply-patch fix.patch
+```
+
+### 3. CI Gate for PR Blocker Findings
+
+Fail CI if blocker or breaking contract findings are detected:
+
+```bash
+cartograph ai-review --branch "origin/main...HEAD" --fail-on-blocker --fail-on-breaking
+```
+
+---
+
+## File: complexity.md
+
+# 📈 `cartograph complexity` Cookbook
+
+The `cartograph complexity` command performs **4-quadrant hotspot analysis**, calculating cognitive complexity, cyclomatic complexity, God-class anti-patterns, and **Danger Zone** items (high complexity with zero test coverage).
+
+## Common Workflows
+
+### 1. Top Hotspots & Danger Zone Analysis
+
+Inspect top technical debt hotspots in the repository:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph complexity --top 10 --danger-zone
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+with cartograph.open() as cg:
+    report = cg.complexity(top=10)
+    for h in report.hotspots:
+        print(f"Quadrant: {h.quadrant} | {h.symbol} (Score: {h.score}, Test Coverage: {h.test_coverage})")
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Identify God-classes and refactoring targets -->
+Invoke: `cartograph complexity --top 5 --god-class --format xml`
+Action: Refactor flagged methods into cohesive sub-modules.
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<complexity_heatmap top="10" total_hotspots="3">
+  <hotspot quadrant="Q1_DANGER_ZONE" symbol="SessionManager::handle_request" score="84" coverage="0.0">
+    <coordinates file="src/session.rs" line="145"/>
+    <recommendation>Extract session lifecycle logic into separate trait implementation.</recommendation>
+  </hotspot>
+</complexity_heatmap>
+```
+```
+````
+
+### 2. Standalone Interactive HTML Dashboard
+
+Generate a shareable, visual complexity heatmap dashboard:
+
+```bash
+cartograph complexity --html --out heatmap.html
+```
+
+### 3. CI Gate on Cognitive Complexity Delta
+
+Prevent PRs from introducing severe complexity spikes:
+
+```bash
+cartograph complexity --branch "origin/main...HEAD" --fail-on-hotspots
+```
+
+---
+
+## File: config.md
+
+# ⚙️ `cartograph config` Cookbook
+
+The `cartograph config` command validates, generates, and inspects `cartograph.toml` project configuration files.
+
+## Common Workflows
+
+### 1. Initializing a Starter Configuration File
+
+Scaffold a fresh `cartograph.toml` tailored to Clean Architecture:
+
+```bash
+cartograph config init --preset clean-architecture
+```
+
+### 2. Validating Configuration Syntax & Rules
+
+Validate syntax, exclude globs, and architectural boundary rules:
+
+```bash
+cartograph config validate
+```
+
+### 3. Displaying Currently Resolved Project Configuration
+
+Output resolved project settings formatted as JSON:
+
+```bash
+cartograph config show --json
+```
+
+---
+
+## File: deadcode.md
+
+# 💀 `cartograph deadcode` Cookbook
+
+The `cartograph deadcode` command executes **mark-and-sweep reachability analysis**, uncovering unused functions, unread struct fields, orphan UI components, and ghost dependencies.
+
+## Common Workflows
+
+### 1. Repository-Wide Dead Code Sweep
+
+Scan for dead symbols and orphaned modules:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph deadcode --min-lines 15
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+with cartograph.open() as cg:
+    deadcode = cg.deadcode(min_lines=15)
+    print(f"Discovered {len(deadcode.symbols)} dead functions/types")
+    print(f"Total dead lines: {deadcode.total_dead_lines}")
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Scan for dead code islands before refactoring -->
+Invoke: `cartograph deadcode --json`
+Action: Prune unreachable code verified safe by reachability analysis.
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<deadcode_report total_dead_symbols="2" total_dead_lines="48">
+  <dead_symbol name="legacy_oauth_callback" file="src/auth.rs" line="230" lines="28"/>
+</deadcode_report>
+```
+```
+````
+
+### 2. PR Diff Gate: Accidental Orphan Prevention
+
+Fail CI if a pull request introduces new dead code or leaves orphaned functions:
+
+```bash
+cartograph deadcode --branch "origin/main...HEAD" --fail-on-new-deadcode
+```
+
+### 3. Generate `.contextignore` to Shield AI Coding Agents
+
+Shield AI agents from ingesting dead code in context loops:
+
+```bash
+cartograph deadcode --export-ai-ignore .contextignore
+```
+
+---
+
+## File: diagnose.md
+
+# 🩺 `cartograph diagnose` Cookbook
+
+The `cartograph diagnose` command parses **crash logs, stack traces, and Sentry payloads**, anchoring frames to AST coordinates and performing def-use backward slicing to scaffold reproducing tests.
+
+## Common Workflows
+
+### 1. Stack Trace Parsing & Root-Cause Slicing
+
+Analyze a crash trace directly from stdin or file:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph diagnose --file crash.log --deep --scaffold-test
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+with cartograph.open() as cg:
+    diag = cg.diagnose(log_file="crash.log", deep=True)
+    print(f"Probable Root Cause: {diag.root_cause.symbol} at {diag.root_cause.file}:{diag.root_cause.line}")
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Diagnose crash trace and scaffold reproducer -->
+Invoke: `cartograph diagnose --file crash.log --format xml --scaffold-test`
+Action: Implement minimal patch addressing the identified backward def-use slice.
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<diagnostic_report status="RESOLVED" confidence="0.94">
+  <root_cause file="src/auth.rs" line="88" symbol="parse_header">
+    <slice_provenance variable="auth_header" unhandled_variant="None"/>
+  </root_cause>
+</diagnostic_report>
+```
+```
+````
+
+### 2. Sentry APM JSON Integration
+
+Ingest live production crash dumps from Sentry:
+
+```bash
+cartograph diagnose --sentry sentry_payload.json
+```
+
+### 3. Scaffolding Reproducer Unit Tests
+
+Automatically generate a failing test reproducing the crash:
+
+```bash
+cartograph diagnose --file traceback.txt --scaffold-test
+```
+
+---
+
+## File: diagram.md
+
+# 📊 `cartograph diagram` Cookbook
+
+The `cartograph diagram` command exports **visual architecture diagrams, call graphs, sequence diagrams, and ER schemas** via the pure-Rust Sugiyama layout engine.
+
+## Common Workflows
+
+### 1. Generating Mermaid.js Architecture Diagrams
+
+Generate an architectural overview diagram for documentation:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph diagram --type architecture --format mermaid
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+with cartograph.open() as cg:
+    diagram = cg.diagram(diagram_type="architecture", format="mermaid")
+    print(diagram.content)
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Export architectural call graph -->
+Invoke: `cartograph diagram --symbol "<NAME>" --format mermaid`
+Verify: Review upstream callers and downstream callees visually.
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<architecture_diagram type="callgraph" target="authenticate">
+  <node id="auth" label="authenticate" file="src/auth.rs"/>
+  <node id="login" label="login_handler" file="src/routes/login.rs"/>
+  <edge from="login" to="auth" kind="Calls"/>
+</architecture_diagram>
+```
+```
+````
+
+### 2. Standalone Scalable Vector Graphics (SVG)
+
+Export a standalone SVG file with embedded dark/light themes and open in browser:
+
+```bash
+cartograph diagram --type callgraph --format svg --out callgraph.svg --open
+```
+
+### 3. PR Blast Radius Diff Overlay
+
+Overlay changed files onto the architectural graph:
+
+```bash
+cartograph diagram --branch "origin/main...HEAD" --format svg --out pr_diff.svg
+```
+
+---
+
+## File: extract-logic.md
+
+# 📋 `cartograph extract-logic` Cookbook
+
+The `cartograph extract-logic` command parses AST expressions to **extract domain validation rules, pricing policies, and business constraints**, exporting them as Gherkin BDD scenarios or Decision Tables.
+
+## Common Workflows
+
+### 1. Extract Validation Rules as Gherkin Scenarios
+
+Generate human-readable BDD specifications from validation logic:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph extract-logic --symbol "validate_order" --gherkin
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+with cartograph.open() as cg:
+    logic = cg.extract_logic(symbol="validate_order", format="gherkin")
+    print(logic.content)
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Extract validation rules as Gherkin scenarios -->
+Invoke: `cartograph extract-logic --symbol "validate_order" --gherkin`
+Action: Generate unit tests covering all extracted BDD edge cases.
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<business_rules symbol="validate_order" file="src/order.rs">
+  <rule id="R1" condition="order.total &gt; 1000.0" outcome="require_manager_approval"/>
+  <rule id="R2" condition="user.is_suspended" outcome="reject_transaction"/>
+</business_rules>
+```
+```
+````
+
+### 2. Exporting Markdown Decision Tables
+
+Synthesize tabular business rule logic:
+
+```bash
+cartograph extract-logic --concept "discount" --table
+```
+
+### 3. Business Rule Regression Gate
+
+Detect if a PR accidentally loosens or deletes critical business rules:
+
+```bash
+cartograph extract-logic --branch "origin/main...HEAD" --fail-on-relaxed --fail-on-removed
+```
+
+---
+
+## File: impact.md
+
+# 💥 `cartograph impact` Cookbook
+
+The `cartograph impact` command calculates the **transitive blast radius, affected dependents, and SemVer breaking change risks** of code changes in `<25ms`.
+
+## Common Workflows
+
+### 1. Pre-Edit Blast Radius Calculation
+
+Inspect all upstream callers that depend on a function before modifying its signature:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph impact --symbol "authenticate" --depth 3 --fail-on-breaking
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+with cartograph.open() as cg:
+    impact = cg.impact("authenticate", max_depth=3)
+    print(f"Risk Score: {impact.risk_score}")
+    print(f"Direct Dependents: {len(impact.direct_dependents)}")
+    if impact.has_breaking_changes:
+        raise ValueError("Breaking change detected in core authentication contract!")
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Pre-edit blast radius calculation -->
+Invoke: `cartograph impact --symbol "authenticate" --format xml`
+Verify: Review <blast_radius_analysis> risk_score and breaking attribute before proceeding.
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<blast_radius_analysis root="auth::authenticate" risk_score="0.75" breaking="false">
+  <direct_dependents count="4">
+    <node file="src/routes/login.rs" line="34" symbol="login_handler" depth="1"/>
+    <node file="src/routes/api.rs" line="92" symbol="verify_jwt" depth="1"/>
+  </direct_dependents>
+</blast_radius_analysis>
+```
+```
+````
+
+### 2. CI/CD Gate on Pull Request Diff Range
+
+Ensure no breaking changes are merged into the main branch:
+
+```bash
+cartograph impact --branch "origin/main...HEAD" --fail-on critical
+```
+
+### 3. Speculative Rename / Delete Simulation
+
+Test the architectural consequence of deleting or renaming a symbol without modifying code:
+
+```bash
+cartograph impact --simulate-delete "LegacySessionManager"
+```
+
+---
+
+## File: index.md
+
+# 🛠️ CLI Command Cookbooks
+
+The Cartograph CLI provides 14 specialized commands engineered for sub-millisecond AST intelligence, architectural verification, predictive testing, and autonomous agent workflows.
+
+::::{grid} 1 2 2 2
+:gutter: 3
+
+:::{grid-item-card} 🔍 Core Navigation
+- {doc}`locate`: 1-turn AST symbol search replacing grep
+- {doc}`impact`: Blast-radius and breaking change detection
+- {doc}`test-selector`: Predictive test selection & runner execution
+- {doc}`routes`: Full-stack HTTP route & ORM database mapping
+:::
+
+:::{grid-item-card} 📐 Architecture & Quality
+- {doc}`lint-arch`: Layer boundaries & circular dependency inversion
+- {doc}`complexity`: Cognitive complexity & Danger Zone hotspot heatmap
+- {doc}`deadcode`: Mark-and-sweep reachability & ghost dependency purging
+- {doc}`extract-logic`: Domain business logic & Gherkin extraction
+:::
+
+:::{grid-item-card} 🔬 Diagnostics & Visualization
+- {doc}`ai-review`: Contract-aware PR reviews & executable patch application
+- {doc}`diagnose`: Crash log backward slicing & test reproducer scaffolding
+- {doc}`diagram`: Visual architecture & callgraph diagram exporter
+:::
+
+:::{grid-item-card} 🤖 Agent & Profile Management
+- {doc}`skills`: 1-click agent skill installer & doctor suite
+- {doc}`verify`: Pre-commit closed-loop self-healing verification gate
+- {doc}`config`: cartograph.toml validation & profile management
+:::
+::::
+
+---
+
+## File: lint-arch.md
+
+# 📐 `cartograph lint-arch` Cookbook
+
+The `cartograph lint-arch` command checks **architectural layer boundaries, forbidden dependencies, and circular dependency cycles** in `<10ms`, providing actionable Minimum Feedback Arc Set (MFAS) cut-edge advice.
+
+## Common Workflows
+
+### 1. Strict Boundary & Cycle Enforcement
+
+Run strict architectural validation on the codebase:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph lint-arch --strict --fail-on error
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+with cartograph.open() as cg:
+    report = cg.lint_arch(strict=True)
+    if report.has_violations:
+        print(f"Found {len(report.violations)} architectural boundary violations!")
+        for cycle in report.cycles:
+            print(f"Cycle detected: {' -> '.join(cycle.path)}")
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Validate architectural boundaries -->
+Invoke: `cartograph lint-arch --strict --format xml`
+Action: If circular dependencies are reported, invert the suggested MFAS cut-edge.
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<lint_arch_report status="PASSED" total_cycles="0" boundary_violations="0">
+  <summary layers_enforced="4" audited_modules="38"/>
+</lint_arch_report>
+```
+```
+````
+
+### 2. Exporting to SARIF for GitHub Code Scanning
+
+Export violations formatted as SARIF 2.1.0 for PR annotations:
+
+```bash
+cartograph lint-arch --sarif > results.sarif
+```
+
+### 3. Architecture Preset Templates
+
+Enforce Clean Architecture or Hexagonal Architecture presets:
+
+```bash
+cartograph lint-arch --preset clean-architecture
+```
+
+---
+
+## File: locate.md
+
+# 🔍 `cartograph locate` Cookbook
+
+The `cartograph locate` command performs **surgical 1-turn AST subgraph retrieval** in `<3ms`, eliminating blind, repetitive `grep` and `find` loops.
+
+## Common Workflows
+
+### 1. Rapid Symbol Search
+
+Retrieve a function definition, inlined parameter types, callers, and callees:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph locate "authenticate" --depth 2
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+with cartograph.open() as cg:
+    subgraph = cg.locate("authenticate", max_depth=2)
+    print(f"Root symbol: {subgraph.root.name} in {subgraph.root.file_path}")
+    print(f"Callers: {[c.name for c in subgraph.callers]}")
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Locate target symbol and inlined contracts in 1 turn -->
+Invoke: `cartograph locate "authenticate" --format xml`
+Action: Inspect <code_context> for exact line coordinates and caller contracts.
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<cartograph_context query="authenticate" confidence="0.98">
+  <target id="auth::authenticate" file="src/auth.rs" line="42" kind="function">
+    <signature>pub fn authenticate(user: &amp;str, token: &amp;str) -&gt; Result&lt;Session&gt;</signature>
+  </target>
+  <callers count="3">
+    <node file="src/routes/login.rs" line="18" symbol="login_handler"/>
+  </callers>
+</cartograph_context>
+```
+```
+````
+
+### 2. Filtering by AST Kind and Language
+
+Limit retrieval to interfaces in TypeScript:
+
+```bash
+cartograph locate "UserRepository" --kind interface --lang typescript
+```
+
+### 3. Execution Flow Tracing
+
+Automatically follow calls downstream to database queries:
+
+```bash
+cartograph locate "checkout" --flow --direction out
+```
+
+---
+
+## File: routes.md
+
+# 🌐 `cartograph routes` Cookbook
+
+The `cartograph routes` command traces **full-stack HTTP endpoints** from frontend UI callers through route handlers, middlewares, and ORM models down to SQL database tables.
+
+## Common Workflows
+
+### 1. Endpoint Discovery & Handler Tracing
+
+Inspect an endpoint's complete downstream execution path:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph routes "/api/v1/users/:id" --show-callers
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+with cartograph.open() as cg:
+    routes = cg.routes(pattern="/api/v1/users/:id")
+    for r in routes:
+        print(f"{r.method} {r.path} -> Handler: {r.handler} (Model: {r.orm_model})")
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Trace full-stack route dependencies -->
+Invoke: `cartograph routes "<PATTERN>" --format xml`
+Verify: Review middlewares and downstream database tables touched by endpoint.
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<route_map method="GET" path="/api/v1/users/:id" framework="actix-web">
+  <handler file="src/routes/users.rs" line="54" symbol="get_user_handler"/>
+  <middlewares>
+    <middleware name="JwtAuthMiddleware"/>
+    <middleware name="RateLimiter"/>
+  </middlewares>
+  <orm_model name="User" table="users"/>
+</route_map>
+```
+```
+````
+
+### 2. Inverted ORM Model & Table Lookup
+
+Find all HTTP routes that touch a specific database table:
+
+```bash
+cartograph routes --table "orders" --method POST
+```
+
+### 3. API Contract Breaking Change Gate
+
+Verify route contracts against a base branch:
+
+```bash
+cartograph routes --verify-contracts --branch "origin/main...HEAD" --fail-on-breaking
+```
+
+---
+
+## File: skills.md
+
+# 🤖 `cartograph skills` Cookbook
+
+The `cartograph skills` suite manages **Skills-First AI agent configurations**, enabling 1-click scaffolding, drift detection, environment health doctoring, and productivity ROI analytics.
+
+## Common Workflows
+
+### 1. 1-Click Skill Installation for All Detected IDEs
+
+Auto-detect IDEs (Claude Code, Cursor, Windsurf, Antigravity, Aider) and scaffold `.agent/skills/` in `<15ms`:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph skills install --yes
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+# Skills are managed natively through the CLI binary
+# Invoke via subprocess or CLI in turn-1 agent setup:
+# cartograph skills install --target claude
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Turn-1 Self-Installation -->
+Invoke: `cartograph skills install --yes`
+Outcome: Scaffolds all 10 canonical SKILL.md bundles into .agent/skills/
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<skills_installation status="SUCCESS" installed="10" duration_ms="12">
+  <ide target="claude" file="CLAUDE.md" updated="true"/>
+  <ide target="cursor" file=".cursorrules" updated="true"/>
+</skills_installation>
+```
+```
+````
+
+### 2. Upgrading Installed Skills via 3-Way Merge
+
+Upgrade installed templates to match the running binary without overwriting user rules:
+
+```bash
+cartograph skills update
+```
+
+### 3. Environment Doctor & Auto-Remediation
+
+Diagnose missing skills, stale SQLite database caches, and auto-repair:
+
+```bash
+cartograph skills check --fix
+```
+
+### 4. Telemetry ROI & Productivity Stats
+
+Display tokens saved, full-file reads avoided, and test minutes spared:
+
+```bash
+cartograph skills stats
+```
+
+---
+
+## File: test-selector.md
+
+# 🧪 `cartograph test-selector` Cookbook
+
+The `cartograph test-selector` command maps modified files and symbols to **predictively impacted tests**, running only affected test suites and cutting CI test execution time by **80% to 95%**.
+
+## Common Workflows
+
+### 1. Predictive Test Execution on Staged Changes
+
+Select and run tests covering uncommitted staged edits:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph test-selector --staged --run --bail
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+with cartograph.open() as cg:
+    selection = cg.select_tests(staged=True)
+    print(f"Selected {len(selection.tests)} test cases across {len(selection.files)} files")
+    for cmd in selection.runner_commands:
+        print(f"Execute: {cmd}")
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Run predictive test selection after editing code -->
+Invoke: `cartograph test-selector --staged --run --bail`
+Action: If tests fail, inspect failure trace before attempting commit.
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<test_selection changed_symbols="2" total_tests_selected="5" execution_time_avoided_pct="91.4">
+  <runner command="cargo test --test auth_integration_test"/>
+  <affected_test file="tests/auth_test.rs" line="112" symbol="test_token_expiry"/>
+</test_selection>
+```
+```
+````
+
+### 2. CI/CD Fail-Fast Gate on PR Branch
+
+Enforce that 100% of modified functions have passing test coverage:
+
+```bash
+cartograph test-selector --branch "origin/main...HEAD" --fail-on-untested --run --bail
+```
+
+### 3. Piping Commands to Shell
+
+Output only raw test runner commands for native CI execution:
+
+```bash
+cartograph test-selector --branch "origin/main...HEAD" --command-only | bash
+```
+
+---
+
+## File: verify.md
+
+# ✅ `cartograph verify` Cookbook
+
+The `cartograph verify` command is the **atomic pre-commit closed-loop verification gate**, validating AST syntax, architectural boundaries, SemVer breaking changes, and running predictive tests in `<200ms`.
+
+## Common Workflows
+
+### 1. Pre-Commit Verification Gate
+
+Run atomic checks on uncommitted Git staged modifications:
+
+::::{tab-set}
+:::{tab-item} CLI Command
+:sync: cli
+
+```bash
+cartograph verify --staged --fail-fast
+```
+```
+
+:::{tab-item} Python SDK
+:sync: python
+
+```python
+import cartograph
+
+# cartograph verify is designed for high-speed pre-commit git hooks
+# Run in bash: cartograph verify --staged
+```
+```
+
+:::{tab-item} AI Agent Skill
+:sync: agent
+
+```markdown
+<!-- Agent Directive: Mandatory pre-commit verification -->
+Invoke: `cartograph verify --staged`
+Gate: If status="FAILED", fix reported issues before creating git commit.
+```
+```
+
+:::{tab-item} Structured XML Context
+:sync: xml
+
+```xml
+<verification_gate status="PASSED" duration_ms="184">
+  <check name="ast_syntax" status="OK"/>
+  <check name="architectural_boundaries" status="OK"/>
+  <check name="breaking_changes" status="OK"/>
+  <check name="predictive_tests" passed="4" failed="0"/>
+</verification_gate>
+```
+```
+````
+
+### 2. Base Branch Range Verification
+
+Verify an entire feature branch against `main`:
+
+```bash
+cartograph verify --branch "origin/main...HEAD" --fail-fast
+```
+
+---
+
+## File: action-recipes.md
+
+# 🍳 Multi-Turn Autonomous Agent Action Recipes
+
+Prescriptive, deterministic workflows for autonomous coding agents:
+
+## Recipe 1: Surgical Refactoring
+
+1. **Step 1 (Explore)**: `cartograph locate "<target_symbol>" --format xml`
+2. **Step 2 (Risk Check)**: `cartograph impact --symbol "<target_symbol>" --format xml`
+3. **Step 3 (Edit)**: Perform minimal surgical edit using exact coordinates.
+4. **Step 4 (Verify Gate)**: `cartograph verify --staged`
+5. **Step 5 (Commit)**: Proceed to git commit if `<verification_gate status="PASSED">`.
+
+## Recipe 2: Test-Driven Bugfix
+
+1. **Step 1 (Diagnose)**: `cartograph diagnose --file crash.log --scaffold-test`
+2. **Step 2 (Reproduce)**: Execute generated test reproducer and observe failure.
+3. **Step 3 (Patch)**: Implement minimal fix.
+4. **Step 4 (Predictive Test)**: `cartograph test-selector --staged --run --bail`
+5. **Step 5 (Verify)**: `cartograph verify --staged`
+
+---
+
+## File: antigravity.md
+
+# 🛸 Google Antigravity IDE Integration Guide
+
+Cartograph provides first-class support for the **Google Antigravity IDE** customization system.
+
+## Automated Setup
+
+```bash
+cartograph skills install --target antigravity --yes
+```
+
+## What Gets Configured
+
+- Scaffolds `.agents/skills/cartograph-assistant/SKILL.md` inside the workspace root.
+- Defines standard Antigravity YAML frontmatter, parameter mappings, trigger keywords, and subagent orchestration recipes.
+- Enables autonomous Antigravity agents to execute sub-3ms graph analysis via `run_command`.
+
+---
+
+## File: claude-code.md
+
+# 🧠 Claude Code Integration Guide
+
+Cartograph provides 1-click integration with Anthropic's **Claude Code** CLI tool.
+
+## Automated Setup
+
+Run the 1-click installer:
+
+```bash
+cartograph skills install --target claude --yes
+```
+
+## What Gets Configured
+
+1. **`CLAUDE.md` Guidelines**: Injects natural language intent triggers and tool preferences:
+   ```markdown
+   <!-- CARTOGRAPH SKILLS START -->
+   ## Code Graph & Intelligence Tools
+   Before modifying existing public symbols or investigating errors:
+   - Use `cartograph locate "<query>" --format xml` instead of blind grep loops.
+   - Use `cartograph impact --symbol "<name>" --format xml` before modifying public APIs.
+   - Use `cartograph verify --staged` before creating git commits.
+   <!-- CARTOGRAPH SKILLS END -->
+   ```
+2. **Custom Slash Commands (`.claude/commands/`)**:
+   - `/locate <query>`: Localize AST context in 1 turn.
+   - `/impact <symbol>`: Calculate blast radius.
+   - `/verify`: Run pre-commit closed-loop verification gate.
+   - `/review`: Run contract-aware offline code review.
+
+---
+
+## File: cursor-windsurf.md
+
+# 🖱️ Cursor & Windsurf Integration Guide
+
+Cartograph seamlessly integrates into **Cursor** and **Windsurf Cascade**, directing agents to execute compiled CLI commands rather than reading entire source files into context.
+
+## Automated Setup
+
+```bash
+# For Cursor
+cartograph skills install --target cursor --yes
+
+# For Windsurf
+cartograph skills install --target windsurf --yes
+```
+
+## Cursor Rules Scaffolding
+
+- Writes `.cursorrules` with repository guidance.
+- Scaffolds `.cursor/rules/cartograph.mdc` with glob-matching directives instructing Cursor agent to run `cartograph locate` and `cartograph verify`.
+
+## Windsurf Cascade Scaffolding
+
+- Configures `.windsurfrules` directing Cascade to execute `cartograph locate` and `cartograph test-selector --run` before finalizing edits.
+
+---
+
+## File: index.md
+
+# 🤖 Autonomous AI Agent Integration & Architecture
+
+Cartograph is engineered from the ground up to serve as the definitive software intelligence engine for autonomous coding agents (Claude Code, Cursor, Windsurf, Google Antigravity, Aider, Roo Code, Cline, and OpenHands).
+
+## The Paradigm Shift: "Skills-First" vs "Always-On MCP Daemons"
+
+Traditional AI agent tool architectures rely on Model Context Protocol (MCP) servers or background JSON-RPC daemons. In a workspace with 12 analysis tools, injecting JSON schemas on every conversational turn imposes a **1,500 to 3,000+ token per-turn tax**, burning tens of thousands of tokens per session and introducing daemon connection fragility.
+
+Cartograph solves this with the **"Skills-First" Architecture**:
+- **0 Token Idle Footprint**: Skills are defined as lightweight, standardized `SKILL.md` markdown files in `.agent/skills/`. The agent's base system prompt carries zero token overhead until a skill is triggered.
+- **On-Demand Native CLI Execution (<3ms)**: When triggered, the agent invokes the compiled native binary (`cartograph locate`, `cartograph impact`).
+- **Structured LLM XML Schemas**: Emits exact coordinates (`file="path" line="42" col="5"`) and type signatures, eliminating hallucinations.
+- **Hard Token Ceilings**: Hierarchical AST degradation under `--max-tokens <N>` collapses distant callers while preserving 100% graph topology.
+
+::::{grid} 1 2 2 2
+:gutter: 3
+
+:::{grid-item-card} 📄 AI Endpoints (llms.txt)
+:link: llms-endpoints
+:link-type: doc
+
+Curated llms.txt roadmap (<500 tokens) and stripped single-turn llms-full.txt corpus.
+:::
+
+:::{grid-item-card} 🧠 Claude Code
+:link: claude-code
+:link-type: doc
+
+CLAUDE.md project guidelines and custom slash commands (/locate, /impact, /verify).
+:::
+
+:::{grid-item-card} 🖱️ Cursor & Windsurf
+:link: cursor-windsurf
+:link-type: doc
+
+.cursorrules, .cursor/rules/*.mdc, and .windsurfrules Cascade configuration.
+:::
+
+:::{grid-item-card} 🛸 Google Antigravity
+:link: antigravity
+:link-type: doc
+
+Antigravity IDE custom assistant skill and multi-agent subagent recipes.
+:::
+
+:::{grid-item-card} 🪙 Token Budgeting
+:link: token-budgeting
+:link-type: doc
+
+AST degradation tiers, budget enforcement, and context economization.
+:::
+
+:::{grid-item-card} 📜 XML Schemas
+:link: xml-schemas
+:link-type: doc
+
+Complete schema definitions for <cartograph_context>, <blast_radius_analysis>, and <verification_gate>.
+:::
+::::
+
+---
+
+## File: llms-endpoints.md
+
+# 📄 AI Agent Endpoints (`llms.txt`, `llms-full.txt` & Headless Lookups)
+
+Cartograph provides dedicated endpoints designed specifically for ingestion by Large Language Models and autonomous coding agents.
+
+## 1. `llms.txt` (Curated Token Roadmap)
+
+Hosted at `/llms.txt` on the documentation site:
+- Adheres to the emerging `llms.txt` standard.
+- Delivers an ultra-dense, curated overview of Cartograph's capabilities, CLI syntax, and skills architecture in **<500 tokens**.
+- Ideal for agents to read on turn 1 of an engineering session.
+
+## 2. `llms-full.txt` (Concatenated Corpus)
+
+Hosted at `/llms-full.txt`:
+- Concatenates the entire documentation into a single clean Markdown file.
+- Strips out HTML navigation menus, headers, footers, and interactive web widgets.
+- Preserves code examples, XML schemas, and parameter tables.
+- Enables models with large context windows (128k–1M tokens) to ingest the complete documentation corpus in a single turn.
+
+## 3. Headless CLI Docs Retrieval (`cartograph docs --for-agent`)
+
+Coding agents with terminal execution tools can look up targeted documentation without scraping the web:
+
+```bash
+cartograph docs --for-agent --section impact --max-tokens 500
+```
+
+Emitted output:
+```xml
+<cartograph_docs section="impact" budget="500">
+  <summary>Analyze blast radius, breaking changes, and risk of code modifications in &lt;25ms.</summary>
+  <usage>cartograph impact --symbol &lt;NAME&gt; [--depth &lt;D&gt;] [--fail-on &lt;LEVEL&gt;] [--format xml|json]</usage>
+  <options>
+    <option flag="--symbol" type="string" desc="Target symbol query"/>
+    <option flag="--depth" type="int" default="3" desc="Maximum graph traversal depth"/>
+    <option flag="--verify-semver" type="string" desc="Enforce SemVer policy (patch, minor, major)"/>
+    <option flag="--fail-on" type="string" desc="Fail CI if risk meets threshold (low, medium, high, critical)"/>
+  </options>
+</cartograph_docs>
+```
+
+---
+
+## File: other-agents.md
+
+# 🛠️ Aider, Roo Code, Cline & OpenHands Integration
+
+Cartograph supports the broader autonomous coding agent ecosystem:
+
+## Aider (`.aider.conf.yml`)
+
+Configure Aider to automatically check architectural boundaries and tests:
+
+```yaml
+# .aider.conf.yml
+test-cmd: "cartograph verify --staged"
+```
+
+## Roo Code & Cline (`.roomodes`, `.clinerules`)
+
+Run the automated installer:
+
+```bash
+cartograph skills install --target roo --yes
+cartograph skills install --target cline --yes
+```
+
+Inlines rules instructing the LLM to invoke `cartograph locate` to anchor file edits to exact coordinates.
+
+---
+
+## File: token-budgeting.md
+
+# 🪙 Token Budgeting & Context Economization
+
+Enforce hard token ceilings across any Cartograph command using `--max-tokens <N>`:
+
+```bash
+cartograph locate "authenticate" --max-tokens 1500 --format xml
+```
+
+## Degradation Behavior
+
+1. **Root Definition**: 100% full implementation preserved.
+2. **Inlined Type Contracts**: All parameter and return types preserved.
+3. **Neighbor Callers/Callees**: Function bodies collapsed into typed signatures:
+   ```rust
+   fn verify_token(raw: &str) -> Result<User> /* [34 lines collapsed] */
+   ```
+4. **Extreme Budget Starvation**: If the budget is exhausted, Cartograph preserves the root signature and appends `warning="budget_exhausted"`, never truncating malformed XML tags.
+
+---
+
+## File: xml-schemas.md
+
+# 📜 Structured LLM XML Context Schemas
+
+Cartograph emits unambiguous structured XML tags, establishing clear semantic boundaries that prevent LLM hallucinations.
+
+## 1. `<cartograph_context>` (`locate`)
+
+```xml
+<cartograph_context query="authenticate" confidence="0.98">
+  <target id="auth::authenticate" file="src/auth.rs" line="42" col="1" kind="function">
+    <signature>pub fn authenticate(user: &amp;str, token: &amp;str) -&gt; Result&lt;Session&gt;</signature>
+    <body>... full body snippet ...</body>
+  </target>
+  <callers count="2">
+    <node file="src/routes/login.rs" line="18" symbol="login_handler" signature="fn login_handler(...)"/>
+  </callers>
+</cartograph_context>
+```
+
+## 2. `<blast_radius_analysis>` (`impact`)
+
+```xml
+<blast_radius_analysis root="auth::authenticate" risk_score="0.82" breaking="true">
+  <affected_dependents count="5">
+    <node file="src/routes/login.rs" line="18" symbol="login_handler" impact="direct"/>
+  </affected_dependents>
+</blast_radius_analysis>
+```
+
+## 3. `<verification_gate>` (`verify`)
+
+```xml
+<verification_gate status="PASSED" duration_ms="185">
+  <check name="ast_syntax" status="OK"/>
+  <check name="architectural_boundaries" status="OK"/>
+  <check name="breaking_changes" status="OK"/>
+  <check name="predictive_tests" passed="4" failed="0"/>
+</verification_gate>
+```
+
+---
+
+## File: agent-frameworks.md
+
+# 🤖 AI Agent Framework Integrations (LangChain, LlamaIndex)
+
+Integrate Cartograph directly into multi-agent workflows as a native tool primitive:
+
+## LangChain Tool Integration
+
+```python
+from langchain.tools import tool
+import cartograph
+
+@tool
+def code_graph_locate(symbol: str) -> str:
+    """Locate symbol definition, physical coordinates, and callers in 1 turn."""
+    with cartograph.open() as cg:
+        res = cg.locate(symbol)
+        return f"File: {res.root.file_path}:{res.root.start_line} Callers: {len(res.callers)}"
+
+@tool
+def code_graph_impact(symbol: str) -> str:
+    """Calculate blast radius and breaking change risk score for a symbol."""
+    with cartograph.open() as cg:
+        res = cg.impact(symbol)
+        return f"Risk: {res.risk_score}, Breaking: {res.has_breaking_changes}"
+```
+
+---
+
+## File: arrow-dataframes.md
+
+# ⚡ Zero-Copy Arrow, Polars & Pandas Integration
+
+Traditional Python extensions convert data into lists of dicts, incurring massive CPU serialization overhead. `cartograph` implements the **Apache Arrow C Data Interface** and **PyCapsule protocol** (`__arrow_c_stream__`).
+
+## Export to Polars (<1ms for 100,000 Records)
+
+```python
+import cartograph
+import polars as pl
+
+with cartograph.open() as cg:
+    # Zero-copy conversion directly into Polars DataFrame
+    df_nodes = pl.from_arrow(cg.nodes_arrow())
+    print(df_nodes.schema)
+
+    # Filter most complex functions
+    complex_funcs = (
+        df_nodes
+        .filter(pl.col("kind") == "function")
+        .sort("cognitive_complexity", descending=True)
+        .head(10)
+    )
+    print(complex_funcs.select(["name", "file_path", "cognitive_complexity"]))
+```
+
+## Export to Pandas
+
+```python
+import cartograph
+import pandas as pd
+
+with cartograph.open() as cg:
+    # Direct zero-copy export to Pandas
+    df = cg.to_pandas_nodes()
+    print(df["kind"].value_counts())
+```
+
+---
+
+## File: codegraph-api.md
+
+# 🔌 `CodeGraph` & `AsyncCodeGraph` Lifecycles
+
+The Python SDK exposes two primary interfaces: `CodeGraph` for synchronous code and data science notebooks, and `AsyncCodeGraph` for asynchronous frameworks.
+
+## Synchronous `CodeGraph`
+
+```python
+import cartograph
+
+# Context manager guarantees cleanup
+with cartograph.open(path=".", profile="default") as cg:
+    # 1. Inspect graph scale
+    print(f"Total symbols: {cg.node_count()}, edges: {cg.edge_count()}")
+
+    # 2. Query symbol
+    node = cg.get_symbol("authenticate")
+    print(f"File: {node.file_path}, Line: {node.start_line}")
+
+    # 3. Graph traversal
+    callers = cg.get_callers("authenticate")
+    print(f"Direct callers: {[c.name for c in callers]}")
+```
+
+### GIL Release Mechanics
+Every heavy graph traversal or AST parsing operation invokes Rust's `py.allow_threads()`. Multiple Python worker threads (e.g. in Gunicorn or Celery) can run parallel Cartograph queries without blocking the Python runtime.
+
+## Asynchronous `AsyncCodeGraph`
+
+```python
+import asyncio
+from cartograph.aio import AsyncCodeGraph
+
+async def analyze():
+    async with AsyncCodeGraph.open() as acg:
+        impact = await acg.impact("authenticate")
+        print(f"Risk score: {impact.risk_score}")
+
+asyncio.run(analyze())
+```
+
+---
+
+## File: index.md
+
+# 🐍 Python SDK & Data Science Tutorials
+
+`cartograph` transforms your codebase into an in-memory, high-speed data science asset. This section provides tutorials for software analytics, network graph algorithms, and AI agent tool calling.
+
+::::{grid} 1 2 2 2
+:gutter: 3
+
+:::{grid-item-card} 🔌 CodeGraph API
+:link: codegraph-api
+:link-type: doc
+
+Synchronous and asynchronous CodeGraph lifecycles, context managers, and GIL-release mechanics.
+:::
+
+:::{grid-item-card} ⚡ Zero-Copy Arrow & Polars
+:link: arrow-dataframes
+:link-type: doc
+
+Sub-millisecond columnar export to Polars and Pandas using Apache Arrow PyCapsule protocol.
+:::
+
+:::{grid-item-card} 🕸️ NetworkX Centrality
+:link: networkx-analytics
+:link-type: doc
+
+Codebase graph algorithms: betweenness centrality, PageRank, and Louvain community detection.
+:::
+
+:::{grid-item-card} 📓 Jupyter Notebooks
+:link: jupyter-visualization
+:link-type: doc
+
+Interactive in-cell graph rendering with _repr_html_ and _repr_svg_ hooks.
+:::
+
+:::{grid-item-card} 🤖 Agent Frameworks
+:link: agent-frameworks
+:link-type: doc
+
+Integration with LangChain, LlamaIndex, AutoGen, and CrewAI as native tool-calling primitives.
+:::
+::::
+
+---
+
+## File: jupyter-visualization.md
+
+# 📓 Interactive Jupyter Notebook Visualization
+
+`cartograph` includes native `_repr_html_` and `_repr_svg_` hooks that automatically render rich visual diagrams inside Jupyter Notebook, VS Code, and Google Colab cells.
+
+## Rendering Code Subgraphs in Jupyter
+
+```python
+import cartograph
+
+cg = cartograph.open()
+# Evaluating a diagram object in a notebook cell renders an interactive SVG/HTML diagram!
+cg.diagram(query="authenticate", diagram_type="callgraph")
+```
+
+The cell outputs an interactive, pan-and-zoom SVG diagram with syntax-highlighted node labels and caller/callee edges.
+
+---
+
+## File: networkx-analytics.md
+
+# 🕸️ NetworkX Centrality & Community Detection
+
+Convert any indexed codebase into a `networkx.DiGraph` in 1 line:
+
+```python
+import cartograph
+import networkx as nx
+
+with cartograph.open() as cg:
+    # 1. Export as directed graph
+    g: nx.DiGraph = cg.to_networkx()
+    print(f"Nodes: {g.number_of_nodes()}, Edges: {g.number_of_edges()}")
+
+    # 2. Compute Betweenness Centrality (Find architectural bottlenecks)
+    centrality = nx.betweenness_centrality(g)
+    top_bottlenecks = sorted(centrality.items(), key=lambda x: x[1], reverse=True)[:5]
+    print("Top architectural bottlenecks:")
+    for node, score in top_bottlenecks:
+        print(f"  {node}: {score:.4f}")
+
+    # 3. PageRank (Identify core utility symbols)
+    pagerank = nx.pagerank(g)
+    top_core = sorted(pagerank.items(), key=lambda x: x[1], reverse=True)[:5]
+    print("Top PageRank symbols:")
+    for node, score in top_core:
+        print(f"  {node}: {score:.4f}")
+```
+
+---
+
+## File: github-actions.md
+
+# 🐙 GitHub Actions Quality Gates
+
+Enforce architecture boundaries, dead code bans, and predictive test selection on pull requests:
+
+```yaml
+# .github/workflows/cartograph-gates.yml
+name: Cartograph Quality Gate
+
+on:
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install --path crates/cartograph-cli
+
+      # 1. Index repository graph
+      - name: Index Code Graph
+        run: cartograph index . --json
+
+      # 2. Architectural Boundary & Cycle Gate
+      - name: Architectural Boundary Gate
+        run: cartograph lint-arch --strict --fail-on error
+
+      # 3. Accidental Orphan & Dead Code Gate
+      - name: Dead Code Gate
+        run: cartograph deadcode --branch "origin/${{ github.base_ref }}...HEAD" --fail-on-new-deadcode
+
+      # 4. Predictive Test Selector Gate
+      - name: Predictive Test Selector Gate
+        run: cartograph test-selector --branch "origin/${{ github.base_ref }}...HEAD" --run --bail
+```
+
+---
+
+## File: gitlab-ci.md
+
+# 🦊 GitLab CI Pipeline Configuration
+
+```yaml
+# .gitlab-ci.yml
+stages:
+  - analyze
+
+cartograph_gate:
+  stage: analyze
+  image: rust:latest
+  script:
+    - cargo install --path crates/cartograph-cli
+    - cartograph index .
+    - cartograph lint-arch --strict --fail-on error
+    - cartograph deadcode --fail-on-deadcode
+```
+
+---
+
+## File: index.md
+
+# 🚢 CI/CD & DevOps Automation
+
+Integrate Cartograph quality gates into automated build and deployment pipelines.
+
+::::{grid} 1 2 2 2
+:gutter: 3
+
+:::{grid-item-card} 🐙 GitHub Actions
+:link: github-actions
+:link-type: doc
+
+Automated structural quality gates, branch diff checks, and fail-fast predictive tests.
+:::
+
+:::{grid-item-card} 🦊 GitLab CI
+:link: gitlab-ci
+:link-type: doc
+
+Native containerized pipelines with SQLite caching and architectural gate stages.
+:::
+
+:::{grid-item-card} 🪝 Local Pre-Commit Hooks
+:link: pre-commit
+:link-type: doc
+
+Fast staged verification (<200ms) with .pre-commit-config.yaml preventing bad commits.
+:::
+
+:::{grid-item-card} 🛡️ SARIF & Security Scanning
+:link: sarif-security
+:link-type: doc
+
+Exporting architectural violations to the GitHub Code Scanning security tab.
+:::
+::::
+
+---
+
+## File: pre-commit.md
+
+# 🪝 Local Git Pre-Commit Hooks
+
+Enforce atomic AST syntax and contract checks before developers can commit code:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: cartograph-verify
+        name: Cartograph Pre-Commit Gate
+        entry: cartograph verify --staged --fail-fast
+        language: system
+        pass_filenames: false
+        stages: [commit]
+```
+
+---
+
+## File: sarif-security.md
+
+# 🛡️ SARIF 2.1.0 & GitHub Code Scanning
+
+Export architectural violations and security risks directly into GitHub's Security Code Scanning alert tab:
+
+```bash
+cartograph lint-arch --sarif > results.sarif
+```
+
+Upload in GitHub Actions:
+
+```yaml
+- name: Upload SARIF report
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: results.sarif
+```
+
+---
+
+## File: go.md
+
+# 🐹 Go Language Reference
+
+- **Tree-Sitter Grammar**: `tree-sitter-go`
+- **Supported Versions**: Go 1.18 through 1.23+.
+
+## AST Symbol Extraction
+
+- **Functions & Methods**: Top-level `func` and receiver methods `func (r *Receiver) Method()`.
+- **Structs & Interfaces**: Type declarations and embedded structs.
+- **Implicit Interface Satisfaction**: Evaluates method sets to connect structs to the interfaces they implement.
+- **Packages & Imports**: Resolves package-level symbols and internal package imports.
+
+---
+
+## File: index.md
+
+# 🌐 Polyglot Language Grammar Reference
+
+Cartograph provides first-class AST parsing and cross-file linking across 7 polyglot languages:
+
+::::{grid} 1 2 2 3
+:gutter: 3
+
+:::{grid-item-card} 🦀 Rust
+:link: rust
+:link-type: doc
+
+Rust 2024 traits, impl blocks, macro_rules!, pub(crate) visibility, and modules.
+:::
+
+:::{grid-item-card} 🟨 TypeScript & JS
+:link: typescript-javascript
+:link-type: doc
+
+ESM / CJS, JSX/TSX React components, decorators, interfaces, and type aliases.
+:::
+
+:::{grid-item-card} 🐍 Python
+:link: python
+:link-type: doc
+
+Classes, decorators, async functions, PEP 484 type hints, and dynamic imports.
+:::
+
+:::{grid-item-card} 💎 Ruby
+:link: ruby
+:link-type: doc
+
+Classes, modules, mixins (include/extend), and Rails controller/model conventions.
+:::
+
+:::{grid-item-card} 🐹 Go
+:link: go
+:link-type: doc
+
+Structs, interfaces, implicit interface satisfaction, goroutines, and packages.
+:::
+
+:::{grid-item-card} 🗄️ SQL
+:link: sql
+:link-type: doc
+
+CREATE TABLE, foreign keys, schema migrations, and JOIN queries.
+:::
+
+:::{grid-item-card} 📝 Markdown
+:link: markdown
+:link-type: doc
+
+Headings hierarchy, code block language annotations, and cross-file references.
+:::
+::::
+
+---
+
+## File: markdown.md
+
+# 📝 Markdown Document Reference
+
+- **Tree-Sitter Grammar**: `tree-sitter-markdown`
+
+## AST Symbol Extraction
+
+- **Document Headings**: Extracts `H1` through `H6` hierarchy into document outline nodes.
+- **Code Blocks**: Extracts fenced code blocks with language identifiers.
+- **Cross-References**: Resolves relative file links between markdown documents.
+
+---
+
+## File: python.md
+
+# 🐍 Python Language Reference
+
+- **Tree-Sitter Grammar**: `tree-sitter-python`
+- **Supported Versions**: Python 3.8 through 3.13+.
+
+## AST Symbol Extraction
+
+- **Functions & Methods**: Synchronous `def` and asynchronous `async def`.
+- **Classes**: Class definitions, base classes (`class Sub(Base)`), and metaclasses.
+- **Decorators**: Resolves `@staticmethod`, `@classmethod`, `@property`, and custom route decorators (e.g. `@app.get("/users")`).
+- **Type Hints**: PEP 484 and PEP 526 type annotations.
+
+---
+
+## File: ruby.md
+
+# 💎 Ruby Language Reference
+
+- **Tree-Sitter Grammar**: `tree-sitter-ruby`
+- **Supported Versions**: Ruby 2.7 through 3.3+.
+
+## AST Symbol Extraction
+
+- **Classes & Modules**: `class` definitions, superclasses, and `module` namespaces.
+- **Methods**: Instance methods (`def name`) and singleton/class methods (`def self.name`).
+- **Mixins**: Resolves `include`, `extend`, and `prepend` module mixin relationships.
+- **Rails Conventions**: Routes, active record models, and controller actions.
+
+---
+
+## File: rust.md
+
+# 🦀 Rust Language Reference
+
+- **Tree-Sitter Grammar**: `tree-sitter-rust`
+- **Supported Editions**: Rust 2015, 2018, 2021, and 2024.
+
+## AST Symbol Extraction
+
+- **Functions & Methods**: Extracts `fn`, `async fn`, `const fn`, and `extern "C" fn`.
+- **Traits & Implementations**: Extracts trait definitions and `impl Trait for Struct` blocks, creating direct `Implements` edges.
+- **Enums & Structs**: Captures fields, visibility (`pub`, `pub(crate)`), and derive attributes.
+- **Macros**: Extracts `macro_rules!` definitions and invocations.
+
+---
+
+## File: sql.md
+
+# 🗄️ SQL Grammar Reference
+
+- **Tree-Sitter Grammar**: `tree-sitter-sql`
+- **Supported Dialects**: ANSI SQL, PostgreSQL, SQLite, MySQL.
+
+## AST Symbol Extraction
+
+- **Tables & Views**: `CREATE TABLE` and `CREATE VIEW` statements.
+- **Foreign Keys**: Direct references between tables via `FOREIGN KEY (...) REFERENCES ...`.
+- **Queries & Joins**: Tracks queries touching specific tables for route mapping.
+
+---
+
+## File: typescript-javascript.md
+
+# 🟨 TypeScript & JavaScript Reference
+
+- **Tree-Sitter Grammars**: `tree-sitter-typescript` (TS & TSX), `tree-sitter-javascript`.
+
+## AST Symbol Extraction
+
+- **Modules & Exports**: Handles ESM (`import`/`export`), CommonJS (`require`/`module.exports`), and namespace re-exports.
+- **Classes & Interfaces**: Resolves `implements` and `extends` hierarchies.
+- **React / JSX / TSX**: Recognizes functional React components, hooks (`useState`, `useEffect`), and JSX tag usages.
+- **Type Annotations**: Extracts parameter types and return type annotations.
+
+---
+
