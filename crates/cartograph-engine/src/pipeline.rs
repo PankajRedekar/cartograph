@@ -90,8 +90,8 @@ impl IndexPipeline {
             .par_iter()
             .map(|discovered| {
                 let buf = FileWalker::read_file_bytes(&discovered.absolute_path, mmap_threshold)?;
-                let content = buf.as_str().map_err(EngineError::Utf8)?;
-                let parsed = registry.parse_file(&discovered.relative_path, content, None)?;
+                let content = buf.to_str_lossy();
+                let parsed = registry.parse_file(&discovered.relative_path, &content, None)?;
                 Ok((discovered.clone(), parsed))
             })
             .collect();

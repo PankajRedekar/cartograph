@@ -26,6 +26,13 @@ impl ZeroCopyBuffer {
     pub fn as_str(&self) -> std::result::Result<&str, std::str::Utf8Error> {
         std::str::from_utf8(self.deref())
     }
+
+    pub fn to_str_lossy(&self) -> std::borrow::Cow<'_, str> {
+        match std::str::from_utf8(self.deref()) {
+            Ok(s) => std::borrow::Cow::Borrowed(s),
+            Err(_) => String::from_utf8_lossy(self.deref()),
+        }
+    }
 }
 
 impl Deref for ZeroCopyBuffer {
@@ -171,9 +178,27 @@ impl FileWalker {
             let path_str = path.to_string_lossy();
             let mut excluded = false;
             for pattern in &custom_excludes {
-                if path_str.contains(pattern.as_str()) {
-                    excluded = true;
-                    break;
+                let clean = pattern.trim_matches('/');
+                if clean.contains('/') {
+                    if path_str.contains(clean) {
+                        excluded = true;
+                        break;
+                    }
+                } else {
+                    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if file_name == clean || file_name.ends_with(clean) {
+                        excluded = true;
+                        break;
+                    }
+                    for comp in path.components() {
+                        if comp.as_os_str() == clean {
+                            excluded = true;
+                            break;
+                        }
+                    }
+                    if excluded {
+                        break;
+                    }
                 }
             }
             if excluded {

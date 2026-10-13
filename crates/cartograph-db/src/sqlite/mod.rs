@@ -122,16 +122,18 @@ impl GraphStoreBackend for SqliteBackend {
             CartographError::Transaction(format!("Failed to begin delete transaction: {e}"))
         })?;
 
-        // Delete connected edges for any nodes in this file
+        // Delete connected edges for any nodes in this file using separate indexed statements
         tx.execute(
-            r#"
-            DELETE FROM edges
-            WHERE source_id IN (SELECT id FROM nodes WHERE filepath = ?1)
-               OR target_id IN (SELECT id FROM nodes WHERE filepath = ?1)
-            "#,
+            "DELETE FROM edges WHERE source_id IN (SELECT id FROM nodes WHERE filepath = ?1)",
             params![filepath],
         )
-        .map_err(|e| CartographError::Database(format!("Failed to delete edges for file: {e}")))?;
+        .map_err(|e| CartographError::Database(format!("Failed to delete source edges: {e}")))?;
+
+        tx.execute(
+            "DELETE FROM edges WHERE target_id IN (SELECT id FROM nodes WHERE filepath = ?1)",
+            params![filepath],
+        )
+        .map_err(|e| CartographError::Database(format!("Failed to delete target edges: {e}")))?;
 
         // Delete nodes (triggers will automatically clean up nodes_fts)
         tx.execute("DELETE FROM nodes WHERE filepath = ?1", params![filepath])

@@ -64,8 +64,9 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         );
 
         CREATE TRIGGER IF NOT EXISTS nodes_ai AFTER INSERT ON nodes BEGIN
-            INSERT INTO nodes_fts(id, name, filepath, scope, signature, docstring)
+            INSERT INTO nodes_fts(rowid, id, name, filepath, scope, signature, docstring)
             VALUES (
+                new.rowid,
                 new.id,
                 new.name,
                 new.filepath,
@@ -76,13 +77,14 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         END;
 
         CREATE TRIGGER IF NOT EXISTS nodes_ad AFTER DELETE ON nodes BEGIN
-            DELETE FROM nodes_fts WHERE id = old.id;
+            DELETE FROM nodes_fts WHERE rowid = old.rowid;
         END;
 
         CREATE TRIGGER IF NOT EXISTS nodes_au AFTER UPDATE ON nodes BEGIN
-            DELETE FROM nodes_fts WHERE id = old.id;
-            INSERT INTO nodes_fts(id, name, filepath, scope, signature, docstring)
+            DELETE FROM nodes_fts WHERE rowid = old.rowid;
+            INSERT INTO nodes_fts(rowid, id, name, filepath, scope, signature, docstring)
             VALUES (
+                new.rowid,
                 new.id,
                 new.name,
                 new.filepath,

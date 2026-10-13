@@ -156,10 +156,10 @@ impl FileWatcher {
             return Ok(None); // Unmodified, discard
         }
 
-        let content = buf.as_str().map_err(EngineError::Utf8)?;
+        let content = buf.to_str_lossy();
 
         // Incremental or full parse
-        let parsed = self.registry.parse_file(&rel_path, content, None)?;
+        let parsed = self.registry.parse_file(&rel_path, &content, None)?;
 
         let mut node_ids = Vec::with_capacity(parsed.nodes.len());
         for node in &parsed.nodes {
