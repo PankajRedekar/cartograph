@@ -1,0 +1,25 @@
+# Cartograph
+
+> Ultra-Fast Native AST Code Graph Intelligence Engine & Autonomous AI Agent Architecture
+
+Cartograph parses 7 polyglot languages (Rust, TypeScript/JS, Python, Ruby, Go, SQL, Markdown) into a unified SQLite code graph with sub-millisecond query latency.
+
+## Key Capabilities
+- **cartograph locate**: 1-turn AST subgraph retrieval replacing grep (<3ms).
+- **cartograph impact**: Blast-radius calculation and breaking change detection (<25ms).
+- **cartograph test-selector**: Predictive test selection and execution (<15ms).
+- **cartograph routes**: Full-stack HTTP route and database ORM mapping.
+- **cartograph lint-arch**: Architectural boundary and circular dependency checker.
+- **cartograph complexity**: Cognitive complexity heatmap and God-class detection.
+- **cartograph deadcode**: Mark-and-sweep reachability and dead code purging.
+- **cartograph ai-review**: Contract-aware PR reviews and patch application.
+- **cartograph extract-logic**: Business validation rules & Gherkin extractor.
+- **cartograph diagnose**: Stack trace AST slicer & test reproducer generator.
+- **cartograph diagram**: Visual architecture and callgraph diagram exporter.
+- **cartograph skills**: Multi-IDE agent skills installer (Claude, Cursor, Windsurf, Antigravity).
+- **cartograph verify**: Pre-commit closed-loop self-healing verification gate (<200ms).
+
+## Documentation Links
+- Full Documentation Corpus: /llms-full.txt
+- CLI Reference: /reference/cli/
+- Python SDK Reference: /reference/python/

@@ -1,0 +1,82 @@
+name: Cartograph Documentation Portal
+
+on:
+  push:
+    branches: [ master, main ]
+    tags: [ 'v*' ]
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'crates/**'
+      - 'openspec/**'
+      - '.github/workflows/docs.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  # 1. Verification & Quality Gates
+  verify-docs:
+    name: Docs Build & Linkcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install documentation dependencies
+        run: pip install -r docs/requirements.txt
+
+      - name: Build CLI & generate reference
+        run: |
+          cargo build -p cartograph-cli
+          cargo run -p cartograph-cli -- docs generate-cli
+          python scripts/generate_llms_txt.py
+
+      - name: Verify CLI cookbook snippets against test fixtures
+        run: pytest tests/test_docs_cli.py
+
+      - name: Build documentation (Strict Mode)
+        run: sphinx-build -b html -W --keep-going docs docs/_build/html
+
+      - name: Run Python doctests
+        run: sphinx-build -b doctest docs docs/_build/doctest
+
+      - name: Run linkcheck (Verify no broken links)
+        run: sphinx-build -b linkcheck docs docs/_build/linkcheck
+
+      - name: Generate UNIX man pages
+        run: sphinx-build -b man docs docs/_build/man
+
+      - name: Package Dash/Zeal docset
+        run: python scripts/build_docset.py
+
+      - name: Upload HTML Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: docs/_build/html
+
+  # 2. Deployment to GitHub Pages (Only on master/main)
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    needs: [verify-docs]
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

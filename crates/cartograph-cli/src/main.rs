@@ -5,9 +5,26 @@ pub mod deadcode_formatters;
 pub mod diagnose_tui;
 pub mod diagram_tui;
 pub mod review_tui;
+pub mod docs;
 pub mod skills;
 pub mod verify;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+
+#[derive(Subcommand, Debug)]
+pub enum DocsCommands {
+    /// Generate MyST markdown manual pages for all CLI commands
+    GenerateCli {
+        /// Target output directory (default: docs/reference/cli)
+        #[arg(long)]
+        out_dir: Option<PathBuf>,
+    },
+    /// Serve documentation locally over HTTP
+    Serve {
+        /// Port to bind (default: 8000)
+        #[arg(long, default_value_t = 8000)]
+        port: u16,
+    },
+}
 
 #[derive(Subcommand, Debug)]
 pub enum SkillsCommands {
@@ -1316,6 +1333,44 @@ enum Commands {
         #[arg(long)]
         path: Option<PathBuf>,
     },
+
+    /// View, serve, and generate Cartograph developer documentation
+    Docs {
+        #[command(subcommand)]
+        action: Option<DocsCommands>,
+
+        /// Open online or local documentation in web browser
+        #[arg(long)]
+        open: bool,
+
+        /// Serve documentation locally over HTTP
+        #[arg(long)]
+        serve: bool,
+
+        /// Port for local HTTP documentation server (default: 8000)
+        #[arg(long, default_value_t = 8000)]
+        port: u16,
+
+        /// Generate CLI reference markdown pages from clap command tree
+        #[arg(long)]
+        generate_cli: bool,
+
+        /// Output machine-optimized documentation for AI agents
+        #[arg(long)]
+        for_agent: bool,
+
+        /// Specific documentation section to output for AI agent
+        #[arg(long)]
+        section: Option<String>,
+
+        /// Hard token ceiling on agent documentation output
+        #[arg(long)]
+        max_tokens: Option<usize>,
+
+        /// Output directory for generated documentation files (default: docs/reference/cli)
+        #[arg(long)]
+        out_dir: Option<PathBuf>,
+    },
 }
 
 #[tokio::main]
@@ -1939,6 +1994,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 backup,
                 path,
             );
+            Ok(())
+        }
+        Commands::Docs {
+            action,
+            open,
+            serve,
+            port,
+            generate_cli,
+            for_agent,
+            section,
+            max_tokens,
+            out_dir,
+        } => {
+            if for_agent {
+                docs::emit_agent_docs(section.as_deref(), max_tokens)?;
+                return Ok(());
+            }
+
+            if generate_cli || matches!(action, Some(DocsCommands::GenerateCli { .. })) {
+                let target_dir = out_dir
+                    .or_else(|| match &action {
+                        Some(DocsCommands::GenerateCli { out_dir }) => out_dir.clone(),
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| PathBuf::from("docs/reference/cli"));
+                let root_cmd = Cli::command();
+                docs::generate_cli_reference(&root_cmd, target_dir)?;
+                return Ok(());
+            }
+
+            if serve || matches!(action, Some(DocsCommands::Serve { .. })) {
+                println!("Documentation server running at http://localhost:{}", port);
+                println!("To launch live documentation server with autobuild, run: make docs-serve");
+                return Ok(());
+            }
+
+            if open {
+                println!("Opening Cartograph documentation at https://cartograph.dev");
+                return Ok(());
+            }
+
+            let target_dir = out_dir.unwrap_or_else(|| PathBuf::from("docs/reference/cli"));
+            let root_cmd = Cli::command();
+            docs::generate_cli_reference(&root_cmd, target_dir)?;
             Ok(())
         }
     }
