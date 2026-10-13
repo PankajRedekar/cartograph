@@ -13,6 +13,7 @@ pub mod lint_arch;
 pub mod locate;
 pub mod pipeline;
 pub mod routes;
+pub mod skills;
 pub mod stats;
 pub mod symbol_table;
 pub mod test_selector;
@@ -60,3 +61,9 @@ pub use test_selector::{
     ExecutionSummary, TestExecutor, TestSelector, TestSelectorOptions, TestSelectorOutputFormat,
 };
 pub use watcher::{FileWatcher, WatchEvent, WatcherSettings};
+pub use skills::{
+    CheckStatus, DoctorReport, InstallOptions, InstallReport, RoiStatsReport, SkillDefinition,
+    SkillDoctor, SkillInstaller, SkillPreset, SkillRegistry, SkillUpdateReport, SkillUpdater,
+    TargetIde, TelemetryEvent, TelemetryRecorder, VerificationCheck, VerificationGateEngine,
+    VerificationGateReport,
+};

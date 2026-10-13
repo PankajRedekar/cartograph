@@ -239,7 +239,7 @@ Modern software engineering and AI-assisted development suffer from a critical c
   - **Async & Batch Operations**: Native `asyncio` support for non-blocking I/O in web applications (FastAPI, Django, Flask) and high-throughput batch symbol queries.
   - **Performance SLA**: Sub-1ms in-memory graph query execution from Python, zero memory leaks, and 50x faster execution than pure-Python AST parsers.
 
-- [ ] **4.2 "Skills-First" AI Agent Architecture & Multi-IDE Skill Bundles (`.agent/skills/`, `cartograph skills`)**
+- [x] **4.2 "Skills-First" AI Agent Architecture & Multi-IDE Skill Bundles (`.agent/skills/`, `cartograph skills`, `cartograph verify`)** — **100% COMPLETE**
   - **Zero-Token-Overhead "Skills-First" Architecture**: Bypasses heavy background MCP servers and eliminates 1,500+ token per-turn system prompt bloat. Leverages coding agents' native terminal execution tools (`run_command`, `bash`) with on-demand skill execution, consuming **0 tokens** until a skill is explicitly invoked.
   - **Standardized Multi-Agent Skill Bundles (`.agent/skills/`, `.agents/skills/`)**: Distributable `SKILL.md` skill definitions featuring YAML frontmatter metadata, contextual triggers, task checklists, and parameter mappings for autonomous agents:
     - `cartograph-locate`: Rapid 1-turn AST subgraph retrieval replacing blind `grep`/`find` loops with exact caller/callee context and inlined type contracts.

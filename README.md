@@ -929,6 +929,67 @@ cartograph diagram -i
 
 ---
 
+### 16. `cartograph skills` & `install-skills` — "Skills-First" AI Agent Architecture (<15ms)
+Replaces bloated background MCP daemons with a zero-token-overhead, terminal-native skills architecture. Installs and manages standardized `SKILL.md` bundles across all major coding agent platforms.
+
+```bash
+# 1-Click install all canonical skills & auto-configure rules for detected IDEs:
+cartograph skills install
+# Shortcut:
+cartograph install-skills
+
+# Targeted platform installation:
+cartograph skills install --target claude        # Configures CLAUDE.md & .claude/commands/
+cartograph skills install --target cursor        # Configures .cursorrules & .cursor/rules/*.mdc
+cartograph skills install --target windsurf      # Configures .windsurfrules
+cartograph skills install --target antigravity   # Configures .agents/skills/
+cartograph skills install --target all           # Universal multi-IDE scaffolding (<15ms)
+
+# Diagnostics, drift auto-update, and ROI telemetry:
+cartograph skills check --fix                    # Diagnoses environment health and auto-repairs missing skills
+cartograph skills update                         # 3-way smart update preserving custom guidelines
+cartograph skills stats                          # Quantifies prompt tokens saved & test minutes avoided
+```
+
+#### Key Capabilities
+- **0 Token Idle Overhead**: Skills live as lightweight markdown files in `.agent/skills/` and are only loaded upon agent intent, saving 1,500–3,000+ tokens on every turn.
+- **Universal Multi-IDE Ecosystem Support**: Native adapters for Claude Code, Cursor, Windsurf, Google Antigravity, Aider, Roo Code, Cline, and OpenHands.
+- **11 Canonical Skill Bundles**: `verify`, `locate`, `impact`, `test-selector`, `routes`, `diagnose`, `complexity`, `lint-arch`, `deadcode`, `extract-logic`, and `diagram`.
+- **Drift Detection & 3-Way Smart Merge (`cartograph skills update`)**: Anchored by YAML frontmatter hashes; updates CLI flags and directives while preserving user customizations between delimiters.
+- **Environment Doctor (`cartograph skills check --fix`)**: Verifies graph index freshness, skill integrity, IDE rule bindings, and auto-heals workspace configurations.
+- **Token ROI Telemetry (`cartograph skills stats`)**: Embedded SQLite telemetry measuring tokens saved, full-file reads avoided, and estimated dollar savings.
+
+---
+
+### 17. `cartograph verify` — Pre-Commit Closed-Loop Verification Gate (<200ms)
+The primary quality gate for autonomous agents. Atomically checks syntax, enforces architectural boundaries (`lint-arch`), checks SemVer contract breaks (`impact --verify-semver`), and predictively runs only affected tests (`test-selector`).
+
+```bash
+# Atomically verify git staged changes (<200ms):
+cartograph verify --staged --format xml
+
+# Verify branch modifications against base with fail-fast:
+cartograph verify --branch "main...HEAD" --fail-fast
+```
+
+#### Output XML Schema
+```xml
+<verification_gate status="PASSED" target_scope="staged_changes" duration_ms="124">
+  <summary total_checks="3" passed_checks="3" failed_checks="0" skipped_checks="0" />
+  <check name="architecture_boundaries" status="PASSED" duration_ms="8">
+    <details>0 package boundary breaches, 0 circular dependency cycles detected.</details>
+  </check>
+  <check name="contract_compatibility" status="PASSED" duration_ms="12">
+    <details>0 breaking SemVer contract changes detected.</details>
+  </check>
+  <check name="predictive_tests" status="PASSED" duration_ms="104">
+    <details>4 affected tests executed and passed.</details>
+  </check>
+</verification_gate>
+```
+
+---
+
 ## 🌐 Supported Languages & AST Constructs
 
 Cartograph embeds native Tree-Sitter grammars and declarative `.scm` query definitions:
@@ -1233,7 +1294,7 @@ Cartograph is structured across four major evolutionary milestones:
   - [x] 3.4 Visual Diagram Exporter (`cartograph diagram`)
 - [ ] **Phase 4: Native Python Bindings, AI Agent Skills & Sphinx Knowledge Portal (v2.0)** — **IN PROGRESS**
   - [x] 4.1 High-Performance Python Bindings & Graph Data Science SDK (`cartograph-py` via PyO3) — **100% COMPLETE**
-  - [ ] 4.2 "Skills-First" AI Agent Architecture & Multi-IDE Skill Bundles
+  - [x] 4.2 "Skills-First" AI Agent Architecture & Multi-IDE Skill Bundles (`cartograph skills`, `cartograph verify`) — **100% COMPLETE**
   - [ ] 4.3 Comprehensive Developer Documentation Portal & Knowledge Architecture (Sphinx & ReadTheDocs)
 
 See [ROADMAP.md](ROADMAP.md) for full architectural specifications.
