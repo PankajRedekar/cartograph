@@ -5,7 +5,139 @@ pub mod deadcode_formatters;
 pub mod diagnose_tui;
 pub mod diagram_tui;
 pub mod review_tui;
+pub mod skills;
+pub mod verify;
 use clap::{Parser, Subcommand};
+
+#[derive(Subcommand, Debug)]
+pub enum SkillsCommands {
+    /// List available Cartograph skill templates and installation status
+    List {
+        /// Show only skills currently installed in this repository
+        #[arg(long)]
+        installed: bool,
+
+        /// Output format: text (default), json
+        #[arg(long, default_value = "text")]
+        format: String,
+
+        /// Target workspace directory
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
+
+    /// Install skill definitions and IDE configuration rules
+    Install {
+        /// Target IDE or agent runtime: claude | cursor | windsurf | antigravity | aider | roo | cline | openhands | all
+        #[arg(short, long)]
+        target: Option<String>,
+
+        /// Installation preset: minimal | standard | strict
+        #[arg(short, long, default_value = "standard")]
+        preset: String,
+
+        /// Comma-separated list of specific skills to install
+        #[arg(short, long)]
+        skills: Option<String>,
+
+        /// Install globally to user home directory instead of repository
+        #[arg(short, long)]
+        global: bool,
+
+        /// Overwrite existing skill files and configuration rules
+        #[arg(short, long)]
+        force: bool,
+
+        /// Accept defaults non-interactively (ideal for CI / agent turn-1)
+        #[arg(short, long)]
+        yes: bool,
+
+        /// Force interactive TUI selection wizard
+        #[arg(short, long)]
+        interactive: bool,
+
+        /// Simulate installation and preview file changes without writing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Create .bak backups before editing existing user rules
+        #[arg(long)]
+        backup: bool,
+
+        /// Target workspace directory (default: current directory)
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
+
+    /// Upgrade installed skills to latest Cartograph release (3-way merge)
+    Update {
+        /// Target IDE or agent runtime
+        #[arg(short, long)]
+        target: Option<String>,
+
+        /// Preview template updates and diffs without modifying files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Force overwrite templates, bypassing 3-way smart merge
+        #[arg(short, long)]
+        force: bool,
+
+        /// Target workspace directory (default: current directory)
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
+
+    /// Verify skill health, database freshness, and auto-remediate (alias: doctor)
+    #[command(alias = "doctor")]
+    Check {
+        /// Automatically remediate detected anomalies (re-index, fix skills, rules)
+        #[arg(long)]
+        fix: bool,
+
+        /// Output diagnostic report formatted as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Target workspace directory (default: current directory)
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
+
+    /// Display agent prompt tokens saved, test minutes avoided & ROI
+    Stats {
+        /// Output format: text (default), json, xml
+        #[arg(long, default_value = "text")]
+        format: String,
+
+        /// Filter telemetry stats window (e.g. 24h, 7d, 30d, all)
+        #[arg(long)]
+        since: Option<String>,
+
+        /// Reset local telemetry recording database
+        #[arg(long)]
+        reset: bool,
+
+        /// Target workspace directory (default: current directory)
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
+
+    /// Remove installed Cartograph skills and rule files
+    Uninstall {
+        /// Target IDE to uninstall
+        #[arg(short, long)]
+        target: Option<String>,
+
+        /// Comma-separated list of specific skills to remove
+        #[arg(short, long)]
+        skills: Option<String>,
+
+        /// Target workspace directory (default: current directory)
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "cartograph")]
@@ -1108,6 +1240,82 @@ enum Commands {
         #[arg(short = 'i', long)]
         interactive: bool,
     },
+
+    /// Closed-loop pre-commit verification gate (syntax, arch, impact & tests)
+    Verify {
+        /// Verify Git staged modifications (<200ms)
+        #[arg(long, default_value_t = true)]
+        staged: bool,
+
+        /// Verify modifications against base branch (e.g. main...HEAD)
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Halt immediately upon first failing verification check
+        #[arg(long)]
+        fail_fast: bool,
+
+        /// Output format: xml (default), json, text
+        #[arg(long, default_value = "xml")]
+        format: String,
+
+        /// Target workspace directory (default: current directory)
+        #[arg(long)]
+        path: Option<PathBuf>,
+
+        /// Database profile or SQLite file path
+        #[arg(short, long, default_value = "default")]
+        db: String,
+    },
+
+    /// Manage "Skills-First" AI agent configurations and multi-IDE skill bundles
+    Skills {
+        #[command(subcommand)]
+        action: SkillsCommands,
+    },
+
+    /// 1-click shortcut alias for installing Cartograph skills and configuring IDEs
+    InstallSkills {
+        /// Target IDE or agent runtime: claude | cursor | windsurf | antigravity | aider | roo | cline | openhands | all
+        #[arg(short, long)]
+        target: Option<String>,
+
+        /// Installation preset: minimal | standard | strict
+        #[arg(short, long, default_value = "standard")]
+        preset: String,
+
+        /// Comma-separated list of specific skills to install
+        #[arg(short, long)]
+        skills: Option<String>,
+
+        /// Install globally to user home directory instead of repository
+        #[arg(short, long)]
+        global: bool,
+
+        /// Overwrite existing skill files and configuration rules
+        #[arg(short, long)]
+        force: bool,
+
+        /// Accept defaults non-interactively (ideal for CI / agent turn-1)
+        #[arg(short, long)]
+        yes: bool,
+
+        /// Force interactive TUI selection wizard
+        #[arg(short, long)]
+        interactive: bool,
+
+        /// Simulate installation and preview file changes without writing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Create .bak backups before editing existing user rules
+        #[arg(long)]
+        backup: bool,
+
+        /// Target workspace directory (default: current directory)
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
 }
 
 #[tokio::main]
@@ -1650,6 +1858,88 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 interactive,
             )
             .await
+        }
+        Commands::Verify {
+            staged,
+            branch,
+            fail_fast,
+            format,
+            path,
+            db,
+        } => {
+            verify::handle_verify(staged, branch, fail_fast, format, path, db).await;
+            Ok(())
+        }
+        Commands::Skills { action } => {
+            match action {
+                SkillsCommands::List { installed, format, path } => {
+                    skills::handle_skills_list(installed, format, path);
+                }
+                SkillsCommands::Install {
+                    target,
+                    preset,
+                    skills,
+                    global,
+                    force,
+                    yes,
+                    interactive,
+                    dry_run,
+                    backup,
+                    path,
+                } => {
+                    skills::handle_skills_install(
+                        target,
+                        preset,
+                        skills,
+                        global,
+                        force,
+                        yes,
+                        interactive,
+                        dry_run,
+                        backup,
+                        path,
+                    );
+                }
+                SkillsCommands::Update { target, dry_run, force, path } => {
+                    skills::handle_skills_update(target, dry_run, force, path);
+                }
+                SkillsCommands::Check { fix, json, path } => {
+                    skills::handle_skills_check(fix, json, path);
+                }
+                SkillsCommands::Stats { format, since, reset, path } => {
+                    skills::handle_skills_stats(format, since, reset, path);
+                }
+                SkillsCommands::Uninstall { target, skills, path } => {
+                    skills::handle_skills_uninstall(target, skills, path);
+                }
+            }
+            Ok(())
+        }
+        Commands::InstallSkills {
+            target,
+            preset,
+            skills,
+            global,
+            force,
+            yes,
+            interactive,
+            dry_run,
+            backup,
+            path,
+        } => {
+            skills::handle_skills_install(
+                target,
+                preset,
+                skills,
+                global,
+                force,
+                yes,
+                interactive,
+                dry_run,
+                backup,
+                path,
+            );
+            Ok(())
         }
     }
 }
