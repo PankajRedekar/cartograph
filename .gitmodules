@@ -1,0 +1,3 @@
+[submodule "Formula"]
+	path = Formula
+	url = https://github.com/PankajRedekar/homebrew-cartograph.git
