@@ -67,6 +67,12 @@ jobs:
           name: docs-html
           path: docs/_build/html
 
+      - name: Upload GitHub Pages artifact
+        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html
+
   # 2. Deployment to GitHub Pages (Only on master/main)
   deploy-pages:
     name: Deploy to GitHub Pages
