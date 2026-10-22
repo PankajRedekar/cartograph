@@ -35,16 +35,11 @@ jobs:
 
   macos:
     name: Build macOS Wheels (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-14
     strategy:
       fail-fast: false
       matrix:
         target: [x86_64, aarch64]
-        include:
-          - target: x86_64
-            os: macos-13
-          - target: aarch64
-            os: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: PyO3/maturin-action@v1
