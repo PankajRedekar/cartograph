@@ -55,7 +55,10 @@ impl PyDiagramResult {
                 self.content
             ))
         } else if self.format == "svg" {
-            Some(format!(r#"<div style="max-width: 100%; overflow: auto;">{}</div>"#, self.content))
+            Some(format!(
+                r#"<div style="max-width: 100%; overflow: auto;">{}</div>"#,
+                self.content
+            ))
         } else {
             None
         }

@@ -12,15 +12,37 @@ cargo install cartograph-cli
 
 ## 2. Homebrew (macOS & Linux)
 
+Install via official Tap:
+
 ```bash
 brew tap PankajRedekar/cartograph
 brew install cartograph
 ```
 
-## 3. Python Wheels (PyPI)
+Or once available in `homebrew/core`:
 
 ```bash
-pip install cartograph
+brew install cartograph
+```
+
+## 3. Python Wheels (PyPI)
+
+Install the Python SDK with native AST engine:
+
+```bash
+pip install cartograph-python
+```
+
+Or with Graph Data Science extras:
+
+```bash
+pip install "cartograph-python[all]"
+```
+
+In your Python code:
+
+```python
+import cartograph
 ```
 
 ## 4. Precompiled GitHub Release Binaries

@@ -39,9 +39,18 @@ fn test_cli_diagnose_json_output() {
     let root = dir.path();
 
     // Initialize git repo and files
-    let _ = Command::new("git").current_dir(root).args(["init"]).output();
-    let _ = Command::new("git").current_dir(root).args(["config", "user.name", "Test User"]).output();
-    let _ = Command::new("git").current_dir(root).args(["config", "user.email", "test@example.com"]).output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["init"])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["config", "user.name", "Test User"])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["config", "user.email", "test@example.com"])
+        .output();
 
     let src = root.join("src");
     fs::create_dir_all(&src).unwrap();
@@ -51,8 +60,14 @@ fn test_cli_diagnose_json_output() {
     )
     .unwrap();
 
-    let _ = Command::new("git").current_dir(root).args(["add", "."]).output();
-    let _ = Command::new("git").current_dir(root).args(["commit", "-m", "init"]).output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["add", "."])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["commit", "-m", "init"])
+        .output();
 
     let trace = "Traceback (most recent call last):\n  File \"src/main.py\", line 3, in run\n    print(val.id)\nAttributeError: 'NoneType' object has no attribute 'id'";
 
@@ -75,13 +90,26 @@ fn test_cli_diagnose_file_and_markdown() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    let _ = Command::new("git").current_dir(root).args(["init"]).output();
-    let _ = Command::new("git").current_dir(root).args(["config", "user.name", "Test User"]).output();
-    let _ = Command::new("git").current_dir(root).args(["config", "user.email", "test@example.com"]).output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["init"])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["config", "user.name", "Test User"])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["config", "user.email", "test@example.com"])
+        .output();
 
     let src = root.join("src");
     fs::create_dir_all(&src).unwrap();
-    fs::write(src.join("api.rs"), "pub fn handler() {\n    panic!(\"boom\");\n}\n").unwrap();
+    fs::write(
+        src.join("api.rs"),
+        "pub fn handler() {\n    panic!(\"boom\");\n}\n",
+    )
+    .unwrap();
 
     let crash_file = root.join("crash.log");
     fs::write(
@@ -113,9 +141,18 @@ fn test_cli_diagnose_stdin_pipe() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    let _ = Command::new("git").current_dir(root).args(["init"]).output();
-    let _ = Command::new("git").current_dir(root).args(["config", "user.name", "Test User"]).output();
-    let _ = Command::new("git").current_dir(root).args(["config", "user.email", "test@example.com"]).output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["init"])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["config", "user.name", "Test User"])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["config", "user.email", "test@example.com"])
+        .output();
 
     let trace = "File \"src/app.py\", line 15, in process\n    record = data[0]\nIndexError: list index out of range\n";
 

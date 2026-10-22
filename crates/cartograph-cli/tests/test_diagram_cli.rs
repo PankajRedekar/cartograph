@@ -34,9 +34,18 @@ fn test_cli_diagram_help() {
 }
 
 fn setup_indexed_repo(root: &std::path::Path) {
-    let _ = Command::new("git").current_dir(root).args(["init"]).output();
-    let _ = Command::new("git").current_dir(root).args(["config", "user.name", "Test User"]).output();
-    let _ = Command::new("git").current_dir(root).args(["config", "user.email", "test@example.com"]).output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["init"])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["config", "user.name", "Test User"])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["config", "user.email", "test@example.com"])
+        .output();
 
     let src = root.join("src");
     fs::create_dir_all(&src).unwrap();
@@ -66,8 +75,14 @@ pub fn login(user: &str) -> bool {
     .unwrap();
 
     // Commit files
-    let _ = Command::new("git").current_dir(root).args(["add", "."]).output();
-    let _ = Command::new("git").current_dir(root).args(["commit", "-m", "init"]).output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["add", "."])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(root)
+        .args(["commit", "-m", "init"])
+        .output();
 
     // Index repository
     let index_res = Command::new(cartograph_bin())
@@ -166,5 +181,7 @@ fn test_cli_diagram_out_file() {
     assert!(output.status.success());
     assert!(out_file.exists());
     let content = fs::read_to_string(&out_file).unwrap();
-    assert!(content.contains("flowchart") || content.contains("mermaid") || content.contains("graph"));
+    assert!(
+        content.contains("flowchart") || content.contains("mermaid") || content.contains("graph")
+    );
 }

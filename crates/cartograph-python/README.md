@@ -1,23 +1,23 @@
-# cartograph
+# cartograph-python
 
 > **Ultra-Fast Native AST Code Graph & Graph Data Science SDK**
 
-`cartograph` is the official Python SDK and high-performance PyO3 native extension for Cartograph. It provides sub-millisecond AST code graph queries, blast-radius impact analysis, zero-copy Apache Arrow exports to Polars & Pandas, and seamless conversion to NetworkX & igraph.
+`cartograph-python` is the official Python SDK and high-performance PyO3 native extension for Cartograph. It provides sub-millisecond AST code graph queries, blast-radius impact analysis, zero-copy Apache Arrow exports to Polars & Pandas, and seamless conversion to NetworkX & igraph.
 
 ## Installation
 
 ```bash
 # Core SDK
-pip install cartograph
+pip install cartograph-python
 
 # With all data science dependencies
-pip install "cartograph[all]"
+pip install "cartograph-python[all]"
 
 # Or specific extras:
-pip install "cartograph[polars]"
-pip install "cartograph[networkx]"
-pip install "cartograph[igraph]"
-pip install "cartograph[pandas]"
+pip install "cartograph-python[polars]"
+pip install "cartograph-python[networkx]"
+pip install "cartograph-python[igraph]"
+pip install "cartograph-python[pandas]"
 ```
 
 ## Quickstart

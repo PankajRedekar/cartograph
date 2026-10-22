@@ -1,9 +1,9 @@
-use std::path::PathBuf;
-use colored::Colorize;
 use cartograph_engine::skills::{
-    detect_ides, InstallOptions, SkillDoctor, SkillInstaller, SkillPreset, SkillRegistry,
-    SkillUpdater, TargetIde, TelemetryRecorder,
+    InstallOptions, SkillDoctor, SkillInstaller, SkillPreset, SkillRegistry, SkillUpdater,
+    TargetIde, TelemetryRecorder, detect_ides,
 };
+use colored::Colorize;
+use std::path::PathBuf;
 
 pub fn handle_skills_list(installed: bool, format: String, path: Option<PathBuf>) {
     let root = path.unwrap_or_else(|| PathBuf::from("."));
@@ -27,12 +27,15 @@ pub fn handle_skills_list(installed: bool, format: String, path: Option<PathBuf>
                 })
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&output).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&output).unwrap_or_default()
+        );
         return;
     }
 
     println!("\n{}", "🤖 Cartograph Canonical Agent Skills:".bold());
-    println!("{:<26} {:<10} {}", "SKILL ID", "STATUS", "DESCRIPTION");
+    println!("{:<26} {:<10} DESCRIPTION", "SKILL ID", "STATUS");
     println!("{}", "─".repeat(80));
 
     for s in all {
@@ -52,6 +55,7 @@ pub fn handle_skills_list(installed: bool, format: String, path: Option<PathBuf>
     println!();
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_skills_install(
     target: Option<String>,
     preset_str: String,
@@ -70,21 +74,30 @@ pub fn handle_skills_install(
     let detected = detect_ides(&root);
 
     if interactive && !yes {
-        println!("{}", "┌────────────────────────────────────────────────────────────────────────┐".cyan());
-        println!("{}", "│             🤖 Cartograph Skills Installer — Interactive Setup         │".cyan());
-        println!("{}", "└────────────────────────────────────────────────────────────────────────┘".cyan());
+        println!(
+            "{}",
+            "┌────────────────────────────────────────────────────────────────────────┐".cyan()
+        );
+        println!(
+            "{}",
+            "│             🤖 Cartograph Skills Installer — Interactive Setup         │".cyan()
+        );
+        println!(
+            "{}",
+            "└────────────────────────────────────────────────────────────────────────┘".cyan()
+        );
         println!("Detected IDEs: {:?}", detected);
     }
 
     let target_ide = if let Some(ref t) = target {
         t.parse::<TargetIde>().unwrap_or(TargetIde::All)
-    } else if !detected.is_empty() {
-        TargetIde::All
     } else {
         TargetIde::All
     };
 
-    let preset = preset_str.parse::<SkillPreset>().unwrap_or(SkillPreset::Standard);
+    let preset = preset_str
+        .parse::<SkillPreset>()
+        .unwrap_or(SkillPreset::Standard);
 
     let specific_skills = skills_csv.map(|s| {
         s.split(',')
@@ -119,7 +132,12 @@ pub fn handle_skills_install(
 
     match SkillInstaller::install(&options) {
         Ok(report) => {
-            println!("\n{}", "✨ Cartograph Skills installed successfully!".green().bold());
+            println!(
+                "\n{}",
+                "✨ Cartograph Skills installed successfully!"
+                    .green()
+                    .bold()
+            );
             println!("Target platform: {}", report.target);
             println!("Scaffolded skills ({}):", report.skills_written.len());
             for p in &report.skills_written {
@@ -152,7 +170,10 @@ pub fn handle_skills_update(
         Ok(report) => {
             if dry_run {
                 println!("{}", "🔍 Dry-run update preview:".yellow().bold());
-                println!("Drifted skills to update ({}):", report.updated_skills.len());
+                println!(
+                    "Drifted skills to update ({}):",
+                    report.updated_skills.len()
+                );
                 for s in &report.updated_skills {
                     println!("  • {}", s.yellow());
                 }
@@ -166,7 +187,10 @@ pub fn handle_skills_update(
                     }
                 }
                 if !report.preserved_user_customizations.is_empty() {
-                    println!("Preserved user customizations in ({}):", report.preserved_user_customizations.len());
+                    println!(
+                        "Preserved user customizations in ({}):",
+                        report.preserved_user_customizations.len()
+                    );
                     for s in &report.preserved_user_customizations {
                         println!("  [✔] {}", s.magenta());
                     }
@@ -186,18 +210,46 @@ pub fn handle_skills_check(fix: bool, json: bool, path: Option<PathBuf>) {
     let report = SkillDoctor::diagnose(&root, fix);
 
     if json {
-        println!("{}", serde_json::to_string_pretty(&report).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).unwrap_or_default()
+        );
         return;
     }
 
     println!("\n{}", "🩺 Cartograph Skills & Environment Doctor:".bold());
-    println!(" • Git Repository:         {}", if report.is_git_repo { "YES".green() } else { "NO".yellow() });
-    println!(" • Graph Database:         {}", if report.is_indexed { format!("YES ({} nodes, {} edges)", report.index_node_count, report.index_edge_count).green() } else { "NOT FOUND".yellow() });
-    println!(" • Installed Skills:       {}", format!("{} skill(s)", report.installed_skills_count).cyan());
+    println!(
+        " • Git Repository:         {}",
+        if report.is_git_repo {
+            "YES".green()
+        } else {
+            "NO".yellow()
+        }
+    );
+    println!(
+        " • Graph Database:         {}",
+        if report.is_indexed {
+            format!(
+                "YES ({} nodes, {} edges)",
+                report.index_node_count, report.index_edge_count
+            )
+            .green()
+        } else {
+            "NOT FOUND".yellow()
+        }
+    );
+    println!(
+        " • Installed Skills:       {}",
+        format!("{} skill(s)", report.installed_skills_count).cyan()
+    );
     println!(" • Detected IDEs:          {:?}", report.detected_ides);
 
     if !report.drifted_skills.is_empty() {
-        println!(" • Drifted Skills ({}):   {:?}", report.drifted_skills.len(), report.drifted_skills);
+        println!(
+            " • Drifted Skills ({}):   {:?}",
+            report.drifted_skills.len(),
+            report.drifted_skills
+        );
     }
 
     if !report.warnings.is_empty() {
@@ -216,7 +268,12 @@ pub fn handle_skills_check(fix: bool, json: bool, path: Option<PathBuf>) {
     println!();
 }
 
-pub fn handle_skills_stats(format: String, since: Option<String>, reset: bool, path: Option<PathBuf>) {
+pub fn handle_skills_stats(
+    format: String,
+    since: Option<String>,
+    reset: bool,
+    path: Option<PathBuf>,
+) {
     let root = path.unwrap_or_else(|| PathBuf::from("."));
 
     if reset {
@@ -224,7 +281,10 @@ pub fn handle_skills_stats(format: String, since: Option<String>, reset: bool, p
             eprintln!("{} {}", "❌ Error resetting telemetry:".red(), e);
             std::process::exit(1);
         }
-        println!("{}", "✨ Local telemetry database reset successfully.".green());
+        println!(
+            "{}",
+            "✨ Local telemetry database reset successfully.".green()
+        );
         return;
     }
 
@@ -241,7 +301,11 @@ pub fn handle_skills_stats(format: String, since: Option<String>, reset: bool, p
     }
 }
 
-pub fn handle_skills_uninstall(target: Option<String>, skills: Option<String>, path: Option<PathBuf>) {
+pub fn handle_skills_uninstall(
+    target: Option<String>,
+    skills: Option<String>,
+    path: Option<PathBuf>,
+) {
     let root = path.unwrap_or_else(|| PathBuf::from("."));
 
     let target_ide = target.map(|t| t.parse::<TargetIde>().unwrap_or(TargetIde::All));
@@ -254,7 +318,12 @@ pub fn handle_skills_uninstall(target: Option<String>, skills: Option<String>, p
 
     match SkillInstaller::uninstall(&root, target_ide, specific_skills) {
         Ok(removed) => {
-            println!("{}", "🗑️  Cartograph Skills uninstalled successfully:".yellow().bold());
+            println!(
+                "{}",
+                "🗑️  Cartograph Skills uninstalled successfully:"
+                    .yellow()
+                    .bold()
+            );
             for p in removed {
                 println!("  [-] {}", p.display().to_string().dimmed());
             }

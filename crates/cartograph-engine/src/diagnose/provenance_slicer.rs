@@ -102,9 +102,10 @@ impl ProvenanceSlicer {
             if let Some(caps) = attr_re.captures(crash_message) {
                 let attr = caps.get(1)?.as_str();
                 if let Some(snippet) = &leaf.code_snippet
-                    && let Some(var) = Self::find_receiver_before_attribute(snippet, attr) {
-                        return Some(var);
-                    }
+                    && let Some(var) = Self::find_receiver_before_attribute(snippet, attr)
+                {
+                    return Some(var);
+                }
             }
         }
 
@@ -114,18 +115,20 @@ impl ProvenanceSlicer {
             if let Some(caps) = prop_re.captures(crash_message) {
                 let prop = caps.get(1)?.as_str();
                 if let Some(snippet) = &leaf.code_snippet
-                    && let Some(var) = Self::find_receiver_before_attribute(snippet, prop) {
-                        return Some(var);
-                    }
+                    && let Some(var) = Self::find_receiver_before_attribute(snippet, prop)
+                {
+                    return Some(var);
+                }
             }
         }
 
         // 3. Rust: Option::unwrap() on None
         if (crash_message.contains("Option::unwrap") || crash_message.contains("unwrap()"))
             && let Some(snippet) = &leaf.code_snippet
-                && let Some(var) = Self::find_receiver_before_attribute(snippet, "unwrap") {
-                    return Some(var);
-                }
+            && let Some(var) = Self::find_receiver_before_attribute(snippet, "unwrap")
+        {
+            return Some(var);
+        }
 
         // 4. Fallback: parse snippet for first identifier
         if let Some(snippet) = &leaf.code_snippet {
@@ -142,12 +145,16 @@ impl ProvenanceSlicer {
     }
 
     fn find_receiver_before_attribute(snippet: &str, attr: &str) -> Option<String> {
-        let pattern = format!(r#"([a-zA-Z_][a-zA-Z0-9_]*)\.{}|\b([a-zA-Z_][a-zA-Z0-9_]*)\["#, regex::escape(attr));
+        let pattern = format!(
+            r#"([a-zA-Z_][a-zA-Z0-9_]*)\.{}|\b([a-zA-Z_][a-zA-Z0-9_]*)\["#,
+            regex::escape(attr)
+        );
         let re = Regex::new(&pattern).ok()?;
         if let Some(caps) = re.captures(snippet)
-            && let Some(m) = caps.get(1).or_else(|| caps.get(2)) {
-                return Some(m.as_str().to_string());
-            }
+            && let Some(m) = caps.get(1).or_else(|| caps.get(2))
+        {
+            return Some(m.as_str().to_string());
+        }
         None
     }
 
@@ -170,7 +177,10 @@ impl ProvenanceSlicer {
             if idx < lines.len() {
                 let line = lines[idx].trim();
                 if let Some(caps) = assign_re.captures(line) {
-                    let rhs = caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
+                    let rhs = caps
+                        .get(1)
+                        .map(|m| m.as_str().to_string())
+                        .unwrap_or_default();
                     return Some((idx, line.to_string(), rhs));
                 }
             }

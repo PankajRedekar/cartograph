@@ -47,19 +47,27 @@ impl PatchSynthesizer {
                 format!("Add defensive guard to prevent NoneType dereference on `{var}`"),
             ),
             ("python", FaultCategory::MissingGuard) => (
-                format!("{indent}if '{var}' not in payload:\n{indent}    return None\n{original_line}"),
+                format!(
+                    "{indent}if '{var}' not in payload:\n{indent}    return None\n{original_line}"
+                ),
                 format!("Ensure dictionary key `{var}` exists before access"),
             ),
             ("rust", FaultCategory::NullDeref) => (
-                format!("{indent}let Some({var}) = {var} else {{\n{indent}    return Ok(Default::default());\n{indent}}};\n{original_line}"),
+                format!(
+                    "{indent}let Some({var}) = {var} else {{\n{indent}    return Ok(Default::default());\n{indent}}};\n{original_line}"
+                ),
                 format!("Safely unwrap Option `{var}` using let-else guard to prevent panic"),
             ),
             ("typescript" | "javascript", FaultCategory::NullDeref) => (
-                format!("{indent}if (!{var}) {{\n{indent}    return undefined;\n{indent}}}\n{original_line}"),
+                format!(
+                    "{indent}if (!{var}) {{\n{indent}    return undefined;\n{indent}}}\n{original_line}"
+                ),
                 format!("Add null check for `{var}` before property access"),
             ),
             ("go", FaultCategory::NullDeref) => (
-                format!("{indent}if {var} == nil {{\n{indent}    return nil, fmt.Errorf(\"{var} cannot be nil\")\n{indent}}}\n{original_line}"),
+                format!(
+                    "{indent}if {var} == nil {{\n{indent}    return nil, fmt.Errorf(\"{var} cannot be nil\")\n{indent}}}\n{original_line}"
+                ),
                 format!("Add nil check for `{var}` before dereference"),
             ),
             _ => (
@@ -95,7 +103,11 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let file_path = temp.path().join("src/repo.py");
         fs::create_dir_all(file_path.parent().unwrap()).unwrap();
-        fs::write(&file_path, "def get_user(id):\n    user = db.find(id)\n    return user.name\n").unwrap();
+        fs::write(
+            &file_path,
+            "def get_user(id):\n    user = db.find(id)\n    return user.name\n",
+        )
+        .unwrap();
 
         let synth = PatchSynthesizer::new(temp.path().to_path_buf());
         let candidate = FaultCandidate {
@@ -126,7 +138,12 @@ mod tests {
             language: "python".to_string(),
         };
 
-        let fix = synth.synthesize_fix(&candidate, &frame, FaultCategory::NullDeref, "AttributeError");
+        let fix = synth.synthesize_fix(
+            &candidate,
+            &frame,
+            FaultCategory::NullDeref,
+            "AttributeError",
+        );
         assert!(fix.is_some());
         let f = fix.unwrap();
         assert!(f.replacement_code.contains("if user is None:"));

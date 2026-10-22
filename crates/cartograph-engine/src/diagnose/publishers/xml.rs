@@ -34,7 +34,10 @@ impl XmlPublisher {
 
         if let Some(fix) = &report.suggested_fix {
             xml.push_str("  <suggested_patch>\n");
-            xml.push_str(&format!("    <diff><![CDATA[\n{}\n]]></diff>\n", fix.unified_diff_patch));
+            xml.push_str(&format!(
+                "    <diff><![CDATA[\n{}\n]]></diff>\n",
+                fix.unified_diff_patch
+            ));
             xml.push_str("  </suggested_patch>\n");
         }
 

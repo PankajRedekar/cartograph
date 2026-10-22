@@ -246,13 +246,13 @@ impl StructuralGates {
         }) = engine.run(opts).await
         {
             for item in delta.newly_introduced {
-                    let finding_id = ContractAnalyzer::compute_finding_id(
-                        &item.filepath,
-                        item.start_line as usize,
-                        FindingCategory::DeadCode,
-                        &format!("deadcode_{}", item.name),
-                    );
-                    findings.push(ReviewFinding {
+                let finding_id = ContractAnalyzer::compute_finding_id(
+                    &item.filepath,
+                    item.start_line as usize,
+                    FindingCategory::DeadCode,
+                    &format!("deadcode_{}", item.name),
+                );
+                findings.push(ReviewFinding {
                         id: finding_id,
                         category: FindingCategory::DeadCode,
                         severity: FindingSeverity::Warning,
@@ -274,8 +274,8 @@ impl StructuralGates {
                         is_acknowledged: false,
                         ack_reason: None,
                     });
-                }
             }
+        }
         findings
     }
 }

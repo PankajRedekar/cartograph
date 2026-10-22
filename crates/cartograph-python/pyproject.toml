@@ -3,7 +3,7 @@ requires = ["maturin>=1.5,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "cartograph"
+name = "cartograph-python"
 version = "0.2.0"
 description = "Ultra-Fast Native AST Code Graph & Graph Data Science SDK"
 authors = [{ name = "Pankaj Redekar" }]
@@ -27,6 +27,12 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/PankajRedekar/cartograph"
+Documentation = "https://github.com/PankajRedekar/cartograph#readme"
+Repository = "https://github.com/PankajRedekar/cartograph"
+"Bug Tracker" = "https://github.com/PankajRedekar/cartograph/issues"
 
 [project.optional-dependencies]
 networkx = ["networkx>=3.0"]

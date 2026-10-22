@@ -22,7 +22,9 @@ impl DiagnoseTui {
         out.push_str(&format!(
             "│ {:<left_w$} │ {:<right_w$} │\n",
             "TOPOLOGICAL FAILURE CASCADE (LEFT PANE)".bold().white(),
-            "AST CONTEXT & REMEDIATION DRAWER (RIGHT PANE)".bold().white(),
+            "AST CONTEXT & REMEDIATION DRAWER (RIGHT PANE)"
+                .bold()
+                .white(),
             left_w = left_width - 1,
             right_w = right_width - 1
         ));
@@ -134,10 +136,7 @@ impl DiagnoseTui {
                 9 => {
                     if let Some(test) = &report.regression_test {
                         truncate_or_pad(
-                            &format!(
-                                "Regression Test: {} ({})",
-                                test.test_name, test.framework
-                            ),
+                            &format!("Regression Test: {} ({})", test.test_name, test.framework),
                             right_width,
                         )
                     } else {

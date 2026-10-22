@@ -14,13 +14,19 @@ impl SequenceDiagramExtractor {
         options: &DiagramOptions,
     ) -> Result<DiagramGraph> {
         let query = options.query.as_deref().unwrap_or("POST /api/v1/checkout");
-        let mut graph = DiagramGraph::new(format!("Sequence Diagram: {query}"), DiagramType::Sequence);
+        let mut graph =
+            DiagramGraph::new(format!("Sequence Diagram: {query}"), DiagramType::Sequence);
 
         // Standard sequence participants
-        let client_node = DiagramNode::new("actor:client", "Client (Browser/App)", NodeKind::Component);
+        let client_node =
+            DiagramNode::new("actor:client", "Client (Browser/App)", NodeKind::Component);
         let router_node = DiagramNode::new("comp:router", "Router / Gateway", NodeKind::Component);
         let auth_node = DiagramNode::new("comp:auth", "AuthGuard Middleware", NodeKind::Component);
-        let controller_node = DiagramNode::new("comp:controller", "Endpoint Controller", NodeKind::Component);
+        let controller_node = DiagramNode::new(
+            "comp:controller",
+            "Endpoint Controller",
+            NodeKind::Component,
+        );
         let service_node = DiagramNode::new("comp:service", "Domain Service", NodeKind::Component);
         let db_node = DiagramNode::new("comp:database", "Database / Storage", NodeKind::Model);
 

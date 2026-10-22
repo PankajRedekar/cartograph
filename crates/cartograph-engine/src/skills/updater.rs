@@ -1,8 +1,8 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 use crate::skills::registry::{SkillDefinition, SkillRegistry};
 use crate::skills::template::TemplateEngine;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillUpdateReport {
@@ -42,7 +42,8 @@ impl SkillUpdater {
 
     /// Checks if an installed skill has drifted from current binary canonical definition.
     pub fn is_drifted(installed_content: &str, canonical: &SkillDefinition) -> bool {
-        let installed_version = Self::parse_frontmatter_field(installed_content, "cartograph_version");
+        let installed_version =
+            Self::parse_frontmatter_field(installed_content, "cartograph_version");
         let installed_hash = Self::parse_frontmatter_field(installed_content, "content_hash");
 
         let version_mismatch = match installed_version {
@@ -76,7 +77,11 @@ impl SkillUpdater {
                     if path.is_dir() {
                         let skill_file = path.join("SKILL.md");
                         if skill_file.exists() {
-                            let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                            let name = path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string();
                             result.push((name, skill_file));
                         }
                     }
@@ -92,12 +97,11 @@ impl SkillUpdater {
         let mut drifted = Vec::new();
 
         for (id, path) in installed {
-            if let Some(canonical) = SkillRegistry::get_skill(&id) {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    if Self::is_drifted(&content, &canonical) {
-                        drifted.push(id);
-                    }
-                }
+            if let Some(canonical) = SkillRegistry::get_skill(&id)
+                && let Ok(content) = fs::read_to_string(&path)
+                && Self::is_drifted(&content, &canonical)
+            {
+                drifted.push(id);
             }
         }
         drifted
@@ -130,7 +134,8 @@ impl SkillUpdater {
                         canonical.template_content.to_string()
                     };
 
-                    TemplateEngine::write_file_atomic(&path, &new_content).map_err(|e| e.to_string())?;
+                    TemplateEngine::write_file_atomic(&path, &new_content)
+                        .map_err(|e| e.to_string())?;
                 }
 
                 updated.push(id);

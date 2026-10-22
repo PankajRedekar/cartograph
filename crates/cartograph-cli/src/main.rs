@@ -4,8 +4,8 @@ mod commands;
 pub mod deadcode_formatters;
 pub mod diagnose_tui;
 pub mod diagram_tui;
-pub mod review_tui;
 pub mod docs;
+pub mod review_tui;
 pub mod skills;
 pub mod verify;
 use clap::{CommandFactory, Parser, Subcommand};
@@ -1927,7 +1927,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Skills { action } => {
             match action {
-                SkillsCommands::List { installed, format, path } => {
+                SkillsCommands::List {
+                    installed,
+                    format,
+                    path,
+                } => {
                     skills::handle_skills_list(installed, format, path);
                 }
                 SkillsCommands::Install {
@@ -1955,16 +1959,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         path,
                     );
                 }
-                SkillsCommands::Update { target, dry_run, force, path } => {
+                SkillsCommands::Update {
+                    target,
+                    dry_run,
+                    force,
+                    path,
+                } => {
                     skills::handle_skills_update(target, dry_run, force, path);
                 }
                 SkillsCommands::Check { fix, json, path } => {
                     skills::handle_skills_check(fix, json, path);
                 }
-                SkillsCommands::Stats { format, since, reset, path } => {
+                SkillsCommands::Stats {
+                    format,
+                    since,
+                    reset,
+                    path,
+                } => {
                     skills::handle_skills_stats(format, since, reset, path);
                 }
-                SkillsCommands::Uninstall { target, skills, path } => {
+                SkillsCommands::Uninstall {
+                    target,
+                    skills,
+                    path,
+                } => {
                     skills::handle_skills_uninstall(target, skills, path);
                 }
             }
@@ -2026,7 +2044,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if serve || matches!(action, Some(DocsCommands::Serve { .. })) {
                 println!("Documentation server running at http://localhost:{}", port);
-                println!("To launch live documentation server with autobuild, run: make docs-serve");
+                println!(
+                    "To launch live documentation server with autobuild, run: make docs-serve"
+                );
                 return Ok(());
             }
 

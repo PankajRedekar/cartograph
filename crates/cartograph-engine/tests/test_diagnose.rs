@@ -9,10 +9,10 @@ use cartograph_core::config::DiagnoseConfig;
 use cartograph_core::diagnose::{FaultCategory, FaultRole};
 use cartograph_core::model::{Edge, EdgeKind, Node, NodeKind};
 use cartograph_db::memory::MemoryBackend;
+use cartograph_engine::diagnose::DiagnoseEngine;
 use cartograph_engine::diagnose::publishers::{
     JsonPublisher, MarkdownPublisher, SarifPublisher, TerminalPublisher, XmlPublisher,
 };
-use cartograph_engine::diagnose::DiagnoseEngine;
 
 fn make_node(id: &str, name: &str, kind: NodeKind, file: &str, line: u32) -> Node {
     Node {
@@ -33,9 +33,18 @@ fn make_node(id: &str, name: &str, kind: NodeKind, file: &str, line: u32) -> Nod
 }
 
 fn init_git_repo(path: &Path) {
-    let _ = Command::new("git").current_dir(path).args(["init"]).output();
-    let _ = Command::new("git").current_dir(path).args(["config", "user.name", "Test User"]).output();
-    let _ = Command::new("git").current_dir(path).args(["config", "user.email", "test@example.com"]).output();
+    let _ = Command::new("git")
+        .current_dir(path)
+        .args(["init"])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(path)
+        .args(["config", "user.name", "Test User"])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(path)
+        .args(["config", "user.email", "test@example.com"])
+        .output();
 }
 
 #[tokio::test]
@@ -62,8 +71,14 @@ async fn test_end_to_end_python_traceback_diagnosis() {
     .unwrap();
 
     // Commit files
-    let _ = Command::new("git").current_dir(repo_root).args(["add", "."]).output();
-    let _ = Command::new("git").current_dir(repo_root).args(["commit", "-m", "Initial commit"]).output();
+    let _ = Command::new("git")
+        .current_dir(repo_root)
+        .args(["add", "."])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(repo_root)
+        .args(["commit", "-m", "Initial commit"])
+        .output();
 
     let backend = Arc::new(MemoryBackend::new());
     let repo_node = make_node(
@@ -116,7 +131,11 @@ AttributeError: 'NoneType' object has no attribute 'name'
     let report = engine.run_diagnose(trace).await.unwrap();
 
     assert_eq!(report.crash_type, "AttributeError");
-    assert!(report.crash_message.contains("'NoneType' object has no attribute 'name'"));
+    assert!(
+        report
+            .crash_message
+            .contains("'NoneType' object has no attribute 'name'")
+    );
     assert_eq!(report.fault_category, FaultCategory::NullDeref);
     assert!(!report.candidates.is_empty());
 
@@ -127,7 +146,10 @@ AttributeError: 'NoneType' object has no attribute 'name'
     // Verify backward def-use provenance
     let prov = report.provenance.expect("Expected provenance slice");
     assert_eq!(prov.variable_name, "user");
-    assert!(prov.origin_file == Path::new("src/order.py") || prov.origin_file == Path::new("src/repo.py"));
+    assert!(
+        prov.origin_file == Path::new("src/order.py")
+            || prov.origin_file == Path::new("src/repo.py")
+    );
 
     // Verify suggested patch
     let fix = report.suggested_fix.expect("Expected suggested fix");
@@ -157,8 +179,14 @@ async fn test_rust_panic_unwrap_diagnosis() {
     )
     .unwrap();
 
-    let _ = Command::new("git").current_dir(repo_root).args(["add", "."]).output();
-    let _ = Command::new("git").current_dir(repo_root).args(["commit", "-m", "add service"]).output();
+    let _ = Command::new("git")
+        .current_dir(repo_root)
+        .args(["add", "."])
+        .output();
+    let _ = Command::new("git")
+        .current_dir(repo_root)
+        .args(["commit", "-m", "add service"])
+        .output();
 
     let backend = Arc::new(MemoryBackend::new());
     let node = make_node(
@@ -194,7 +222,9 @@ stack backtrace:
     assert!(fix.replacement_code.contains("let Some(maybe_record)"));
     assert!(fix.unified_diff_patch.contains("--- a/src/service.rs"));
 
-    let test_repr = report.regression_test.expect("Expected cargo test reproducer");
+    let test_repr = report
+        .regression_test
+        .expect("Expected cargo test reproducer");
     assert_eq!(test_repr.framework, "cargo_test");
     assert!(test_repr.test_code.contains("std::panic::catch_unwind"));
 }
@@ -208,7 +238,11 @@ async fn test_sentry_json_apm_ingestion() {
     let src_dir = repo_root.join("src");
     fs::create_dir_all(&src_dir).unwrap();
     let handler_js = src_dir.join("handler.js");
-    fs::write(&handler_js, "function handle(req) {\n  let id = req.id;\n}\n").unwrap();
+    fs::write(
+        &handler_js,
+        "function handle(req) {\n  let id = req.id;\n}\n",
+    )
+    .unwrap();
 
     let backend = Arc::new(MemoryBackend::new());
 
@@ -239,7 +273,10 @@ async fn test_sentry_json_apm_ingestion() {
     assert!(report.crash_message.contains("reading 'id'"));
     assert_eq!(report.fault_category, FaultCategory::NullDeref);
     assert_eq!(report.call_path.len(), 1);
-    assert_eq!(report.call_path[0].file_path, PathBuf::from("src/handler.js"));
+    assert_eq!(
+        report.call_path[0].file_path,
+        PathBuf::from("src/handler.js")
+    );
     assert_eq!(report.call_path[0].line_number, 2);
 }
 

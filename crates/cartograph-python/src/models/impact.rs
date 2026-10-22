@@ -1,5 +1,5 @@
-use pyo3::prelude::*;
 use cartograph_core::model::{ImpactReport, ImpactRoot};
+use pyo3::prelude::*;
 
 #[pyclass(name = "ImpactRoot", frozen)]
 #[derive(Clone, Debug)]

@@ -7,15 +7,18 @@ pub mod template;
 pub mod updater;
 pub mod verify;
 
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use serde::{Deserialize, Serialize};
 
 pub use budget::{BudgetedSubgraphContext, TokenBudgetManager};
 pub use doctor::{DoctorReport, SkillDoctor};
 pub use registry::{SkillDefinition, SkillPreset, SkillRegistry, TargetIde};
 pub use stats::{RoiStatsReport, TelemetryEvent, TelemetryRecorder};
-pub use targets::{all_adapters, detect_ides, get_adapter, install_universal_skills, uninstall_universal_skills, IdeAdapter};
+pub use targets::{
+    IdeAdapter, all_adapters, detect_ides, get_adapter, install_universal_skills,
+    uninstall_universal_skills,
+};
 pub use template::TemplateEngine;
 pub use updater::{SkillUpdateReport, SkillUpdater};
 pub use verify::{CheckStatus, VerificationCheck, VerificationGateEngine, VerificationGateReport};
@@ -98,9 +101,16 @@ impl SkillInstaller {
                         if options.backup {
                             // backup files if existing
                             match adapter.target() {
-                                TargetIde::Claude => { let _ = TemplateEngine::backup_file(&root.join("CLAUDE.md")); }
-                                TargetIde::Cursor => { let _ = TemplateEngine::backup_file(&root.join(".cursorrules")); }
-                                TargetIde::Windsurf => { let _ = TemplateEngine::backup_file(&root.join(".windsurfrules")); }
+                                TargetIde::Claude => {
+                                    let _ = TemplateEngine::backup_file(&root.join("CLAUDE.md"));
+                                }
+                                TargetIde::Cursor => {
+                                    let _ = TemplateEngine::backup_file(&root.join(".cursorrules"));
+                                }
+                                TargetIde::Windsurf => {
+                                    let _ =
+                                        TemplateEngine::backup_file(&root.join(".windsurfrules"));
+                                }
                                 _ => {}
                             }
                         }
@@ -112,9 +122,16 @@ impl SkillInstaller {
                     if let Some(adapter) = get_adapter(specific_target) {
                         if options.backup {
                             match specific_target {
-                                TargetIde::Claude => { let _ = TemplateEngine::backup_file(&root.join("CLAUDE.md")); }
-                                TargetIde::Cursor => { let _ = TemplateEngine::backup_file(&root.join(".cursorrules")); }
-                                TargetIde::Windsurf => { let _ = TemplateEngine::backup_file(&root.join(".windsurfrules")); }
+                                TargetIde::Claude => {
+                                    let _ = TemplateEngine::backup_file(&root.join("CLAUDE.md"));
+                                }
+                                TargetIde::Cursor => {
+                                    let _ = TemplateEngine::backup_file(&root.join(".cursorrules"));
+                                }
+                                TargetIde::Windsurf => {
+                                    let _ =
+                                        TemplateEngine::backup_file(&root.join(".windsurfrules"));
+                                }
                                 _ => {}
                             }
                         }

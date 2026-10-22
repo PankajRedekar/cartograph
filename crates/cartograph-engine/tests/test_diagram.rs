@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::diagram::{
-    DiagramDiffStatus, DiagramEdge, DiagramEdgeStyle, DiagramFormat,
-    DiagramGraph, DiagramNode, DiagramOptions, DiagramTheme, DiagramType,
-    TraversalDirection,
+    DiagramDiffStatus, DiagramEdge, DiagramEdgeStyle, DiagramFormat, DiagramGraph, DiagramNode,
+    DiagramOptions, DiagramTheme, DiagramType, TraversalDirection,
 };
 use cartograph_core::model::{Edge, EdgeKind, Node, NodeKind};
 use cartograph_db::memory::MemoryBackend;
+use cartograph_engine::diagram::DiagramEngine;
 use cartograph_engine::diagram::extractor::{
     ArchitectureExtractor, CallGraphExtractor, ConceptClusterExtractor, DiffImpactExtractor,
     EntityRelationshipExtractor, LogicFlowExtractor, SequenceDiagramExtractor,
@@ -18,7 +18,6 @@ use cartograph_engine::diagram::renderers::{
     D2Renderer, DotRenderer, HtmlRenderer, JsonRenderer, MermaidRenderer, PlantUmlRenderer,
     SvgRenderer, TextRenderer, XmlRenderer, render_diagram,
 };
-use cartograph_engine::diagram::DiagramEngine;
 
 fn make_node(id: &str, name: &str, kind: NodeKind, file: &str, line: u32) -> Node {
     Node {
@@ -49,11 +48,7 @@ fn make_edge(source: &str, target: &str, kind: EdgeKind) -> Edge {
     }
 }
 
-async fn insert_test_data(
-    backend: &Arc<dyn GraphStoreBackend>,
-    nodes: &[Node],
-    edges: &[Edge],
-) {
+async fn insert_test_data(backend: &Arc<dyn GraphStoreBackend>, nodes: &[Node], edges: &[Edge]) {
     for n in nodes {
         let _ = backend.set_file_hash(&n.filepath, "dummy_hash").await;
     }
@@ -65,7 +60,13 @@ async fn test_architecture_extractor() {
     let backend: Arc<dyn GraphStoreBackend> = Arc::new(MemoryBackend::new());
 
     let auth_mod = make_node("mod_auth", "auth", NodeKind::Module, "src/auth/mod.rs", 1);
-    let billing_mod = make_node("mod_billing", "billing", NodeKind::Module, "src/billing/mod.rs", 1);
+    let billing_mod = make_node(
+        "mod_billing",
+        "billing",
+        NodeKind::Module,
+        "src/billing/mod.rs",
+        1,
+    );
     let db_mod = make_node("mod_db", "db", NodeKind::Module, "src/db/mod.rs", 1);
 
     let e1 = make_edge("mod_auth", "mod_db", EdgeKind::Imports);
@@ -99,16 +100,39 @@ async fn test_architecture_extractor() {
         .unwrap();
 
     assert_eq!(graph_uncollapsed.diagram_type, DiagramType::Architecture);
-    assert!(graph_uncollapsed.clusters.iter().any(|c| c.id.contains("src/")));
+    assert!(
+        graph_uncollapsed
+            .clusters
+            .iter()
+            .any(|c| c.id.contains("src/"))
+    );
 }
 
 #[tokio::test]
 async fn test_callgraph_extractor() {
     let backend: Arc<dyn GraphStoreBackend> = Arc::new(MemoryBackend::new());
 
-    let caller = make_node("fn_handle_req", "handle_request", NodeKind::Function, "src/handler.rs", 10);
-    let callee1 = make_node("fn_auth_check", "authenticate", NodeKind::Function, "src/auth.rs", 20);
-    let mut callee2 = make_node("fn_fetch_data", "fetch_records", NodeKind::Function, "src/repo.rs", 30);
+    let caller = make_node(
+        "fn_handle_req",
+        "handle_request",
+        NodeKind::Function,
+        "src/handler.rs",
+        10,
+    );
+    let callee1 = make_node(
+        "fn_auth_check",
+        "authenticate",
+        NodeKind::Function,
+        "src/auth.rs",
+        20,
+    );
+    let mut callee2 = make_node(
+        "fn_fetch_data",
+        "fetch_records",
+        NodeKind::Function,
+        "src/repo.rs",
+        30,
+    );
     callee2.signature = Some("async fn fetch_records() -> Result<Vec<Data>>".to_string());
 
     let e1 = make_edge("fn_handle_req", "fn_auth_check", EdgeKind::Calls);
@@ -134,10 +158,18 @@ async fn test_callgraph_extractor() {
     assert_eq!(graph.edges.len(), 2);
 
     // Verify async call has dashed edge style
-    let async_edge = graph.edges.iter().find(|e| e.target_id == "fn_fetch_data").unwrap();
+    let async_edge = graph
+        .edges
+        .iter()
+        .find(|e| e.target_id == "fn_fetch_data")
+        .unwrap();
     assert_eq!(async_edge.style, DiagramEdgeStyle::Dashed);
 
-    let sync_edge = graph.edges.iter().find(|e| e.target_id == "fn_auth_check").unwrap();
+    let sync_edge = graph
+        .edges
+        .iter()
+        .find(|e| e.target_id == "fn_auth_check")
+        .unwrap();
     assert_eq!(sync_edge.style, DiagramEdgeStyle::Solid);
 }
 
@@ -145,12 +177,24 @@ async fn test_callgraph_extractor() {
 async fn test_entity_relationship_extractor() {
     let backend: Arc<dyn GraphStoreBackend> = Arc::new(MemoryBackend::new());
 
-    let mut user = make_node("struct_user", "User", NodeKind::Struct, "src/models/user.rs", 5);
+    let mut user = make_node(
+        "struct_user",
+        "User",
+        NodeKind::Struct,
+        "src/models/user.rs",
+        5,
+    );
     user.metadata = Some(serde_json::json!({
         "fields": "id: uuid, email: string, name: string"
     }));
 
-    let mut order = make_node("struct_order", "Order", NodeKind::Struct, "src/models/order.rs", 10);
+    let mut order = make_node(
+        "struct_order",
+        "Order",
+        NodeKind::Struct,
+        "src/models/order.rs",
+        10,
+    );
     order.metadata = Some(serde_json::json!({
         "fields": "id: uuid, user_id: uuid, total: decimal"
     }));
@@ -178,16 +222,39 @@ async fn test_entity_relationship_extractor() {
 
     // Verify ER attributes extracted
     let user_node = graph.nodes.iter().find(|n| n.label == "User").unwrap();
-    assert!(user_node.attributes.iter().any(|a| a.name.contains("email") || a.name.contains("id")));
+    assert!(
+        user_node
+            .attributes
+            .iter()
+            .any(|a| a.name.contains("email") || a.name.contains("id"))
+    );
 }
 
 #[tokio::test]
 async fn test_sequence_diagram_extractor() {
     let backend: Arc<dyn GraphStoreBackend> = Arc::new(MemoryBackend::new());
 
-    let route = make_node("route_orders", "POST /api/orders", NodeKind::Route, "src/routes.rs", 1);
-    let ctrl = make_node("ctrl_orders", "create_order", NodeKind::Function, "src/controller.rs", 10);
-    let srv = make_node("srv_orders", "OrderService::create", NodeKind::Method, "src/service.rs", 20);
+    let route = make_node(
+        "route_orders",
+        "POST /api/orders",
+        NodeKind::Route,
+        "src/routes.rs",
+        1,
+    );
+    let ctrl = make_node(
+        "ctrl_orders",
+        "create_order",
+        NodeKind::Function,
+        "src/controller.rs",
+        10,
+    );
+    let srv = make_node(
+        "srv_orders",
+        "OrderService::create",
+        NodeKind::Method,
+        "src/service.rs",
+        20,
+    );
     let model = make_node("model_order", "Order", NodeKind::Model, "src/models.rs", 30);
 
     let e1 = make_edge("route_orders", "ctrl_orders", EdgeKind::Calls);
@@ -215,7 +282,13 @@ async fn test_sequence_diagram_extractor() {
 async fn test_logic_flowchart_extractor() {
     let backend: Arc<dyn GraphStoreBackend> = Arc::new(MemoryBackend::new());
 
-    let mut fn_validate = make_node("fn_val", "validate_discount", NodeKind::Function, "src/pricing.rs", 15);
+    let mut fn_validate = make_node(
+        "fn_val",
+        "validate_discount",
+        NodeKind::Function,
+        "src/pricing.rs",
+        15,
+    );
     fn_validate.metadata = Some(serde_json::json!({
         "logic_rules": "rule:code_valid -> status:active; rule:min_spend -> amount >= 50; outcome:apply_discount"
     }));
@@ -263,10 +336,22 @@ async fn test_diff_impact_extractor() {
 async fn test_concept_cluster_extractor() {
     let backend: Arc<dyn GraphStoreBackend> = Arc::new(MemoryBackend::new());
 
-    let mut n1 = make_node("n1", "calculate_vat", NodeKind::Function, "src/pricing/tax.rs", 10);
+    let mut n1 = make_node(
+        "n1",
+        "calculate_vat",
+        NodeKind::Function,
+        "src/pricing/tax.rs",
+        10,
+    );
     n1.docstring = Some("Calculates VAT for pricing checkout".to_string());
 
-    let mut n2 = make_node("n2", "apply_coupon", NodeKind::Function, "src/pricing/discount.rs", 20);
+    let mut n2 = make_node(
+        "n2",
+        "apply_coupon",
+        NodeKind::Function,
+        "src/pricing/discount.rs",
+        20,
+    );
     n2.docstring = Some("Applies promotional pricing coupon".to_string());
 
     let e = make_edge("n2", "n1", EdgeKind::Calls);
@@ -284,7 +369,12 @@ async fn test_concept_cluster_extractor() {
         .unwrap();
 
     assert_eq!(graph.diagram_type, DiagramType::ConceptCluster);
-    assert!(graph.nodes.iter().any(|n| n.label == "calculate_vat" || n.label == "apply_coupon"));
+    assert!(
+        graph
+            .nodes
+            .iter()
+            .any(|n| n.label == "calculate_vat" || n.label == "apply_coupon")
+    );
 }
 
 #[tokio::test]
@@ -292,13 +382,25 @@ async fn test_pruning_and_transitive_reduction() {
     let mut graph = DiagramGraph::new("test".to_string(), DiagramType::CallGraph);
 
     // Create a triangle: A -> B, B -> C, A -> C (A -> C is transitively redundant)
-    graph.nodes.push(DiagramNode::new("A", "A", NodeKind::Function));
-    graph.nodes.push(DiagramNode::new("B", "B", NodeKind::Function));
-    graph.nodes.push(DiagramNode::new("C", "C", NodeKind::Function));
+    graph
+        .nodes
+        .push(DiagramNode::new("A", "A", NodeKind::Function));
+    graph
+        .nodes
+        .push(DiagramNode::new("B", "B", NodeKind::Function));
+    graph
+        .nodes
+        .push(DiagramNode::new("C", "C", NodeKind::Function));
 
-    graph.edges.push(DiagramEdge::new("A", "B", EdgeKind::Calls));
-    graph.edges.push(DiagramEdge::new("B", "C", EdgeKind::Calls));
-    graph.edges.push(DiagramEdge::new("A", "C", EdgeKind::Calls));
+    graph
+        .edges
+        .push(DiagramEdge::new("A", "B", EdgeKind::Calls));
+    graph
+        .edges
+        .push(DiagramEdge::new("B", "C", EdgeKind::Calls));
+    graph
+        .edges
+        .push(DiagramEdge::new("A", "C", EdgeKind::Calls));
 
     assert_eq!(graph.edges.len(), 3);
 
@@ -307,9 +409,24 @@ async fn test_pruning_and_transitive_reduction() {
 
     // A -> C should be removed
     assert_eq!(graph.edges.len(), 2);
-    assert!(!graph.edges.iter().any(|e| e.source_id == "A" && e.target_id == "C"));
-    assert!(graph.edges.iter().any(|e| e.source_id == "A" && e.target_id == "B"));
-    assert!(graph.edges.iter().any(|e| e.source_id == "B" && e.target_id == "C"));
+    assert!(
+        !graph
+            .edges
+            .iter()
+            .any(|e| e.source_id == "A" && e.target_id == "C")
+    );
+    assert!(
+        graph
+            .edges
+            .iter()
+            .any(|e| e.source_id == "A" && e.target_id == "B")
+    );
+    assert!(
+        graph
+            .edges
+            .iter()
+            .any(|e| e.source_id == "B" && e.target_id == "C")
+    );
 
     // Test centrality pruning
     prune_graph_centrality(&mut graph, None, 2);
@@ -330,10 +447,18 @@ async fn test_sugiyama_layout_engine() {
     graph.nodes.push(n3);
     graph.nodes.push(n4);
 
-    graph.edges.push(DiagramEdge::new("root", "mid1", EdgeKind::Imports));
-    graph.edges.push(DiagramEdge::new("root", "mid2", EdgeKind::Imports));
-    graph.edges.push(DiagramEdge::new("mid1", "leaf", EdgeKind::Imports));
-    graph.edges.push(DiagramEdge::new("mid2", "leaf", EdgeKind::Imports));
+    graph
+        .edges
+        .push(DiagramEdge::new("root", "mid1", EdgeKind::Imports));
+    graph
+        .edges
+        .push(DiagramEdge::new("root", "mid2", EdgeKind::Imports));
+    graph
+        .edges
+        .push(DiagramEdge::new("mid1", "leaf", EdgeKind::Imports));
+    graph
+        .edges
+        .push(DiagramEdge::new("mid2", "leaf", EdgeKind::Imports));
 
     let layout_engine = SugiyamaLayoutEngine::new();
     layout_engine.layout(&mut graph);
@@ -370,14 +495,20 @@ async fn test_multi_format_renderers() {
 
     graph.nodes.push(n1);
     graph.nodes.push(n2);
-    graph.edges.push(DiagramEdge::new("user_svc", "db_pool", EdgeKind::Calls));
+    graph
+        .edges
+        .push(DiagramEdge::new("user_svc", "db_pool", EdgeKind::Calls));
 
     let layout = SugiyamaLayoutEngine::new();
     layout.layout(&mut graph);
 
     // 1. Mermaid
     let mermaid = MermaidRenderer::render(&graph);
-    assert!(mermaid.contains("flowchart") || mermaid.contains("classDiagram") || mermaid.contains("graph"));
+    assert!(
+        mermaid.contains("flowchart")
+            || mermaid.contains("classDiagram")
+            || mermaid.contains("graph")
+    );
     assert!(mermaid.contains("UserService"));
     assert!(mermaid.contains("DbPool"));
 

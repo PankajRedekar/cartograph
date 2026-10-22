@@ -91,9 +91,10 @@ impl GitCorrelator {
             } else if let Some(stripped) = line_str.strip_prefix("author ") {
                 author = stripped.trim().to_string();
             } else if let Some(stripped) = line_str.strip_prefix("author-time ")
-                && let Ok(ts) = stripped.trim().parse::<i64>() {
-                    author_time_sec = ts;
-                }
+                && let Ok(ts) = stripped.trim().parse::<i64>()
+            {
+                author_time_sec = ts;
+            }
         }
 
         let now_sec = chrono::Utc::now().timestamp();
@@ -112,25 +113,37 @@ impl GitCorrelator {
     }
 
     /// Checks whether `rel_path` has modifications around `target_line` in the specified branch comparison.
-    pub fn is_line_modified_in_branch(&self, branch: &str, rel_path: &str, target_line: usize) -> bool {
+    pub fn is_line_modified_in_branch(
+        &self,
+        branch: &str,
+        rel_path: &str,
+        target_line: usize,
+    ) -> bool {
         let output = Command::new("git")
             .current_dir(&self.repo_root)
             .args(["diff", "-U0", branch, "--", rel_path])
             .output();
 
         if let Ok(out) = output
-            && out.status.success() {
-                let diff_text = String::from_utf8_lossy(&out.stdout);
-                return Self::parse_diff_hunks_contain_line(&diff_text, target_line);
-            }
+            && out.status.success()
+        {
+            let diff_text = String::from_utf8_lossy(&out.stdout);
+            return Self::parse_diff_hunks_contain_line(&diff_text, target_line);
+        }
         false
     }
 
     fn parse_diff_hunks_contain_line(diff: &str, target_line: usize) -> bool {
         let hunk_re = Regex::new(r#"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@"#).unwrap();
         for caps in hunk_re.captures_iter(diff) {
-            let start: usize = caps.get(1).and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
-            let count: usize = caps.get(2).and_then(|m| m.as_str().parse().ok()).unwrap_or(1);
+            let start: usize = caps
+                .get(1)
+                .and_then(|m| m.as_str().parse().ok())
+                .unwrap_or(0);
+            let count: usize = caps
+                .get(2)
+                .and_then(|m| m.as_str().parse().ok())
+                .unwrap_or(1);
             let end = start + count.saturating_sub(1);
 
             if target_line >= start && target_line <= end {

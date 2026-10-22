@@ -1,6 +1,6 @@
-use pyo3::prelude::*;
 use crate::models::node::{PyEdge, PyNode};
 use cartograph_engine::locate::LocateResult;
+use pyo3::prelude::*;
 
 #[pyclass(name = "LocateResult", frozen)]
 #[derive(Clone, Debug)]

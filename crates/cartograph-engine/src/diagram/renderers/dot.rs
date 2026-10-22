@@ -20,7 +20,10 @@ impl DotRenderer {
             for node in &graph.nodes {
                 if node.cluster_id.as_deref() == Some(&cluster.id) {
                     let nid = sanitize_dot_id(&node.id);
-                    out.push_str(&format!("    \"{nid}\" [label=\"{}\"];\n", escape_dot(&node.label)));
+                    out.push_str(&format!(
+                        "    \"{nid}\" [label=\"{}\"];\n",
+                        escape_dot(&node.label)
+                    ));
                 }
             }
             out.push_str("  }\n\n");
@@ -29,7 +32,10 @@ impl DotRenderer {
         for node in &graph.nodes {
             if node.cluster_id.is_none() {
                 let nid = sanitize_dot_id(&node.id);
-                out.push_str(&format!("  \"{nid}\" [label=\"{}\"];\n", escape_dot(&node.label)));
+                out.push_str(&format!(
+                    "  \"{nid}\" [label=\"{}\"];\n",
+                    escape_dot(&node.label)
+                ));
             }
         }
 
@@ -52,7 +58,9 @@ impl DotRenderer {
                 .map(|l| format!(", label=\"{}\"", escape_dot(l)))
                 .unwrap_or_default();
 
-            out.push_str(&format!("  \"{src}\" -> \"{tgt}\" [{style_attr}{label_attr}];\n"));
+            out.push_str(&format!(
+                "  \"{src}\" -> \"{tgt}\" [{style_attr}{label_attr}];\n"
+            ));
         }
 
         out.push_str("}\n");

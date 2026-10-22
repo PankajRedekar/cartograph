@@ -10,7 +10,10 @@ impl MarkdownPublisher {
             "# 🔍 Cartograph Root-Cause Diagnosis: `{}`\n\n",
             report.crash_type
         ));
-        md.push_str(&format!("> **Crash Message**: {}\n\n", report.crash_message));
+        md.push_str(&format!(
+            "> **Crash Message**: {}\n\n",
+            report.crash_message
+        ));
         md.push_str(&format!(
             "- **Fault Archetype**: `{}`\n- **Verdict**: `{:?}`\n- **Primary Panic Site**: `{}:{}`\n- **Analysis Duration**: `{}ms`\n\n",
             report.fault_category,
@@ -112,7 +115,10 @@ impl MarkdownPublisher {
                 "## 🧪 Regression Test Reproducer (`{}`)\n\n",
                 test.framework
             ));
-            md.push_str(&format!("Target file: `{}`\n\n", test.target_file.display()));
+            md.push_str(&format!(
+                "Target file: `{}`\n\n",
+                test.target_file.display()
+            ));
             md.push_str("```python\n");
             md.push_str(&test.test_code);
             md.push_str("```\n\n");
@@ -127,9 +133,5 @@ fn sanitize_mermaid_id(raw: &str) -> String {
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
         .collect();
-    if s.is_empty() {
-        "node".to_string()
-    } else {
-        s
-    }
+    if s.is_empty() { "node".to_string() } else { s }
 }

@@ -15,7 +15,10 @@ impl EntityRelationshipExtractor {
         backend: &Arc<dyn GraphStoreBackend>,
         options: &DiagramOptions,
     ) -> Result<DiagramGraph> {
-        let mut graph = DiagramGraph::new("Entity Relationship Diagram", DiagramType::EntityRelationship);
+        let mut graph = DiagramGraph::new(
+            "Entity Relationship Diagram",
+            DiagramType::EntityRelationship,
+        );
 
         // 1. Fetch all candidate data models (Struct, Class, Model, Interface)
         let file_hashes = backend.get_all_file_hashes().await?;
@@ -148,7 +151,10 @@ impl EntityRelationshipExtractor {
 }
 
 /// Heuristically extract attributes/fields from docstrings, signatures, or metadata
-fn extract_attributes(node: &cartograph_core::model::Node, entity_names: &HashSet<String>) -> Vec<DiagramAttribute> {
+fn extract_attributes(
+    node: &cartograph_core::model::Node,
+    entity_names: &HashSet<String>,
+) -> Vec<DiagramAttribute> {
     let mut attrs = Vec::new();
 
     // Check if docstring or signature has field list
@@ -184,7 +190,9 @@ fn extract_attributes(node: &cartograph_core::model::Node, entity_names: &HashSe
         if trimmed.starts_with("pub ") || trimmed.starts_with("let ") || trimmed.contains(':') {
             let clean = trimmed.trim_start_matches("pub ").trim_end_matches(',');
             if let Some((field_name, field_type)) = clean.split_once(':') {
-                let name = field_name.trim().trim_matches(|c: char| !c.is_alphanumeric() && c != '_');
+                let name = field_name
+                    .trim()
+                    .trim_matches(|c: char| !c.is_alphanumeric() && c != '_');
                 let raw_type = field_type.trim();
 
                 if name.is_empty() || name == "id" || name.starts_with("//") {

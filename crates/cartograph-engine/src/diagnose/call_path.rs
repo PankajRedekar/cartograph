@@ -84,9 +84,10 @@ impl CallPathReconstructor {
         let mut upstream_callers = Vec::new();
         if deep_mode
             && let Some((_, root_id)) = anchored.first()
-                && let Ok(callers) = self.backend.get_upstream_impact(root_id, 2).await {
-                    upstream_callers = callers;
-                }
+            && let Ok(callers) = self.backend.get_upstream_impact(root_id, 2).await
+        {
+            upstream_callers = callers;
+        }
 
         (transitions, upstream_callers)
     }

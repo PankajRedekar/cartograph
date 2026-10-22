@@ -16,7 +16,8 @@ impl ArchitectureExtractor {
         backend: &Arc<dyn GraphStoreBackend>,
         options: &DiagramOptions,
     ) -> Result<DiagramGraph> {
-        let mut graph = DiagramGraph::new("Module & Package Architecture", DiagramType::Architecture);
+        let mut graph =
+            DiagramGraph::new("Module & Package Architecture", DiagramType::Architecture);
 
         // 1. Fetch inter-file edges (contains source_filepath, target_filepath, edge_count)
         let file_hashes = backend.get_all_file_hashes().await?;
@@ -32,7 +33,9 @@ impl ArchitectureExtractor {
         let mut module_files: HashMap<String, Vec<String>> = HashMap::new();
         for file in &all_files {
             if !options.include_tests
-                && (file.contains("test") || file.starts_with("tests/") || file.ends_with("_test.go"))
+                && (file.contains("test")
+                    || file.starts_with("tests/")
+                    || file.ends_with("_test.go"))
             {
                 continue;
             }
@@ -94,8 +97,7 @@ impl ArchitectureExtractor {
                 if let (Some(src_mod), Some(tgt_mod)) = (
                     node_to_module.get(&edge.source_id),
                     node_to_module.get(&edge.target_id),
-                )
-                    && src_mod != tgt_mod
+                ) && src_mod != tgt_mod
                 {
                     *inter_mod_edges
                         .entry((src_mod.clone(), tgt_mod.clone()))
@@ -158,8 +160,7 @@ impl ArchitectureExtractor {
                 if let (Some(src_file), Some(tgt_file)) = (
                     node_to_file.get(&edge.source_id),
                     node_to_file.get(&edge.target_id),
-                )
-                    && src_file != tgt_file
+                ) && src_file != tgt_file
                 {
                     *file_edges
                         .entry((src_file.clone(), tgt_file.clone()))

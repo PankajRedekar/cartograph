@@ -1,5 +1,5 @@
-use pyo3::prelude::*;
 use cartograph_core::diagnose::{DiagnosisReport, FaultCandidate};
+use pyo3::prelude::*;
 
 #[pyclass(name = "FaultCandidate", frozen)]
 #[derive(Clone, Debug)]
@@ -78,7 +78,11 @@ impl PyDiagnosisReport {
     fn __repr__(&self) -> String {
         format!(
             "<DiagnosisReport type='{}' failing='{}:{}' verdict='{}' duration={}ms>",
-            self.crash_type, self.failing_file, self.failing_line, self.verdict, self.execution_duration_ms
+            self.crash_type,
+            self.failing_file,
+            self.failing_line,
+            self.verdict,
+            self.execution_duration_ms
         )
     }
 
@@ -107,7 +111,11 @@ impl PyDiagnosisReport {
 impl From<DiagnosisReport> for PyDiagnosisReport {
     fn from(r: DiagnosisReport) -> Self {
         let root_cause = r.root_cause_candidate.map(PyFaultCandidate::from);
-        let candidates = r.candidates.into_iter().map(PyFaultCandidate::from).collect();
+        let candidates = r
+            .candidates
+            .into_iter()
+            .map(PyFaultCandidate::from)
+            .collect();
         Self {
             crash_type: r.crash_type,
             crash_message: r.crash_message,

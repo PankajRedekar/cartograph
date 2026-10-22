@@ -4,8 +4,8 @@ pub mod renderers;
 
 pub use extractor::{
     ArchitectureExtractor, CallGraphExtractor, ConceptClusterExtractor, DiffImpactExtractor,
-    EntityRelationshipExtractor, LogicFlowExtractor, SequenceDiagramExtractor,
-    extract_diagram, prune_graph_centrality, transitive_reduction,
+    EntityRelationshipExtractor, LogicFlowExtractor, SequenceDiagramExtractor, extract_diagram,
+    prune_graph_centrality, transitive_reduction,
 };
 pub use layout::SugiyamaLayoutEngine;
 pub use renderers::{

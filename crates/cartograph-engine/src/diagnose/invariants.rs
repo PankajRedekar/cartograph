@@ -41,9 +41,10 @@ impl InvariantAuditor {
         let callee_layer = self.classify_layer(callee_path);
 
         if let (Some(l1), Some(l2)) = (caller_layer, callee_layer)
-            && l1 != l2 {
-                return true;
-            }
+            && l1 != l2
+        {
+            return true;
+        }
 
         // 2. Check if caller crosses deep package encapsulation boundaries (e.g. accessing internal/)
         if callee_path.contains("/internal/") && !caller_path.contains("/internal/") {
@@ -76,13 +77,15 @@ mod tests {
     #[test]
     fn test_internal_package_boundary_crossing() {
         let auditor = InvariantAuditor::new(LintArchConfig::default());
-        assert!(auditor.is_layer_or_package_boundary(
-            "src/api/handler.rs",
-            "src/billing/internal/store.rs"
-        ));
-        assert!(!auditor.is_layer_or_package_boundary(
-            "src/billing/service.rs",
-            "src/billing/models.rs"
-        ));
+        assert!(
+            auditor.is_layer_or_package_boundary(
+                "src/api/handler.rs",
+                "src/billing/internal/store.rs"
+            )
+        );
+        assert!(
+            !auditor
+                .is_layer_or_package_boundary("src/billing/service.rs", "src/billing/models.rs")
+        );
     }
 }

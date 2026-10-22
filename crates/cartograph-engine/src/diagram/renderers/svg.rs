@@ -1,6 +1,4 @@
-use cartograph_core::diagram::{
-    DiagramDiffStatus, DiagramEdgeStyle, DiagramGraph, DiagramTheme,
-};
+use cartograph_core::diagram::{DiagramDiffStatus, DiagramEdgeStyle, DiagramGraph, DiagramTheme};
 use cartograph_core::model::NodeKind;
 
 pub struct SvgRenderer;
@@ -120,8 +118,12 @@ impl SvgRenderer {
 
                 let (stroke_color, marker_id, dash_attr, stroke_w) = match edge.style {
                     DiagramEdgeStyle::BoldWarning => ("#ef4444", "marker-warning", "", 2.5),
-                    DiagramEdgeStyle::Dashed => (edge_color, "marker-arrow", "stroke-dasharray=\"5 4\"", 1.5),
-                    DiagramEdgeStyle::Dotted => (edge_color, "marker-arrow", "stroke-dasharray=\"2 3\"", 1.5),
+                    DiagramEdgeStyle::Dashed => {
+                        (edge_color, "marker-arrow", "stroke-dasharray=\"5 4\"", 1.5)
+                    }
+                    DiagramEdgeStyle::Dotted => {
+                        (edge_color, "marker-arrow", "stroke-dasharray=\"2 3\"", 1.5)
+                    }
                     DiagramEdgeStyle::Solid => (edge_color, "marker-arrow", "", 1.5),
                 };
 

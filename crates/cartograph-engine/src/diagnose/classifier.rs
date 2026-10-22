@@ -100,7 +100,10 @@ mod tests {
             FaultCategory::NullDeref
         );
         assert_eq!(
-            FaultClassifier::classify("TypeError", "Cannot read properties of undefined (reading 'map')"),
+            FaultClassifier::classify(
+                "TypeError",
+                "Cannot read properties of undefined (reading 'map')"
+            ),
             FaultCategory::NullDeref
         );
         assert_eq!(

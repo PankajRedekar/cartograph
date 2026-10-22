@@ -22,18 +22,24 @@ impl FrameAnchor {
 
             let file_str = frame.file_path.to_string_lossy().to_string();
             if let Ok(nodes) = self.backend.get_nodes_by_filepath(&file_str).await
-                && let Some(best_node) = Self::find_innermost_node(&nodes, frame.line_number, &frame.function_name) {
-                    frame.ast_symbol_id = Some(best_node.id.clone());
-                    frame.ast_node_kind = Some(format!("{:?}", best_node.kind));
-                    if frame.function_name == "<unknown>" || frame.function_name.is_empty() {
-                        frame.function_name = best_node.name.clone();
-                    }
+                && let Some(best_node) =
+                    Self::find_innermost_node(&nodes, frame.line_number, &frame.function_name)
+            {
+                frame.ast_symbol_id = Some(best_node.id.clone());
+                frame.ast_node_kind = Some(format!("{:?}", best_node.kind));
+                if frame.function_name == "<unknown>" || frame.function_name.is_empty() {
+                    frame.function_name = best_node.name.clone();
                 }
+            }
         }
     }
 
     /// Selects the most specific enclosing AST node around the given line number.
-    pub fn find_innermost_node<'a>(nodes: &'a [Node], line: usize, function_name: &str) -> Option<&'a Node> {
+    pub fn find_innermost_node<'a>(
+        nodes: &'a [Node],
+        line: usize,
+        function_name: &str,
+    ) -> Option<&'a Node> {
         let mut candidates: Vec<&'a Node> = nodes
             .iter()
             .filter(|n| {
@@ -57,10 +63,12 @@ impl FrameAnchor {
         }
 
         // Fallback: match by symbol name if exact line fell outside parsed bounds
-        if !function_name.is_empty() && function_name != "<unknown>"
-            && let Some(named) = nodes.iter().find(|n| n.name == function_name) {
-                return Some(named);
-            }
+        if !function_name.is_empty()
+            && function_name != "<unknown>"
+            && let Some(named) = nodes.iter().find(|n| n.name == function_name)
+        {
+            return Some(named);
+        }
 
         None
     }

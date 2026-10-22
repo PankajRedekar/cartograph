@@ -126,7 +126,13 @@ fn test_cli_skills_install_check_and_uninstall_lifecycle() {
     assert!(install_output.status.success());
     let stdout = String::from_utf8_lossy(&install_output.stdout);
     assert!(stdout.contains("Cartograph Skills installed successfully"));
-    assert!(root.join(".agent").join("skills").join("cartograph-locate").join("SKILL.md").exists());
+    assert!(
+        root.join(".agent")
+            .join("skills")
+            .join("cartograph-locate")
+            .join("SKILL.md")
+            .exists()
+    );
 
     // 2. Check (Doctor) in text and JSON
     let check_output = Command::new(cartograph_bin())
@@ -152,7 +158,8 @@ fn test_cli_skills_install_check_and_uninstall_lifecycle() {
         .expect("Failed to execute cartograph skills check --json");
 
     assert!(check_json_output.status.success());
-    let json_val: serde_json::Value = serde_json::from_str(&String::from_utf8_lossy(&check_json_output.stdout)).unwrap();
+    let json_val: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&check_json_output.stdout)).unwrap();
     assert!(json_val["installed_skills_count"].as_u64().unwrap() >= 11);
 
     // 3. Update command
@@ -178,7 +185,13 @@ fn test_cli_skills_install_check_and_uninstall_lifecycle() {
     assert!(uninstall_output.status.success());
     let uninstall_stdout = String::from_utf8_lossy(&uninstall_output.stdout);
     assert!(uninstall_stdout.contains("uninstalled successfully"));
-    assert!(!root.join(".agent").join("skills").join("cartograph-locate").exists());
+    assert!(
+        !root
+            .join(".agent")
+            .join("skills")
+            .join("cartograph-locate")
+            .exists()
+    );
 }
 
 #[test]
@@ -211,7 +224,8 @@ fn test_cli_skills_stats_formats() {
         .expect("Failed to execute cartograph skills stats --format json");
 
     assert!(json_output.status.success());
-    let json_val: serde_json::Value = serde_json::from_str(&String::from_utf8_lossy(&json_output.stdout)).unwrap();
+    let json_val: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&json_output.stdout)).unwrap();
     assert!(json_val["total_agent_invocations"].is_number());
 
     // 3. XML stats
@@ -273,7 +287,8 @@ fn test_cli_verify_command_formats() {
         .expect("Failed to execute cartograph verify --format json");
 
     assert!(json_output.status.success());
-    let json_val: serde_json::Value = serde_json::from_str(&String::from_utf8_lossy(&json_output.stdout)).unwrap();
+    let json_val: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&json_output.stdout)).unwrap();
     assert_eq!(json_val["overall_status"], "PASSED");
 
     // 3. Text output

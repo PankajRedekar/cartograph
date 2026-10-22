@@ -1,16 +1,16 @@
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
-use serde::{Deserialize, Serialize};
 
+use crate::impact::{ImpactAnalyzer, ImpactQuery};
+use crate::lint_arch::ArchLinter;
+use crate::lint_arch::diff::GitDiffScope;
+use crate::skills::stats::{TelemetryEvent, TelemetryRecorder};
+use crate::test_selector::{TestExecutor, TestSelector, TestSelectorOptions};
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::LintArchConfig;
 use cartograph_core::model::SemVerTarget;
-use crate::lint_arch::ArchLinter;
-use crate::lint_arch::diff::GitDiffScope;
-use crate::impact::{ImpactAnalyzer, ImpactQuery};
-use crate::skills::stats::{TelemetryEvent, TelemetryRecorder};
-use crate::test_selector::{TestExecutor, TestSelector, TestSelectorOptions};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -53,15 +53,32 @@ pub struct VerificationGateReport {
 impl VerificationGateReport {
     pub fn format_xml(&self) -> String {
         let total_checks = self.checks.len();
-        let passed_checks = self.checks.iter().filter(|c| c.status == CheckStatus::Passed).count();
-        let failed_checks = self.checks.iter().filter(|c| c.status == CheckStatus::Failed).count();
-        let skipped_checks = self.checks.iter().filter(|c| c.status == CheckStatus::Skipped).count();
+        let passed_checks = self
+            .checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Passed)
+            .count();
+        let failed_checks = self
+            .checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Failed)
+            .count();
+        let skipped_checks = self
+            .checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Skipped)
+            .count();
 
         let mut xml = format!(
             "<verification_gate status=\"{}\" target_scope=\"{}\" duration_ms=\"{:.0}\">\n  \
                <summary total_checks=\"{}\" passed_checks=\"{}\" failed_checks=\"{}\" skipped_checks=\"{}\" />\n",
-            self.overall_status, self.target_scope, self.total_duration_ms,
-            total_checks, passed_checks, failed_checks, skipped_checks
+            self.overall_status,
+            self.target_scope,
+            self.total_duration_ms,
+            total_checks,
+            passed_checks,
+            failed_checks,
+            skipped_checks
         );
 
         for check in &self.checks {
@@ -76,7 +93,10 @@ impl VerificationGateReport {
         }
 
         if let Some(ref advice) = self.remediation_advice {
-            xml.push_str(&format!("  <remediation_advice>\n    {}\n  </remediation_advice>\n", advice.trim()));
+            xml.push_str(&format!(
+                "  <remediation_advice>\n    {}\n  </remediation_advice>\n",
+                advice.trim()
+            ));
         }
 
         xml.push_str("</verification_gate>");
@@ -93,7 +113,10 @@ impl VerificationGateReport {
             self.overall_status, self.target_scope, self.total_duration_ms
         );
         for check in &self.checks {
-            text.push_str(&format!("  • [{}] {} - {}\n", check.status, check.name, check.message));
+            text.push_str(&format!(
+                "  • [{}] {} - {}\n",
+                check.status, check.name, check.message
+            ));
             for issue in &check.blocking_issues {
                 text.push_str(&format!("      Issue: {}\n", issue));
             }
@@ -133,7 +156,8 @@ impl VerificationGateEngine {
         let arch_start = Instant::now();
         let mut arch_status = CheckStatus::Passed;
         let mut arch_issues = Vec::new();
-        let mut arch_msg = "0 package boundary breaches, 0 circular dependency cycles detected.".to_string();
+        let mut arch_msg =
+            "0 package boundary breaches, 0 circular dependency cycles detected.".to_string();
 
         if let Some(ref b) = backend {
             let mut linter = ArchLinter::new(b.clone(), LintArchConfig::default());
@@ -143,17 +167,30 @@ impl VerificationGateEngine {
             }
             match linter.lint().await {
                 Ok(report) => {
-                    if !report.summary.passed || report.summary.active_violations_count > 0 || report.summary.cycles_count > 0 {
+                    if !report.summary.passed
+                        || report.summary.active_violations_count > 0
+                        || report.summary.cycles_count > 0
+                    {
                         arch_status = CheckStatus::Failed;
                         overall_status = CheckStatus::Failed;
-                        regressions_caught += report.summary.active_violations_count + report.summary.cycles_count;
+                        regressions_caught +=
+                            report.summary.active_violations_count + report.summary.cycles_count;
                         for v in &report.violations {
-                            arch_issues.push(format!("Boundary violation in {}: {}", v.source_file, v.message));
+                            arch_issues.push(format!(
+                                "Boundary violation in {}: {}",
+                                v.source_file, v.message
+                            ));
                         }
                         for c in &report.cycles {
-                            arch_issues.push(format!("Circular cycle (length {}): fingerprint {}", c.length, c.fingerprint));
+                            arch_issues.push(format!(
+                                "Circular cycle (length {}): fingerprint {}",
+                                c.length, c.fingerprint
+                            ));
                         }
-                        arch_msg = format!("Found {} boundary violations, {} circular dependency cycles.", report.summary.active_violations_count, report.summary.cycles_count);
+                        arch_msg = format!(
+                            "Found {} boundary violations, {} circular dependency cycles.",
+                            report.summary.active_violations_count, report.summary.cycles_count
+                        );
                         remediation_steps.push("Resolve architectural boundary violations or invert circular imports using dependency injection/traits.".to_string());
                     }
                 }
@@ -202,17 +239,23 @@ impl VerificationGateEngine {
 
             match analyzer.analyze_impact(&query).await {
                 Ok(report) => {
-                    if let Some(ref guard) = report.semver_guard {
-                        if !guard.is_compliant || !guard.breaking_changes.is_empty() {
-                            contract_status = CheckStatus::Failed;
-                            overall_status = CheckStatus::Failed;
-                            regressions_caught += guard.breaking_changes.len();
-                            for b in &guard.breaking_changes {
-                                contract_issues.push(format!("Breaking contract change in {} ({}): {}", b.symbol_name, b.filepath, b.reason));
-                            }
-                            contract_msg = format!("Detected {} breaking contract changes violating SemVer.", guard.breaking_changes.len());
-                            remediation_steps.push("Update caller arguments/return types or increment major version according to SemVer rules.".to_string());
+                    if let Some(ref guard) = report.semver_guard
+                        && (!guard.is_compliant || !guard.breaking_changes.is_empty())
+                    {
+                        contract_status = CheckStatus::Failed;
+                        overall_status = CheckStatus::Failed;
+                        regressions_caught += guard.breaking_changes.len();
+                        for b in &guard.breaking_changes {
+                            contract_issues.push(format!(
+                                "Breaking contract change in {} ({}): {}",
+                                b.symbol_name, b.filepath, b.reason
+                            ));
                         }
+                        contract_msg = format!(
+                            "Detected {} breaking contract changes violating SemVer.",
+                            guard.breaking_changes.len()
+                        );
+                        remediation_steps.push("Update caller arguments/return types or increment major version according to SemVer rules.".to_string());
                     }
                 }
                 Err(e) => {
@@ -244,7 +287,8 @@ impl VerificationGateEngine {
                 name: "predictive_tests".to_string(),
                 status: CheckStatus::Skipped,
                 duration_ms: 0.0,
-                message: "Skipped due to --fail-fast after contract or architecture failure.".to_string(),
+                message: "Skipped due to --fail-fast after contract or architecture failure."
+                    .to_string(),
                 blocking_issues: Vec::new(),
             });
         } else if let Some(ref b) = backend {
@@ -289,7 +333,10 @@ impl VerificationGateEngine {
                                         name: "predictive_tests".to_string(),
                                         status: CheckStatus::Passed,
                                         duration_ms: test_start.elapsed().as_secs_f64() * 1000.0,
-                                        message: format!("{} affected tests executed and passed.", report.selected_tests.len()),
+                                        message: format!(
+                                            "{} affected tests executed and passed.",
+                                            report.selected_tests.len()
+                                        ),
                                         blocking_issues: Vec::new(),
                                     });
                                 } else {
@@ -320,7 +367,10 @@ impl VerificationGateEngine {
                             name: "predictive_tests".to_string(),
                             status: CheckStatus::Passed,
                             duration_ms: test_start.elapsed().as_secs_f64() * 1000.0,
-                            message: format!("{} affected tests mapped.", report.selected_tests.len()),
+                            message: format!(
+                                "{} affected tests mapped.",
+                                report.selected_tests.len()
+                            ),
                             blocking_issues: Vec::new(),
                         });
                     }

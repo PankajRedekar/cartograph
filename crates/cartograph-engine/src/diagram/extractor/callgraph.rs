@@ -67,7 +67,9 @@ impl CallGraphExtractor {
                         let is_async = callee
                             .signature
                             .as_deref()
-                            .map(|s| s.contains("async") || s.contains("Promise") || s.contains("Future"))
+                            .map(|s| {
+                                s.contains("async") || s.contains("Promise") || s.contains("Future")
+                            })
                             .unwrap_or(false);
 
                         let mut edge = DiagramEdge::new(&curr.id, &callee.id, EdgeKind::Calls);
@@ -99,7 +101,9 @@ impl CallGraphExtractor {
                         let is_async = curr
                             .signature
                             .as_deref()
-                            .map(|s| s.contains("async") || s.contains("Promise") || s.contains("Future"))
+                            .map(|s| {
+                                s.contains("async") || s.contains("Promise") || s.contains("Future")
+                            })
                             .unwrap_or(false);
 
                         let mut edge = DiagramEdge::new(&caller.id, &curr.id, EdgeKind::Calls);
@@ -138,7 +142,11 @@ impl CallGraphExtractor {
                 if !mod_name.is_empty() && mod_name != "." {
                     dnode.cluster_id = Some(mod_name.clone());
                     if !graph.clusters.iter().any(|c| c.id == mod_name) {
-                        graph.clusters.push(cartograph_core::diagram::DiagramCluster::new(&mod_name, &mod_name));
+                        graph
+                            .clusters
+                            .push(cartograph_core::diagram::DiagramCluster::new(
+                                &mod_name, &mod_name,
+                            ));
                     }
                 }
             }

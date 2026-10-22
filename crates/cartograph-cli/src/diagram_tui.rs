@@ -1,6 +1,4 @@
-use cartograph_core::diagram::{
-    DiagramDiffStatus, DiagramGraph, DiagramTheme,
-};
+use cartograph_core::diagram::{DiagramDiffStatus, DiagramGraph, DiagramTheme};
 use cartograph_core::model::NodeKind;
 use colored::Colorize;
 use std::io::{self, IsTerminal, Write};
@@ -24,7 +22,9 @@ impl DiagramTui {
         ));
         out.push_str(&format!(
             "│ {:<left_w$} │ {:<right_w$} │\n",
-            format!("📊 GRAPH TOPOLOGY ({})", graph.diagram_type).bold().white(),
+            format!("📊 GRAPH TOPOLOGY ({})", graph.diagram_type)
+                .bold()
+                .white(),
             "NODE INSPECTOR & CONNECTIONS".bold().white(),
             left_w = left_width - 1,
             right_w = right_width - 1
@@ -135,7 +135,11 @@ impl DiagramTui {
                             .filter(|e| e.target_id == n.id)
                             .map(|e| e.source_id.clone())
                             .collect();
-                        let up_str = format!("Inbound Callers ({}): {}", upstream.len(), upstream.join(", "));
+                        let up_str = format!(
+                            "Inbound Callers ({}): {}",
+                            upstream.len(),
+                            upstream.join(", ")
+                        );
                         truncate_or_pad(&up_str, right_width)
                     } else {
                         " ".repeat(right_width)
@@ -149,7 +153,11 @@ impl DiagramTui {
                             .filter(|e| e.source_id == n.id)
                             .map(|e| e.target_id.clone())
                             .collect();
-                        let down_str = format!("Outbound Callees ({}): {}", downstream.len(), downstream.join(", "));
+                        let down_str = format!(
+                            "Outbound Callees ({}): {}",
+                            downstream.len(),
+                            downstream.join(", ")
+                        );
                         truncate_or_pad(&down_str, right_width)
                     } else {
                         " ".repeat(right_width)
@@ -158,7 +166,11 @@ impl DiagramTui {
                 8 => {
                     if let Some(n) = selected_node {
                         if !n.attributes.is_empty() {
-                            let attrs: Vec<_> = n.attributes.iter().map(|a| format!("{}: {}", a.name, a.data_type)).collect();
+                            let attrs: Vec<_> = n
+                                .attributes
+                                .iter()
+                                .map(|a| format!("{}: {}", a.name, a.data_type))
+                                .collect();
                             let a_str = format!("Fields: {}", attrs.join(" | "));
                             truncate_or_pad(&a_str, right_width)
                         } else {
@@ -222,13 +234,17 @@ impl DiagramTui {
                     let mermaid_code = cartograph_engine::diagram::MermaidRenderer::render(graph);
                     let target_path = repo_root.join("diagram.mmd");
                     let _ = std::fs::write(&target_path, &mermaid_code);
-                    println!("\n✅ Exported Mermaid diagram to: {}", target_path.display());
+                    println!(
+                        "\n✅ Exported Mermaid diagram to: {}",
+                        target_path.display()
+                    );
                     println!("Press Enter to continue...");
                     let mut pause = String::new();
                     let _ = io::stdin().read_line(&mut pause);
                 }
                 "s" => {
-                    let svg_code = cartograph_engine::diagram::SvgRenderer::render(graph, DiagramTheme::Dark);
+                    let svg_code =
+                        cartograph_engine::diagram::SvgRenderer::render(graph, DiagramTheme::Dark);
                     let target_path = repo_root.join("diagram.svg");
                     let _ = std::fs::write(&target_path, &svg_code);
                     println!("\n✅ Exported SVG diagram to: {}", target_path.display());
@@ -237,10 +253,14 @@ impl DiagramTui {
                     let _ = io::stdin().read_line(&mut pause);
                 }
                 "h" => {
-                    let html_code = cartograph_engine::diagram::HtmlRenderer::render(graph, DiagramTheme::Dark);
+                    let html_code =
+                        cartograph_engine::diagram::HtmlRenderer::render(graph, DiagramTheme::Dark);
                     let target_path = repo_root.join("diagram.html");
                     let _ = std::fs::write(&target_path, &html_code);
-                    println!("\n✅ Exported interactive HTML diagram to: {}", target_path.display());
+                    println!(
+                        "\n✅ Exported interactive HTML diagram to: {}",
+                        target_path.display()
+                    );
                     println!("Press Enter to continue...");
                     let mut pause = String::new();
                     let _ = io::stdin().read_line(&mut pause);

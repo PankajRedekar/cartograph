@@ -151,7 +151,11 @@ fn render_tree_node(
             let child_is_last = i + 1 == child_count;
             if let Some(child_node) = node_map.get(child_id) {
                 if visited.contains(child_id) {
-                    let child_branch = if child_is_last { "└── " } else { "├── " };
+                    let child_branch = if child_is_last {
+                        "└── "
+                    } else {
+                        "├── "
+                    };
                     let lbl_suffix = edge_lbl
                         .as_ref()
                         .map(|l| format!(" [{l}]"))

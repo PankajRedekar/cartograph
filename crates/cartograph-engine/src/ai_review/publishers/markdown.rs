@@ -71,11 +71,7 @@ impl MarkdownPublisher {
                 "- ✅ **{}** findings resolved by author",
                 iter.resolved_findings.len()
             );
-            let _ = writeln!(
-                md,
-                "- ⚠️ **{}** findings unresolved",
-                iter.unresolved_count
-            );
+            let _ = writeln!(md, "- ⚠️ **{}** findings unresolved", iter.unresolved_count);
             let _ = writeln!(
                 md,
                 "- 🚨 **{}** new regressions introduced\n",
@@ -83,7 +79,10 @@ impl MarkdownPublisher {
             );
 
             if !iter.resolved_findings.is_empty() {
-                let _ = writeln!(md, "<details><summary>Resolved Findings Checklist</summary>\n");
+                let _ = writeln!(
+                    md,
+                    "<details><summary>Resolved Findings Checklist</summary>\n"
+                );
                 for rf in &iter.resolved_findings {
                     let _ = writeln!(
                         md,
@@ -182,10 +181,14 @@ impl MarkdownPublisher {
                 }
 
                 if let Some(ref fix) = f.suggested_fix {
-                    let _ = writeln!(md, "<details open><summary>💡 Suggested Remediation (1-Click Suggestion)</summary>\n");
+                    let _ = writeln!(
+                        md,
+                        "<details open><summary>💡 Suggested Remediation (1-Click Suggestion)</summary>\n"
+                    );
                     let _ = writeln!(md, "{}\n", fix.explanation);
                     if !fix.replacement_code.is_empty() {
-                        let _ = writeln!(md, "```suggestion\n{}\n```\n", fix.replacement_code.trim());
+                        let _ =
+                            writeln!(md, "```suggestion\n{}\n```\n", fix.replacement_code.trim());
                     }
                     if !fix.unified_diff_patch.is_empty() {
                         let _ = writeln!(md, "<details><summary>Unified Diff Patch</summary>\n");

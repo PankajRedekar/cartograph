@@ -2253,12 +2253,9 @@ pub async fn handle_diagnose(
     diag_config.apply_patch = apply_patch || diag_config.apply_patch;
     diag_config.scaffold_test = scaffold_test || diag_config.scaffold_test;
 
-    let engine = cartograph_engine::diagnose::DiagnoseEngine::new(
-        root_path.clone(),
-        backend,
-        diag_config,
-    )
-    .with_lint_config(config.lint_arch.clone());
+    let engine =
+        cartograph_engine::diagnose::DiagnoseEngine::new(root_path.clone(), backend, diag_config)
+            .with_lint_config(config.lint_arch.clone());
 
     let report = engine.run_diagnose(&crash_text).await?;
 
@@ -2266,15 +2263,30 @@ pub async fn handle_diagnose(
     if interactive {
         crate::diagnose_tui::DiagnoseTui::run_interactive(&report, &root_path)?;
     } else if json {
-        println!("{}", cartograph_engine::diagnose::publishers::JsonPublisher::render(&report));
+        println!(
+            "{}",
+            cartograph_engine::diagnose::publishers::JsonPublisher::render(&report)
+        );
     } else if sarif {
-        println!("{}", cartograph_engine::diagnose::publishers::SarifPublisher::render(&report));
+        println!(
+            "{}",
+            cartograph_engine::diagnose::publishers::SarifPublisher::render(&report)
+        );
     } else if markdown {
-        println!("{}", cartograph_engine::diagnose::publishers::MarkdownPublisher::render(&report));
+        println!(
+            "{}",
+            cartograph_engine::diagnose::publishers::MarkdownPublisher::render(&report)
+        );
     } else if xml {
-        println!("{}", cartograph_engine::diagnose::publishers::XmlPublisher::render(&report));
+        println!(
+            "{}",
+            cartograph_engine::diagnose::publishers::XmlPublisher::render(&report)
+        );
     } else {
-        print!("{}", cartograph_engine::diagnose::publishers::TerminalPublisher::render(&report));
+        print!(
+            "{}",
+            cartograph_engine::diagnose::publishers::TerminalPublisher::render(&report)
+        );
     }
 
     Ok(())
@@ -2287,7 +2299,10 @@ fn open_in_browser(path: &Path) {
     #[cfg(target_os = "linux")]
     let res = std::process::Command::new("xdg-open").arg(path).spawn();
     #[cfg(target_os = "windows")]
-    let res = std::process::Command::new("cmd").args(["/C", "start"]).arg(path).spawn();
+    let res = std::process::Command::new("cmd")
+        .args(["/C", "start"])
+        .arg(path)
+        .spawn();
 
     if let Err(e) = res {
         eprintln!("Warning: Failed to launch browser: {}", e);
@@ -2391,22 +2406,36 @@ pub async fn handle_diagram(
         };
         options.out_path = Some(full_out_path.to_string_lossy().to_string());
         engine.export_to_file(&full_out_path, &options).await?;
-        println!("{}", format!("✅ Diagram saved to {}", full_out_path.display()).green().bold());
+        println!(
+            "{}",
+            format!("✅ Diagram saved to {}", full_out_path.display())
+                .green()
+                .bold()
+        );
 
         if open {
             open_in_browser(&full_out_path);
         }
     } else if open {
-        let default_file = canonical_root.join(".cartograph").join(match options.format {
-            cartograph_core::diagram::DiagramFormat::Svg => "diagram.svg",
-            cartograph_core::diagram::DiagramFormat::Html => "diagram.html",
-            _ => "diagram.html",
-        });
-        if options.format != cartograph_core::diagram::DiagramFormat::Svg && options.format != cartograph_core::diagram::DiagramFormat::Html {
+        let default_file = canonical_root
+            .join(".cartograph")
+            .join(match options.format {
+                cartograph_core::diagram::DiagramFormat::Svg => "diagram.svg",
+                cartograph_core::diagram::DiagramFormat::Html => "diagram.html",
+                _ => "diagram.html",
+            });
+        if options.format != cartograph_core::diagram::DiagramFormat::Svg
+            && options.format != cartograph_core::diagram::DiagramFormat::Html
+        {
             options.format = cartograph_core::diagram::DiagramFormat::Html;
         }
         engine.export_to_file(&default_file, &options).await?;
-        println!("{}", format!("🚀 Opening diagram in browser: {}", default_file.display()).cyan().bold());
+        println!(
+            "{}",
+            format!("🚀 Opening diagram in browser: {}", default_file.display())
+                .cyan()
+                .bold()
+        );
         open_in_browser(&default_file);
     } else {
         let rendered = engine.export_string(&options).await?;
@@ -2418,4 +2447,3 @@ pub async fn handle_diagram(
 
     Ok(())
 }
-

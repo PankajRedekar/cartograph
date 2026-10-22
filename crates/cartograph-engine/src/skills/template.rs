@@ -22,16 +22,16 @@ impl TemplateEngine {
             CARTOGRAPH_END_DELIMITER
         );
 
-        if let Some(start_idx) = original_content.find(CARTOGRAPH_START_DELIMITER) {
-            if let Some(end_idx) = original_content.find(CARTOGRAPH_END_DELIMITER) {
-                let actual_end = end_idx + CARTOGRAPH_END_DELIMITER.len();
-                if start_idx <= end_idx {
-                    let mut result = String::with_capacity(original_content.len() + full_block.len());
-                    result.push_str(&original_content[..start_idx]);
-                    result.push_str(&full_block);
-                    result.push_str(&original_content[actual_end..]);
-                    return result;
-                }
+        if let Some(start_idx) = original_content.find(CARTOGRAPH_START_DELIMITER)
+            && let Some(end_idx) = original_content.find(CARTOGRAPH_END_DELIMITER)
+        {
+            let actual_end = end_idx + CARTOGRAPH_END_DELIMITER.len();
+            if start_idx <= end_idx {
+                let mut result = String::with_capacity(original_content.len() + full_block.len());
+                result.push_str(&original_content[..start_idx]);
+                result.push_str(&full_block);
+                result.push_str(&original_content[actual_end..]);
+                return result;
             }
         }
 
@@ -68,19 +68,23 @@ impl TemplateEngine {
             USER_CUSTOM_END
         );
 
-        if let Some(start_idx) = new_template.find(USER_CUSTOM_START) {
-            if let Some(end_idx) = new_template.find(USER_CUSTOM_END) {
-                let actual_end = end_idx + USER_CUSTOM_END.len();
-                let mut result = String::new();
-                result.push_str(&new_template[..start_idx]);
-                result.push_str(&custom_block);
-                result.push_str(&new_template[actual_end..]);
-                return result;
-            }
+        if let Some(start_idx) = new_template.find(USER_CUSTOM_START)
+            && let Some(end_idx) = new_template.find(USER_CUSTOM_END)
+        {
+            let actual_end = end_idx + USER_CUSTOM_END.len();
+            let mut result = String::new();
+            result.push_str(&new_template[..start_idx]);
+            result.push_str(&custom_block);
+            result.push_str(&new_template[actual_end..]);
+            return result;
         }
 
         // If template doesn't have customization delimiters, append before decision checklist or at end
-        format!("{}\n\n## Custom Repository Guidelines\n{}\n", new_template.trim_end(), custom_block)
+        format!(
+            "{}\n\n## Custom Repository Guidelines\n{}\n",
+            new_template.trim_end(),
+            custom_block
+        )
     }
 
     /// Expands `{{variable}}` placeholders in template text.

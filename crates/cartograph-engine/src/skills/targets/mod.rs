@@ -1,25 +1,30 @@
+pub mod aider;
+pub mod antigravity;
 pub mod claude;
+pub mod cline;
 pub mod cursor;
 pub mod windsurf;
-pub mod antigravity;
-pub mod aider;
-pub mod cline;
 
-use std::path::{Path, PathBuf};
 use crate::skills::registry::{SkillDefinition, TargetIde};
 use crate::skills::template::TemplateEngine;
+use std::path::{Path, PathBuf};
 
+pub use aider::AiderAdapter;
+pub use antigravity::AntigravityAdapter;
 pub use claude::ClaudeAdapter;
+pub use cline::ClineAdapter;
 pub use cursor::CursorAdapter;
 pub use windsurf::WindsurfAdapter;
-pub use antigravity::AntigravityAdapter;
-pub use aider::AiderAdapter;
-pub use cline::ClineAdapter;
 
 pub trait IdeAdapter: Send + Sync {
     fn target(&self) -> TargetIde;
     fn detect(&self, root: &Path) -> bool;
-    fn install(&self, root: &Path, skills: &[SkillDefinition], force: bool) -> Result<Vec<PathBuf>, String>;
+    fn install(
+        &self,
+        root: &Path,
+        skills: &[SkillDefinition],
+        force: bool,
+    ) -> Result<Vec<PathBuf>, String>;
     fn uninstall(&self, root: &Path) -> Result<Vec<PathBuf>, String>;
 }
 
@@ -57,14 +62,18 @@ pub fn detect_ides(root: &Path) -> Vec<TargetIde> {
 }
 
 /// Installs canonical SKILL.md bundles to `.agent/skills/<skill-id>/SKILL.md`.
-pub fn install_universal_skills(root: &Path, skills: &[SkillDefinition]) -> Result<Vec<PathBuf>, String> {
+pub fn install_universal_skills(
+    root: &Path,
+    skills: &[SkillDefinition],
+) -> Result<Vec<PathBuf>, String> {
     let mut written = Vec::new();
     let base_dir = root.join(".agent").join("skills");
 
     for skill in skills {
         let skill_dir = base_dir.join(&skill.id);
         let skill_file = skill_dir.join("SKILL.md");
-        TemplateEngine::write_file_atomic(&skill_file, skill.template_content).map_err(|e| e.to_string())?;
+        TemplateEngine::write_file_atomic(&skill_file, skill.template_content)
+            .map_err(|e| e.to_string())?;
         written.push(skill_file);
     }
 
@@ -72,7 +81,10 @@ pub fn install_universal_skills(root: &Path, skills: &[SkillDefinition]) -> Resu
 }
 
 /// Removes canonical SKILL.md bundles from `.agent/skills/`.
-pub fn uninstall_universal_skills(root: &Path, skills: &[SkillDefinition]) -> Result<Vec<PathBuf>, String> {
+pub fn uninstall_universal_skills(
+    root: &Path,
+    skills: &[SkillDefinition],
+) -> Result<Vec<PathBuf>, String> {
     let mut removed = Vec::new();
     let base_dir = root.join(".agent").join("skills");
 

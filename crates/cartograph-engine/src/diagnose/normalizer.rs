@@ -65,15 +65,17 @@ impl PathNormalizer {
 
         // 2. If cleaned is absolute and starts with repo_root
         if let Ok(rel) = direct.strip_prefix(&self.repo_root)
-            && self.repo_root.join(rel).is_file() {
-                return (rel.to_path_buf(), true);
-            }
+            && self.repo_root.join(rel).is_file()
+        {
+            return (rel.to_path_buf(), true);
+        }
 
         // 3. Fallback: match by filename if found anywhere in repo
         if let Some(file_name) = path_obj.file_name().and_then(|n| n.to_str())
-            && let Some(found_rel) = self.find_file_in_repo(file_name) {
-                return (found_rel, true);
-            }
+            && let Some(found_rel) = self.find_file_in_repo(file_name)
+        {
+            return (found_rel, true);
+        }
 
         // If not found in repo, keep normalized relative path and mark out-of-project
         (path_obj.to_path_buf(), false)
@@ -181,9 +183,10 @@ impl PathNormalizer {
         {
             if entry.file_type().is_some_and(|f| f.is_file())
                 && entry.file_name().to_string_lossy() == target_filename
-                    && let Ok(rel) = entry.path().strip_prefix(&self.repo_root) {
-                        return Some(rel.to_path_buf());
-                    }
+                && let Ok(rel) = entry.path().strip_prefix(&self.repo_root)
+            {
+                return Some(rel.to_path_buf());
+            }
         }
         None
     }
@@ -200,7 +203,9 @@ mod tests {
             "src/services/billing.ts"
         );
         assert_eq!(
-            PathNormalizer::strip_container_prefixes("/workspace/crates/cartograph-core/src/lib.rs"),
+            PathNormalizer::strip_container_prefixes(
+                "/workspace/crates/cartograph-core/src/lib.rs"
+            ),
             "crates/cartograph-core/src/lib.rs"
         );
         assert_eq!(
@@ -227,7 +232,10 @@ mod tests {
         let norm = PathNormalizer::new(PathBuf::from("."));
         assert_eq!(norm.detect_language(Path::new("app/test.py")), "python");
         assert_eq!(norm.detect_language(Path::new("src/main.rs")), "rust");
-        assert_eq!(norm.detect_language(Path::new("web/index.ts")), "typescript");
+        assert_eq!(
+            norm.detect_language(Path::new("web/index.ts")),
+            "typescript"
+        );
         assert_eq!(norm.detect_language(Path::new("pkg/api.go")), "go");
     }
 }

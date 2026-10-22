@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use colored::Colorize;
 use cartograph_db::create_backend;
 use cartograph_engine::skills::{CheckStatus, VerificationGateEngine};
+use colored::Colorize;
+use std::path::PathBuf;
 
 use crate::commands::resolve_storage_config;
 
@@ -17,14 +17,8 @@ pub async fn handle_verify(
     let (storage_config, _) = resolve_storage_config(&root, &db);
     let backend = create_backend(&storage_config).ok();
 
-    let report = VerificationGateEngine::run_verification(
-        backend,
-        &root,
-        staged,
-        branch,
-        fail_fast,
-    )
-    .await;
+    let report =
+        VerificationGateEngine::run_verification(backend, &root, staged, branch, fail_fast).await;
 
     match format.to_lowercase().as_str() {
         "json" => println!("{}", report.format_json()),

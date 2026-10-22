@@ -1,6 +1,6 @@
+use cartograph_core::model::{ComplexityRecord, Edge, Node};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use cartograph_core::model::{ComplexityRecord, Edge, Node};
 
 pub fn nodes_to_columnar_dict<'py>(
     py: Python<'py>,

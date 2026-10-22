@@ -1,6 +1,4 @@
-use cartograph_core::diagram::{
-    DiagramDiffStatus, DiagramEdgeStyle, DiagramGraph, DiagramType,
-};
+use cartograph_core::diagram::{DiagramDiffStatus, DiagramEdgeStyle, DiagramGraph, DiagramType};
 
 pub struct MermaidRenderer;
 
@@ -20,7 +18,10 @@ impl MermaidRenderer {
         // Render Subgraph Clusters
         for cluster in &graph.clusters {
             let cluster_id = sanitize_mermaid_id(&cluster.id);
-            out.push_str(&format!("  subgraph {cluster_id} [\"{}\"]\n", cluster.label));
+            out.push_str(&format!(
+                "  subgraph {cluster_id} [\"{}\"]\n",
+                cluster.label
+            ));
             for node in &graph.nodes {
                 if node.cluster_id.as_deref() == Some(&cluster.id) {
                     let nid = sanitize_mermaid_id(&node.id);
@@ -68,7 +69,9 @@ impl MermaidRenderer {
 
             if let Some(lbl) = &edge.label {
                 let clean_lbl = sanitize_label(lbl);
-                out.push_str(&format!("  {src}{arrow_open}{clean_lbl}{arrow_close}{tgt}\n"));
+                out.push_str(&format!(
+                    "  {src}{arrow_open}{clean_lbl}{arrow_close}{tgt}\n"
+                ));
             } else {
                 match edge.style {
                     DiagramEdgeStyle::BoldWarning => out.push_str(&format!("  {src} ===> {tgt}\n")),
@@ -185,7 +188,13 @@ impl MermaidRenderer {
 
 fn sanitize_mermaid_id(id: &str) -> String {
     id.chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 

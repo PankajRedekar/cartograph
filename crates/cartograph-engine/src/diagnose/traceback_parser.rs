@@ -30,39 +30,47 @@ impl TracebackParser {
         if ((trimmed.starts_with('{') && trimmed.ends_with('}'))
             || (trimmed.starts_with('[') && trimmed.ends_with(']')))
             && let Ok(json_val) = serde_json::from_str::<Value>(trimmed)
-                && let Some(parsed) = Self::parse_sentry_json(&json_val) {
-                    return parsed;
-                }
+            && let Some(parsed) = Self::parse_sentry_json(&json_val)
+        {
+            return parsed;
+        }
 
         // 2. Try Python traceback
         if (trimmed.contains("Traceback (most recent call last)") || trimmed.contains("File \""))
-            && let Some(parsed) = Self::parse_python_traceback(trimmed) {
-                return parsed;
-            }
+            && let Some(parsed) = Self::parse_python_traceback(trimmed)
+        {
+            return parsed;
+        }
 
         // 3. Try Rust backtrace / panic
         if (trimmed.contains("panicked at") || trimmed.contains("stack backtrace:"))
-            && let Some(parsed) = Self::parse_rust_backtrace(trimmed) {
-                return parsed;
-            }
+            && let Some(parsed) = Self::parse_rust_backtrace(trimmed)
+        {
+            return parsed;
+        }
 
         // 4. Try JS / TS stack trace
-        if (trimmed.contains("    at ") || trimmed.contains("TypeError:") || trimmed.contains("Error:"))
-            && let Some(parsed) = Self::parse_js_stacktrace(trimmed) {
-                return parsed;
-            }
+        if (trimmed.contains("    at ")
+            || trimmed.contains("TypeError:")
+            || trimmed.contains("Error:"))
+            && let Some(parsed) = Self::parse_js_stacktrace(trimmed)
+        {
+            return parsed;
+        }
 
         // 5. Try Go panic trace
         if (trimmed.contains("panic:") || trimmed.contains("goroutine "))
-            && let Some(parsed) = Self::parse_go_panic(trimmed) {
-                return parsed;
-            }
+            && let Some(parsed) = Self::parse_go_panic(trimmed)
+        {
+            return parsed;
+        }
 
         // 6. Try Java stack trace
         if (trimmed.contains("\tat ") || trimmed.contains("Exception in thread"))
-            && let Some(parsed) = Self::parse_java_stacktrace(trimmed) {
-                return parsed;
-            }
+            && let Some(parsed) = Self::parse_java_stacktrace(trimmed)
+        {
+            return parsed;
+        }
 
         // 7. Generic fallback parser
         Self::parse_generic_trace(trimmed)
@@ -74,7 +82,11 @@ impl TracebackParser {
             .and_then(|e| e.get("values"))
             .and_then(|v| v.as_array())
             .and_then(|arr| arr.first())
-            .or_else(|| val.get("exception")?.as_object().map(|_| val.get("exception").unwrap()))?;
+            .or_else(|| {
+                val.get("exception")?
+                    .as_object()
+                    .map(|_| val.get("exception").unwrap())
+            })?;
 
         let crash_type = exception
             .get("type")
@@ -140,8 +152,14 @@ impl TracebackParser {
         for i in 0..lines.len() {
             let line = lines[i];
             if let Some(caps) = frame_re.captures(line) {
-                let file_path = caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
-                let line_num: usize = caps.get(2).and_then(|m| m.as_str().parse().ok()).unwrap_or(1);
+                let file_path = caps
+                    .get(1)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
+                let line_num: usize = caps
+                    .get(2)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(1);
                 let func_name = caps
                     .get(3)
                     .map(|m| m.as_str().trim().to_string())
@@ -165,7 +183,10 @@ impl TracebackParser {
                     function_name: func_name,
                     code_snippet,
                 });
-            } else if line.contains(':') && !line.trim().starts_with("File") && !line.starts_with("  ") {
+            } else if line.contains(':')
+                && !line.trim().starts_with("File")
+                && !line.starts_with("  ")
+            {
                 let parts: Vec<&str> = line.splitn(2, ':').collect();
                 if parts.len() == 2 && !parts[0].contains('/') && !parts[0].contains('\\') {
                     let ctype = parts[0].trim();
@@ -189,7 +210,8 @@ impl TracebackParser {
     }
 
     fn parse_rust_backtrace(text: &str) -> Option<ParsedCrash> {
-        let panic_re = Regex::new(r#"panicked at (?:'([^']+)', )?([^:]+):(\d+)(?::(\d+))?"#).ok()?;
+        let panic_re =
+            Regex::new(r#"panicked at (?:'([^']+)', )?([^:]+):(\d+)(?::(\d+))?"#).ok()?;
         let at_re = Regex::new(r#"^\s*(?:\d+:)?\s*(?:at\s+)?([^\s:]+):(\d+)(?::(\d+))?"#).ok()?;
         let func_re = Regex::new(r#"^\s*\d+:\s*([^\s]+)"#).ok()?;
 
@@ -206,8 +228,14 @@ impl TracebackParser {
                     .get(1)
                     .map(|m| m.as_str().to_string())
                     .unwrap_or_else(|| "Explicit panic triggered".to_string());
-                let file = caps.get(2).map(|m| m.as_str().to_string()).unwrap_or_default();
-                let line_num: usize = caps.get(3).and_then(|m| m.as_str().parse().ok()).unwrap_or(1);
+                let file = caps
+                    .get(2)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
+                let line_num: usize = caps
+                    .get(3)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(1);
                 let col: Option<usize> = caps.get(4).and_then(|m| m.as_str().parse().ok());
 
                 frames.push(RawFrame {
@@ -225,10 +253,19 @@ impl TracebackParser {
         let mut current_func = "<unknown>".to_string();
         for line in &lines {
             if let Some(caps) = func_re.captures(line) {
-                current_func = caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
+                current_func = caps
+                    .get(1)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
             } else if let Some(caps) = at_re.captures(line) {
-                let file = caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
-                let line_num: usize = caps.get(2).and_then(|m| m.as_str().parse().ok()).unwrap_or(1);
+                let file = caps
+                    .get(1)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
+                let line_num: usize = caps
+                    .get(2)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(1);
                 let col: Option<usize> = caps.get(3).and_then(|m| m.as_str().parse().ok());
 
                 if !file.is_empty() && (file.ends_with(".rs") || !file.contains('/')) {
@@ -255,10 +292,8 @@ impl TracebackParser {
     }
 
     fn parse_js_stacktrace(text: &str) -> Option<ParsedCrash> {
-        let frame_re = Regex::new(
-            r#"^\s*at (?:(.+?)\s+\((.+?):(\d+):(\d+)\)|(.+?):(\d+):(\d+))"#,
-        )
-        .ok()?;
+        let frame_re =
+            Regex::new(r#"^\s*at (?:(.+?)\s+\((.+?):(\d+):(\d+)\)|(.+?):(\d+):(\d+))"#).ok()?;
 
         let mut crash_type = "Error".to_string();
         let mut crash_message = String::new();
@@ -268,22 +303,21 @@ impl TracebackParser {
 
         // First line often "TypeError: message" or "Error: message"
         if let Some(first_line) = lines.first()
-            && first_line.contains(':') && !first_line.trim().starts_with("at ") {
-                let parts: Vec<&str> = first_line.splitn(2, ':').collect();
-                crash_type = parts[0].trim().to_string();
-                if parts.len() > 1 {
-                    crash_message = parts[1].trim().to_string();
-                }
+            && first_line.contains(':')
+            && !first_line.trim().starts_with("at ")
+        {
+            let parts: Vec<&str> = first_line.splitn(2, ':').collect();
+            crash_type = parts[0].trim().to_string();
+            if parts.len() > 1 {
+                crash_message = parts[1].trim().to_string();
             }
+        }
 
         for line in &lines {
             if let Some(caps) = frame_re.captures(line) {
-                if let (Some(func), Some(file), Some(line_s), col_s) = (
-                    caps.get(1),
-                    caps.get(2),
-                    caps.get(3),
-                    caps.get(4),
-                ) {
+                if let (Some(func), Some(file), Some(line_s), col_s) =
+                    (caps.get(1), caps.get(2), caps.get(3), caps.get(4))
+                {
                     let line_num: usize = line_s.as_str().parse().unwrap_or(1);
                     let col: Option<usize> = col_s.and_then(|c| c.as_str().parse().ok());
                     frames.push(RawFrame {
@@ -333,10 +367,19 @@ impl TracebackParser {
         for i in 0..lines.len() {
             let line = lines[i];
             if let Some(caps) = panic_re.captures(line) {
-                crash_message = caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
+                crash_message = caps
+                    .get(1)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
             } else if let Some(caps) = frame_loc_re.captures(line) {
-                let file = caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
-                let line_num: usize = caps.get(2).and_then(|m| m.as_str().parse().ok()).unwrap_or(1);
+                let file = caps
+                    .get(1)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
+                let line_num: usize = caps
+                    .get(2)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(1);
                 let func_name = if i > 0 {
                     lines[i - 1].trim().to_string()
                 } else {
@@ -366,7 +409,8 @@ impl TracebackParser {
 
     fn parse_java_stacktrace(text: &str) -> Option<ParsedCrash> {
         let ex_re = Regex::new(r#"^([a-zA-Z0-9_$.]+(?:Exception|Error))(?::\s*(.*))?"#).ok()?;
-        let at_re = Regex::new(r#"^\s*at\s+([a-zA-Z0-9_$.]+)\.([a-zA-Z0-9_$<]+)\(([^:]+):(\d+)\)"#).ok()?;
+        let at_re =
+            Regex::new(r#"^\s*at\s+([a-zA-Z0-9_$.]+)\.([a-zA-Z0-9_$<]+)\(([^:]+):(\d+)\)"#).ok()?;
 
         let mut crash_type = "Exception".to_string();
         let mut crash_message = String::new();
@@ -376,13 +420,22 @@ impl TracebackParser {
 
         for line in &lines {
             if let Some(caps) = ex_re.captures(line) {
-                crash_type = caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
-                crash_message = caps.get(2).map(|m| m.as_str().to_string()).unwrap_or_default();
+                crash_type = caps
+                    .get(1)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
+                crash_message = caps
+                    .get(2)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
             } else if let Some(caps) = at_re.captures(line) {
                 let class_name = caps.get(1).map(|m| m.as_str()).unwrap_or("");
                 let method_name = caps.get(2).map(|m| m.as_str()).unwrap_or("");
                 let file_name = caps.get(3).map(|m| m.as_str()).unwrap_or("");
-                let line_num: usize = caps.get(4).and_then(|m| m.as_str().parse().ok()).unwrap_or(1);
+                let line_num: usize = caps
+                    .get(4)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(1);
 
                 frames.push(RawFrame {
                     file_path: file_name.to_string(),
@@ -411,8 +464,14 @@ impl TracebackParser {
 
         for line in text.lines() {
             if let Some(caps) = loc_re.captures(line) {
-                let file = caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
-                let line_num: usize = caps.get(2).and_then(|m| m.as_str().parse().ok()).unwrap_or(1);
+                let file = caps
+                    .get(1)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
+                let line_num: usize = caps
+                    .get(2)
+                    .and_then(|m| m.as_str().parse().ok())
+                    .unwrap_or(1);
                 let col: Option<usize> = caps.get(3).and_then(|m| m.as_str().parse().ok());
 
                 frames.push(RawFrame {
@@ -427,7 +486,12 @@ impl TracebackParser {
 
         ParsedCrash {
             crash_type: "Error".to_string(),
-            crash_message: text.lines().next().unwrap_or("Unknown error").trim().to_string(),
+            crash_message: text
+                .lines()
+                .next()
+                .unwrap_or("Unknown error")
+                .trim()
+                .to_string(),
             frames,
         }
     }

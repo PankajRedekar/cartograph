@@ -26,16 +26,16 @@ pub use ai_review::{
     ReviewMemoryManager, ReviewPublisher, RiskEvaluator, SarifPublisher, SideEffectAnalyzer,
     StructuralGates, TerminalPublisher, WebhookPublisher,
 };
-pub use diagram::{DiagramEngine, SugiyamaLayoutEngine, render_diagram};
+pub use complexity::{ComplexityAnalysisOptions, ComplexityEngine};
+pub use deadcode::{
+    BaselineManager, DeadCodeEngine, DeadCodeRunOptions, PruneAdvisor, export_ai_ignore_mask,
+};
 pub use diagnose::{
     CallPathReconstructor, DiagnoseEngine, FaultClassifier, FrameAnchor, GitCorrelator,
     InvariantAuditor, PatchSynthesizer, PathNormalizer, ProvenanceSlicer, RegressionTestScaffolder,
     TopologicalFaultScorer, TracebackParser,
 };
-pub use complexity::{ComplexityAnalysisOptions, ComplexityEngine};
-pub use deadcode::{
-    BaselineManager, DeadCodeEngine, DeadCodeRunOptions, PruneAdvisor, export_ai_ignore_mask,
-};
+pub use diagram::{DiagramEngine, SugiyamaLayoutEngine, render_diagram};
 pub use discovery::{
     DiscoveredGitRepo, DiscoveryConfig, FileWalker, GitWorkspaceResolver, ZeroCopyBuffer,
 };
@@ -55,15 +55,15 @@ pub use locate::{
 };
 pub use pipeline::IndexPipeline;
 pub use routes::RouteEngine;
-pub use stats::IndexStats;
-pub use symbol_table::{NodeSummary, SymbolTable};
-pub use test_selector::{
-    ExecutionSummary, TestExecutor, TestSelector, TestSelectorOptions, TestSelectorOutputFormat,
-};
-pub use watcher::{FileWatcher, WatchEvent, WatcherSettings};
 pub use skills::{
     CheckStatus, DoctorReport, InstallOptions, InstallReport, RoiStatsReport, SkillDefinition,
     SkillDoctor, SkillInstaller, SkillPreset, SkillRegistry, SkillUpdateReport, SkillUpdater,
     TargetIde, TelemetryEvent, TelemetryRecorder, VerificationCheck, VerificationGateEngine,
     VerificationGateReport,
 };
+pub use stats::IndexStats;
+pub use symbol_table::{NodeSummary, SymbolTable};
+pub use test_selector::{
+    ExecutionSummary, TestExecutor, TestSelector, TestSelectorOptions, TestSelectorOutputFormat,
+};
+pub use watcher::{FileWatcher, WatchEvent, WatcherSettings};

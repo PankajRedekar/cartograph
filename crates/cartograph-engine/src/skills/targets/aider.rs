@@ -1,8 +1,8 @@
-use std::fs;
-use std::path::{Path, PathBuf};
 use crate::skills::registry::{SkillDefinition, TargetIde};
 use crate::skills::targets::IdeAdapter;
 use crate::skills::template::TemplateEngine;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct AiderAdapter;
 
@@ -15,7 +15,12 @@ impl IdeAdapter for AiderAdapter {
         root.join(".aider.conf.yml").exists() || root.join(".aider.chat.history.md").exists()
     }
 
-    fn install(&self, root: &Path, _skills: &[SkillDefinition], _force: bool) -> Result<Vec<PathBuf>, String> {
+    fn install(
+        &self,
+        root: &Path,
+        _skills: &[SkillDefinition],
+        _force: bool,
+    ) -> Result<Vec<PathBuf>, String> {
         let mut written = Vec::new();
 
         // 1. Configure .aider.conf.yml
@@ -58,22 +63,23 @@ auto-test: true
         let mut removed = Vec::new();
 
         let conf_path = root.join(".aider.conf.yml");
-        if conf_path.exists() {
-            if let Ok(content) = fs::read_to_string(&conf_path) {
-                if let (Some(s), Some(e)) = (
-                    content.find(crate::skills::template::CARTOGRAPH_START_DELIMITER),
-                    content.find(crate::skills::template::CARTOGRAPH_END_DELIMITER),
-                ) {
-                    let end_pos = e + crate::skills::template::CARTOGRAPH_END_DELIMITER.len();
-                    let cleaned = format!("{}{}", &content[..s], &content[end_pos..]).trim().to_string();
-                    if cleaned.is_empty() {
-                        let _ = fs::remove_file(&conf_path);
-                    } else {
-                        let _ = fs::write(&conf_path, cleaned);
-                    }
-                    removed.push(conf_path);
-                }
+        if conf_path.exists()
+            && let Ok(content) = fs::read_to_string(&conf_path)
+            && let (Some(s), Some(e)) = (
+                content.find(crate::skills::template::CARTOGRAPH_START_DELIMITER),
+                content.find(crate::skills::template::CARTOGRAPH_END_DELIMITER),
+            )
+        {
+            let end_pos = e + crate::skills::template::CARTOGRAPH_END_DELIMITER.len();
+            let cleaned = format!("{}{}", &content[..s], &content[end_pos..])
+                .trim()
+                .to_string();
+            if cleaned.is_empty() {
+                let _ = fs::remove_file(&conf_path);
+            } else {
+                let _ = fs::write(&conf_path, cleaned);
             }
+            removed.push(conf_path);
         }
 
         Ok(removed)

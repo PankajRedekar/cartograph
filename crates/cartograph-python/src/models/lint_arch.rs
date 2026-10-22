@@ -1,5 +1,5 @@
-use pyo3::prelude::*;
 use cartograph_core::model::{BoundaryViolation, DependencyCycle, LintArchReport};
+use pyo3::prelude::*;
 
 #[pyclass(name = "BoundaryViolation", frozen)]
 #[derive(Clone, Debug)]
@@ -146,7 +146,11 @@ impl PyLintArchReport {
 
 impl From<LintArchReport> for PyLintArchReport {
     fn from(r: LintArchReport) -> Self {
-        let violations = r.violations.into_iter().map(PyBoundaryViolation::from).collect();
+        let violations = r
+            .violations
+            .into_iter()
+            .map(PyBoundaryViolation::from)
+            .collect();
         let cycles = r.cycles.into_iter().map(PyDependencyCycle::from).collect();
         Self {
             passed: r.summary.passed,

@@ -15,10 +15,15 @@ impl TopologicalFaultScorer {
         blame_map: &HashMap<usize, GitBlameInfo>,
         boundary_crossings: &HashMap<usize, bool>,
         _category: FaultCategory,
-    ) -> (Vec<FaultCandidate>, Option<FaultCandidate>, DiagnosisVerdict) {
+    ) -> (
+        Vec<FaultCandidate>,
+        Option<FaultCandidate>,
+        DiagnosisVerdict,
+    ) {
         let mut candidates = Vec::new();
 
-        let project_frames: Vec<&TracebackFrame> = frames.iter().filter(|f| f.is_in_project).collect();
+        let project_frames: Vec<&TracebackFrame> =
+            frames.iter().filter(|f| f.is_in_project).collect();
         let total_proj = project_frames.len();
 
         for frame in frames {
@@ -32,15 +37,15 @@ impl TopologicalFaultScorer {
             // 1. Provenance origin match
             if let Some(prov) = provenance
                 && frame.file_path == prov.origin_file
-                    && (frame.line_number == prov.origin_line
-                        || (frame.line_number.abs_diff(prov.origin_line) <= 5))
-                {
-                    score += 0.45;
-                    reasons.push(format!(
-                        "Origin site of tainted variable `{}` (def-use backward slice)",
-                        prov.variable_name
-                    ));
-                }
+                && (frame.line_number == prov.origin_line
+                    || (frame.line_number.abs_diff(prov.origin_line) <= 5))
+            {
+                score += 0.45;
+                reasons.push(format!(
+                    "Origin site of tainted variable `{}` (def-use backward slice)",
+                    prov.variable_name
+                ));
+            }
 
             // 2. Git Blame & Churn recency
             let blame_recency = blame_map.get(&frame.frame_index);
@@ -50,7 +55,10 @@ impl TopologicalFaultScorer {
                     reasons.push("Modified in current branch/PR diff".to_string());
                 } else if blame.age_days <= 7 {
                     score += 0.25;
-                    reasons.push(format!("Recently committed ({} days ago by {})", blame.age_days, blame.author));
+                    reasons.push(format!(
+                        "Recently committed ({} days ago by {})",
+                        blame.age_days, blame.author
+                    ));
                 } else if blame.age_days <= 30 {
                     score += 0.12;
                     reasons.push(format!("Modified {} days ago", blame.age_days));
@@ -58,10 +66,15 @@ impl TopologicalFaultScorer {
             }
 
             // 3. Boundary crossing
-            let is_boundary = boundary_crossings.get(&frame.frame_index).copied().unwrap_or(false);
+            let is_boundary = boundary_crossings
+                .get(&frame.frame_index)
+                .copied()
+                .unwrap_or(false);
             if is_boundary {
                 score += 0.15;
-                reasons.push("Crosses architectural layer or package encapsulation boundary".to_string());
+                reasons.push(
+                    "Crosses architectural layer or package encapsulation boundary".to_string(),
+                );
             }
 
             // 4. Position damping: leaf panic site is usually a consequence, not the origin
@@ -118,9 +131,11 @@ impl TopologicalFaultScorer {
 
         // If highest candidate is marked PanicSite because it was single frame or sole project frame
         if let Some(top) = candidates.first_mut()
-            && top.suspicion_score >= 0.60 && top.role != FaultRole::RootCause {
-                top.role = FaultRole::RootCause;
-            }
+            && top.suspicion_score >= 0.60
+            && top.role != FaultRole::RootCause
+        {
+            top.role = FaultRole::RootCause;
+        }
 
         let root_cause = candidates.first().cloned();
         let verdict = if max_score >= 0.75 {

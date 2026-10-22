@@ -259,7 +259,8 @@ mod tests {
             }),
             suggested_fix: Some(SuggestedFix {
                 replacement_code: "if user is None: return None".to_string(),
-                unified_diff_patch: "--- a/src/services/repo.py\n+++ b/src/services/repo.py\n".to_string(),
+                unified_diff_patch: "--- a/src/services/repo.py\n+++ b/src/services/repo.py\n"
+                    .to_string(),
                 explanation: "Guard against null user".to_string(),
             }),
             regression_test: Some(RegressionTestReproducer {

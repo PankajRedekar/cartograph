@@ -13,10 +13,7 @@ impl TerminalPublisher {
             "🔍 Cartograph Root-Cause Detective:".bold().cyan(),
             report.crash_type.bold().red()
         ));
-        out.push_str(&format!(
-            "   {}\n",
-            report.crash_message.bright_white()
-        ));
+        out.push_str(&format!("   {}\n", report.crash_message.bright_white()));
         out.push_str(&format!(
             "   Category: {} | Verdict: {:?} | Latency: {}ms\n",
             report.fault_category.to_string().yellow(),
@@ -124,7 +121,10 @@ impl TerminalPublisher {
                 "🧪 Synthesized Regression Test:".bold().blue(),
                 test.framework.yellow()
             ));
-            out.push_str(&format!("   Target: {}\n", test.target_file.display().to_string().cyan()));
+            out.push_str(&format!(
+                "   Target: {}\n",
+                test.target_file.display().to_string().cyan()
+            ));
             out.push_str(&format!("   Test Name: {}\n\n", test.test_name));
         }
 

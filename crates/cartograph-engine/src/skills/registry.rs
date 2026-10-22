@@ -28,7 +28,10 @@ impl std::str::FromStr for TargetIde {
             "cline" | "clinerules" => Ok(TargetIde::Cline),
             "openhands" => Ok(TargetIde::OpenHands),
             "all" => Ok(TargetIde::All),
-            _ => Err(format!("Unknown target IDE: '{}'. Supported: claude, cursor, windsurf, antigravity, aider, roo, cline, openhands, all", s)),
+            _ => Err(format!(
+                "Unknown target IDE: '{}'. Supported: claude, cursor, windsurf, antigravity, aider, roo, cline, openhands, all",
+                s
+            )),
         }
     }
 }
@@ -65,7 +68,10 @@ impl std::str::FromStr for SkillPreset {
             "minimal" => Ok(SkillPreset::Minimal),
             "standard" => Ok(SkillPreset::Standard),
             "strict" => Ok(SkillPreset::Strict),
-            _ => Err(format!("Unknown preset: '{}'. Supported: minimal, standard, strict", s)),
+            _ => Err(format!(
+                "Unknown preset: '{}'. Supported: minimal, standard, strict",
+                s
+            )),
         }
     }
 }
@@ -308,19 +314,22 @@ impl SkillRegistry {
 
     pub fn get_skill(id_or_name: &str) -> Option<SkillDefinition> {
         let clean = id_or_name.trim_start_matches("cartograph-");
-        Self::all_skills().into_iter().find(|s| {
-            s.id == id_or_name || s.name == clean || s.name == id_or_name
-        })
+        Self::all_skills()
+            .into_iter()
+            .find(|s| s.id == id_or_name || s.name == clean || s.name == id_or_name)
     }
 
     pub fn skills_for_preset(preset: SkillPreset) -> Vec<SkillDefinition> {
         match preset {
-            SkillPreset::Minimal => {
-                Self::all_skills()
-                    .into_iter()
-                    .filter(|s| s.name == "locate" || s.name == "impact" || s.name == "test-selector" || s.name == "verify")
-                    .collect()
-            }
+            SkillPreset::Minimal => Self::all_skills()
+                .into_iter()
+                .filter(|s| {
+                    s.name == "locate"
+                        || s.name == "impact"
+                        || s.name == "test-selector"
+                        || s.name == "verify"
+                })
+                .collect(),
             SkillPreset::Standard | SkillPreset::Strict => Self::all_skills(),
         }
     }

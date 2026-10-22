@@ -1173,22 +1173,22 @@ All benchmarks measured on standard Apple M-Series / Linux x86_64 hardware:
 
 ---
 
-## 🐍 Python SDK & Graph Data Science (`cartograph`)
+## 🐍 Python SDK & Graph Data Science (`cartograph-python`)
 
 Cartograph provides high-performance, zero-copy native Python bindings compiled via Rust `pyo3` and `maturin`.
 
 ### Installation
 
 ```bash
-# Core SDK (requires Python 3.12+)
-pip install cartograph
+# Core SDK (requires Python 3.8+)
+pip install cartograph-python
 
 # With Graph Data Science extras
-pip install "cartograph[networkx]"   # NetworkX DiGraph export
-pip install "cartograph[polars]"     # Lightning-fast Polars DataFrames
-pip install "cartograph[pandas]"     # Pandas DataFrames & PyArrow
-pip install "cartograph[igraph]"     # python-igraph integration
-pip install "cartograph[all]"        # All data science & analysis extras
+pip install "cartograph-python[networkx]"   # NetworkX DiGraph export
+pip install "cartograph-python[polars]"     # Lightning-fast Polars DataFrames
+pip install "cartograph-python[pandas]"     # Pandas DataFrames & PyArrow
+pip install "cartograph-python[igraph]"     # python-igraph integration
+pip install "cartograph-python[all]"        # All data science & analysis extras
 ```
 
 ### Quickstart

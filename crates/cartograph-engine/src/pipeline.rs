@@ -7,7 +7,7 @@ use cartograph_core::backend::GraphStoreBackend;
 use rayon::prelude::*;
 
 use crate::discovery::{DiscoveryConfig, FileWalker};
-use crate::error::{EngineError, Result};
+use crate::error::Result;
 use crate::hasher::{DiscoveredFile, IncrementalDetector};
 use crate::linker::ReferenceResolver;
 use crate::stats::IndexStats;

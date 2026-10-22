@@ -1,5 +1,5 @@
-use pyo3::prelude::*;
 use cartograph_core::model::FullStackRouteTrace;
+use pyo3::prelude::*;
 
 #[pyclass(name = "RouteTrace", frozen)]
 #[derive(Clone, Debug)]

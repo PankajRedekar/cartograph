@@ -1,5 +1,5 @@
-use pyo3::prelude::*;
 use cartograph_core::model::{Edge, Node};
+use pyo3::prelude::*;
 
 #[pyclass(name = "Node", frozen)]
 #[derive(Clone, Debug)]

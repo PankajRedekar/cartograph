@@ -1,6 +1,6 @@
-use pyo3::prelude::*;
 use cartograph_core::model::GraphStats;
 use cartograph_engine::stats::IndexStats;
+use pyo3::prelude::*;
 
 #[pyclass(name = "IndexStats", frozen)]
 #[derive(Clone, Debug)]
@@ -26,7 +26,11 @@ impl PyIndexStats {
     fn __repr__(&self) -> String {
         format!(
             "<IndexStats files={}/{} nodes={} edges={} duration={}ms>",
-            self.files_indexed, self.files_scanned, self.nodes_indexed, self.edges_indexed, self.elapsed_ms
+            self.files_indexed,
+            self.files_scanned,
+            self.nodes_indexed,
+            self.edges_indexed,
+            self.elapsed_ms
         )
     }
 

@@ -50,7 +50,10 @@ impl FromStr for DiagramType {
             "logic" | "flowchart" | "decision" | "rules" => Ok(DiagramType::LogicFlow),
             "diff" | "impact" | "pr" => Ok(DiagramType::DiffImpact),
             "concept" | "domain" | "aggregate" => Ok(DiagramType::ConceptCluster),
-            other => Err(format!("Unknown diagram type: '{}'. Valid types: architecture, callgraph, er, sequence, logic, diff, concept", other)),
+            other => Err(format!(
+                "Unknown diagram type: '{}'. Valid types: architecture, callgraph, er, sequence, logic, diff, concept",
+                other
+            )),
         }
     }
 }
@@ -120,7 +123,10 @@ impl FromStr for DiagramFormat {
             "plantuml" | "puml" => Ok(DiagramFormat::PlantUml),
             "json" => Ok(DiagramFormat::Json),
             "xml" => Ok(DiagramFormat::Xml),
-            other => Err(format!("Unknown diagram format: '{}'. Valid formats: mermaid, svg, html, text, d2, dot, plantuml, json, xml", other)),
+            other => Err(format!(
+                "Unknown diagram format: '{}'. Valid formats: mermaid, svg, html, text, d2, dot, plantuml, json, xml",
+                other
+            )),
         }
     }
 }
@@ -158,7 +164,10 @@ impl FromStr for DiagramTheme {
             "dark" => Ok(DiagramTheme::Dark),
             "light" => Ok(DiagramTheme::Light),
             "high_contrast" | "contrast" => Ok(DiagramTheme::HighContrast),
-            other => Err(format!("Unknown theme: '{}'. Valid themes: dark, light, high_contrast", other)),
+            other => Err(format!(
+                "Unknown theme: '{}'. Valid themes: dark, light, high_contrast",
+                other
+            )),
         }
     }
 }
@@ -196,7 +205,10 @@ impl FromStr for TraversalDirection {
             "upstream" | "up" | "callers" | "in" => Ok(TraversalDirection::Upstream),
             "downstream" | "down" | "callees" | "out" => Ok(TraversalDirection::Downstream),
             "both" | "bidirectional" | "all" => Ok(TraversalDirection::Both),
-            other => Err(format!("Unknown direction: '{}'. Valid directions: upstream, downstream, both", other)),
+            other => Err(format!(
+                "Unknown direction: '{}'. Valid directions: upstream, downstream, both",
+                other
+            )),
         }
     }
 }
@@ -436,26 +448,65 @@ mod tests {
 
     #[test]
     fn test_diagram_type_parsing() {
-        assert_eq!("architecture".parse::<DiagramType>().unwrap(), DiagramType::Architecture);
-        assert_eq!("arch".parse::<DiagramType>().unwrap(), DiagramType::Architecture);
-        assert_eq!("callgraph".parse::<DiagramType>().unwrap(), DiagramType::CallGraph);
-        assert_eq!("er".parse::<DiagramType>().unwrap(), DiagramType::EntityRelationship);
-        assert_eq!("sequence".parse::<DiagramType>().unwrap(), DiagramType::Sequence);
-        assert_eq!("logic".parse::<DiagramType>().unwrap(), DiagramType::LogicFlow);
-        assert_eq!("diff".parse::<DiagramType>().unwrap(), DiagramType::DiffImpact);
-        assert_eq!("concept".parse::<DiagramType>().unwrap(), DiagramType::ConceptCluster);
+        assert_eq!(
+            "architecture".parse::<DiagramType>().unwrap(),
+            DiagramType::Architecture
+        );
+        assert_eq!(
+            "arch".parse::<DiagramType>().unwrap(),
+            DiagramType::Architecture
+        );
+        assert_eq!(
+            "callgraph".parse::<DiagramType>().unwrap(),
+            DiagramType::CallGraph
+        );
+        assert_eq!(
+            "er".parse::<DiagramType>().unwrap(),
+            DiagramType::EntityRelationship
+        );
+        assert_eq!(
+            "sequence".parse::<DiagramType>().unwrap(),
+            DiagramType::Sequence
+        );
+        assert_eq!(
+            "logic".parse::<DiagramType>().unwrap(),
+            DiagramType::LogicFlow
+        );
+        assert_eq!(
+            "diff".parse::<DiagramType>().unwrap(),
+            DiagramType::DiffImpact
+        );
+        assert_eq!(
+            "concept".parse::<DiagramType>().unwrap(),
+            DiagramType::ConceptCluster
+        );
     }
 
     #[test]
     fn test_diagram_format_parsing() {
-        assert_eq!("mermaid".parse::<DiagramFormat>().unwrap(), DiagramFormat::Mermaid);
+        assert_eq!(
+            "mermaid".parse::<DiagramFormat>().unwrap(),
+            DiagramFormat::Mermaid
+        );
         assert_eq!("svg".parse::<DiagramFormat>().unwrap(), DiagramFormat::Svg);
-        assert_eq!("html".parse::<DiagramFormat>().unwrap(), DiagramFormat::Html);
-        assert_eq!("text".parse::<DiagramFormat>().unwrap(), DiagramFormat::Text);
+        assert_eq!(
+            "html".parse::<DiagramFormat>().unwrap(),
+            DiagramFormat::Html
+        );
+        assert_eq!(
+            "text".parse::<DiagramFormat>().unwrap(),
+            DiagramFormat::Text
+        );
         assert_eq!("d2".parse::<DiagramFormat>().unwrap(), DiagramFormat::D2);
         assert_eq!("dot".parse::<DiagramFormat>().unwrap(), DiagramFormat::Dot);
-        assert_eq!("plantuml".parse::<DiagramFormat>().unwrap(), DiagramFormat::PlantUml);
-        assert_eq!("json".parse::<DiagramFormat>().unwrap(), DiagramFormat::Json);
+        assert_eq!(
+            "plantuml".parse::<DiagramFormat>().unwrap(),
+            DiagramFormat::PlantUml
+        );
+        assert_eq!(
+            "json".parse::<DiagramFormat>().unwrap(),
+            DiagramFormat::Json
+        );
         assert_eq!("xml".parse::<DiagramFormat>().unwrap(), DiagramFormat::Xml);
     }
 
@@ -471,7 +522,8 @@ mod tests {
         graph.edges.push(edge);
 
         let json = serde_json::to_string(&graph).expect("Must serialize to JSON");
-        let roundtrip: DiagramGraph = serde_json::from_str(&json).expect("Must deserialize from JSON");
+        let roundtrip: DiagramGraph =
+            serde_json::from_str(&json).expect("Must deserialize from JSON");
         assert_eq!(roundtrip.title, "Test Architecture");
         assert_eq!(roundtrip.nodes.len(), 1);
         assert_eq!(roundtrip.edges.len(), 1);

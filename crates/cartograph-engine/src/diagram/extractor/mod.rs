@@ -63,7 +63,9 @@ pub async fn extract_diagram(
     match resolved_type {
         DiagramType::Architecture => ArchitectureExtractor::extract(backend, options).await,
         DiagramType::CallGraph => CallGraphExtractor::extract(backend, options).await,
-        DiagramType::EntityRelationship => EntityRelationshipExtractor::extract(backend, options).await,
+        DiagramType::EntityRelationship => {
+            EntityRelationshipExtractor::extract(backend, options).await
+        }
         DiagramType::Sequence => SequenceDiagramExtractor::extract(backend, options).await,
         DiagramType::LogicFlow => LogicFlowExtractor::extract(backend, options).await,
         DiagramType::DiffImpact => DiffImpactExtractor::extract(backend, options).await,

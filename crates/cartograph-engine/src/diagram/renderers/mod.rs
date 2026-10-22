@@ -21,11 +21,7 @@ pub use xml::XmlRenderer;
 use cartograph_core::diagram::{DiagramFormat, DiagramGraph, DiagramTheme};
 
 /// Render a diagram graph to string using the specified format and theme
-pub fn render_diagram(
-    graph: &DiagramGraph,
-    format: DiagramFormat,
-    theme: DiagramTheme,
-) -> String {
+pub fn render_diagram(graph: &DiagramGraph, format: DiagramFormat, theme: DiagramTheme) -> String {
     match format {
         DiagramFormat::Mermaid => MermaidRenderer::render(graph),
         DiagramFormat::Svg => SvgRenderer::render(graph, theme),

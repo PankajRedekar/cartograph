@@ -8,7 +8,8 @@ use pyo3::types::PyDict;
 
 use cartograph_core::backend::GraphStoreBackend;
 use cartograph_core::config::{
-    ComplexityConfig, DeadCodeConfig, DiagnoseConfig, ExtractLogicConfig, LintArchConfig, StorageConfig,
+    ComplexityConfig, DeadCodeConfig, DiagnoseConfig, ExtractLogicConfig, LintArchConfig,
+    StorageConfig,
 };
 use cartograph_core::diagram::{
     DiagramFormat, DiagramOptions, DiagramTheme, DiagramType, TraversalDirection,
@@ -47,11 +48,7 @@ pub struct PyCodeGraph {
 impl PyCodeGraph {
     #[staticmethod]
     #[pyo3(signature = (path = None, profile = "default", in_memory = false))]
-    pub fn open(
-        path: Option<String>,
-        profile: &str,
-        in_memory: bool,
-    ) -> PyResult<Self> {
+    pub fn open(path: Option<String>, profile: &str, in_memory: bool) -> PyResult<Self> {
         let root = if let Some(p) = path {
             PathBuf::from(p)
         } else {
@@ -111,17 +108,19 @@ impl PyCodeGraph {
         let repo_root = self.repo_root.clone();
         let rt = self.runtime.clone();
 
-        let stats = py.allow_threads(move || {
-            rt.block_on(async move {
-                let mut disc = DiscoveryConfig::default();
-                disc.root_path = repo_root;
-                if threads.is_some() {
-                    disc.num_threads = threads;
-                }
-                let pipeline = IndexPipeline::new(backend, disc);
-                pipeline.run(force).await
+        let stats = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let mut disc = DiscoveryConfig::default();
+                    disc.root_path = repo_root;
+                    if threads.is_some() {
+                        disc.num_threads = threads;
+                    }
+                    let pipeline = IndexPipeline::new(backend, disc);
+                    pipeline.run(force).await
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         Ok(PyIndexStats::from(stats))
     }
@@ -131,11 +130,9 @@ impl PyCodeGraph {
         let backend = self.backend.clone();
         let rt = self.runtime.clone();
 
-        let stats = py.allow_threads(move || {
-            rt.block_on(async move {
-                backend.stats().await
-            })
-        }).map_err(to_py_err)?;
+        let stats = py
+            .allow_threads(move || rt.block_on(async move { backend.stats().await }))
+            .map_err(to_py_err)?;
 
         Ok(PyGraphStats::from(stats))
     }
@@ -153,16 +150,18 @@ impl PyCodeGraph {
         let repo_root = self.repo_root.clone();
         let rt = self.runtime.clone();
 
-        let res = py.allow_threads(move || {
-            rt.block_on(async move {
-                let locator = SubgraphLocator::new(backend, repo_root);
-                let mut opts = LocateCliOptions::default();
-                opts.code = code;
-                opts.limit = Some(limit);
-                let q = QueryParser::parse(&query, opts);
-                locator.locate(q).await
+        let res = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let locator = SubgraphLocator::new(backend, repo_root);
+                    let mut opts = LocateCliOptions::default();
+                    opts.code = code;
+                    opts.limit = Some(limit);
+                    let q = QueryParser::parse(&query, opts);
+                    locator.locate(q).await
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         Ok(PyLocateResult::from(res))
     }
@@ -181,17 +180,19 @@ impl PyCodeGraph {
         let repo_root = self.repo_root.clone();
         let rt = self.runtime.clone();
 
-        let res = py.allow_threads(move || {
-            rt.block_on(async move {
-                let analyzer = ImpactAnalyzer::new(backend, repo_root);
-                let mut q = ImpactQuery::default();
-                q.target = Some(target);
-                q.branch_range = branch;
-                q.staged = staged;
-                q.max_depth = depth;
-                analyzer.analyze_impact(&q).await
+        let res = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let analyzer = ImpactAnalyzer::new(backend, repo_root);
+                    let mut q = ImpactQuery::default();
+                    q.target = Some(target);
+                    q.branch_range = branch;
+                    q.staged = staged;
+                    q.max_depth = depth;
+                    analyzer.analyze_impact(&q).await
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         Ok(PyImpactResult::from(res))
     }
@@ -208,16 +209,18 @@ impl PyCodeGraph {
         let repo_root = self.repo_root.clone();
         let rt = self.runtime.clone();
 
-        let res = py.allow_threads(move || {
-            rt.block_on(async move {
-                let selector = TestSelector::new(backend.as_ref());
-                let mut opts = TestSelectorOptions::default();
-                opts.repo_root = repo_root;
-                opts.branch_range = branch;
-                opts.diff_content = Some(target);
-                selector.select_tests(&opts).await
+        let res = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let selector = TestSelector::new(backend.as_ref());
+                    let mut opts = TestSelectorOptions::default();
+                    opts.repo_root = repo_root;
+                    opts.branch_range = branch;
+                    opts.diff_content = Some(target);
+                    selector.select_tests(&opts).await
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         Ok(PyTestSelectorResult::from(res))
     }
@@ -232,14 +235,16 @@ impl PyCodeGraph {
         let backend = self.backend.clone();
         let rt = self.runtime.clone();
 
-        let report = py.allow_threads(move || {
-            rt.block_on(async move {
-                let engine = RouteEngine::new(backend.as_ref());
-                let mut opts = RouteFilterOptions::default();
-                opts.path_pattern = filter_query;
-                engine.query_routes(&opts).await
+        let report = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let engine = RouteEngine::new(backend.as_ref());
+                    let mut opts = RouteFilterOptions::default();
+                    opts.path_pattern = filter_query;
+                    engine.query_routes(&opts).await
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         Ok(report.routes.into_iter().map(PyRouteTrace::from).collect())
     }
@@ -250,14 +255,16 @@ impl PyCodeGraph {
         let backend = self.backend.clone();
         let rt = self.runtime.clone();
 
-        let report = py.allow_threads(move || {
-            rt.block_on(async move {
-                let mut cfg = LintArchConfig::default();
-                cfg.strict = strict;
-                let linter = ArchLinter::new(backend, cfg);
-                linter.lint().await
+        let report = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let mut cfg = LintArchConfig::default();
+                    cfg.strict = strict;
+                    let linter = ArchLinter::new(backend, cfg);
+                    linter.lint().await
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         Ok(PyLintArchReport::from(report))
     }
@@ -274,17 +281,19 @@ impl PyCodeGraph {
         let repo_root = self.repo_root.clone();
         let rt = self.runtime.clone();
 
-        let report = py.allow_threads(move || {
-            rt.block_on(async move {
-                let cfg = ComplexityConfig::default();
-                let mut opts = ComplexityAnalysisOptions::default();
-                opts.repo_root = repo_root;
-                opts.top_n = top;
-                opts.danger_zone_only = danger_zone;
-                opts.granularity = ComplexityGranularity::Symbol;
-                ComplexityEngine::analyze(backend.as_ref(), &cfg, &opts).await
+        let report = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let cfg = ComplexityConfig::default();
+                    let mut opts = ComplexityAnalysisOptions::default();
+                    opts.repo_root = repo_root;
+                    opts.top_n = top;
+                    opts.danger_zone_only = danger_zone;
+                    opts.granularity = ComplexityGranularity::Symbol;
+                    ComplexityEngine::analyze(backend.as_ref(), &cfg, &opts).await
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         Ok(PyComplexityReport::from(report))
     }
@@ -296,15 +305,17 @@ impl PyCodeGraph {
         let repo_root = self.repo_root.clone();
         let rt = self.runtime.clone();
 
-        let report = py.allow_threads(move || {
-            rt.block_on(async move {
-                let cfg = DeadCodeConfig::default();
-                let engine = DeadCodeEngine::new(backend, cfg, repo_root);
-                let mut opts = DeadCodeRunOptions::default();
-                opts.min_lines = Some(min_lines);
-                engine.run(opts).await
+        let report = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let cfg = DeadCodeConfig::default();
+                    let engine = DeadCodeEngine::new(backend, cfg, repo_root);
+                    let mut opts = DeadCodeRunOptions::default();
+                    opts.min_lines = Some(min_lines);
+                    engine.run(opts).await
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         Ok(PyDeadCodeReport::from(report))
     }
@@ -323,20 +334,22 @@ impl PyCodeGraph {
         let repo_root = self.repo_root.clone();
         let rt = self.runtime.clone();
 
-        let rules = py.allow_threads(move || {
-            rt.block_on(async move {
-                let cfg = ExtractLogicConfig::default();
-                let engine = LogicExtractionEngine::new(Some(backend.as_ref()), &cfg);
-                let target_concept = concept.or(query);
-                if let Some(ref sym) = symbol {
-                    engine.extract_symbol(sym, None, &repo_root, deep, 3).await
-                } else if let Some(ref c) = target_concept {
-                    engine.query_concept(c, &repo_root)
-                } else {
-                    engine.scan_workspace(&repo_root)
-                }
+        let rules = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let cfg = ExtractLogicConfig::default();
+                    let engine = LogicExtractionEngine::new(Some(backend.as_ref()), &cfg);
+                    let target_concept = concept.or(query);
+                    if let Some(ref sym) = symbol {
+                        engine.extract_symbol(sym, None, &repo_root, deep, 3).await
+                    } else if let Some(ref c) = target_concept {
+                        engine.query_concept(c, &repo_root)
+                    } else {
+                        engine.scan_workspace(&repo_root)
+                    }
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         Ok(PyLogicReport::from(rules))
     }
@@ -355,20 +368,22 @@ impl PyCodeGraph {
         let repo_root = self.repo_root.clone();
         let rt = self.runtime.clone();
 
-        let report = py.allow_threads(move || {
-            rt.block_on(async move {
-                let input = if let Some(ref path) = file_path {
-                    std::fs::read_to_string(path).unwrap_or(trace_or_log)
-                } else {
-                    trace_or_log
-                };
-                let mut cfg = DiagnoseConfig::default();
-                cfg.offline = offline;
-                cfg.deep = deep;
-                let engine = DiagnoseEngine::new(repo_root, backend, cfg);
-                engine.run_diagnose(&input).await
+        let report = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let input = if let Some(ref path) = file_path {
+                        std::fs::read_to_string(path).unwrap_or(trace_or_log)
+                    } else {
+                        trace_or_log
+                    };
+                    let mut cfg = DiagnoseConfig::default();
+                    cfg.offline = offline;
+                    cfg.deep = deep;
+                    let engine = DiagnoseEngine::new(repo_root, backend, cfg);
+                    engine.run_diagnose(&input).await
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         Ok(PyDiagnosisReport::from(report))
     }
@@ -414,16 +429,22 @@ impl PyCodeGraph {
         opts.max_nodes = max_nodes;
         opts.collapse_modules = collapse_modules;
 
-        let (rendered, node_cnt, edge_cnt) = py.allow_threads(move || {
-            rt.block_on(async move {
-                let engine = DiagramEngine::new(backend);
-                let graph = engine.generate_graph(&opts).await?;
-                let n_cnt = graph.nodes.len();
-                let e_cnt = graph.edges.len();
-                let text = cartograph_engine::diagram::renderers::render_diagram(&graph, opts.format, opts.theme);
-                cartograph_core::error::Result::Ok((text, n_cnt, e_cnt))
+        let (rendered, node_cnt, edge_cnt) = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let engine = DiagramEngine::new(backend);
+                    let graph = engine.generate_graph(&opts).await?;
+                    let n_cnt = graph.nodes.len();
+                    let e_cnt = graph.edges.len();
+                    let text = cartograph_engine::diagram::renderers::render_diagram(
+                        &graph,
+                        opts.format,
+                        opts.theme,
+                    );
+                    cartograph_core::error::Result::Ok((text, n_cnt, e_cnt))
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         Ok(PyDiagramResult::new(
             rendered,
@@ -439,23 +460,25 @@ impl PyCodeGraph {
         let backend = self.backend.clone();
         let rt = self.runtime.clone();
 
-        let (raw_nodes, raw_edges) = py.allow_threads(move || {
-            rt.block_on(async move {
-                let files = backend.get_all_indexed_files().await?;
-                let mut all_nodes = Vec::new();
-                for file in &files {
-                    let nodes = backend.get_nodes_by_filepath(file).await?;
-                    all_nodes.extend(nodes);
-                }
-                let node_ids: Vec<String> = all_nodes.iter().map(|n| n.id.clone()).collect();
-                let all_edges = if node_ids.is_empty() {
-                    Vec::new()
-                } else {
-                    backend.get_edges_for_nodes(&node_ids, 0.0).await?
-                };
-                cartograph_core::error::Result::Ok((all_nodes, all_edges))
+        let (raw_nodes, raw_edges) = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let files = backend.get_all_indexed_files().await?;
+                    let mut all_nodes = Vec::new();
+                    for file in &files {
+                        let nodes = backend.get_nodes_by_filepath(file).await?;
+                        all_nodes.extend(nodes);
+                    }
+                    let node_ids: Vec<String> = all_nodes.iter().map(|n| n.id.clone()).collect();
+                    let all_edges = if node_ids.is_empty() {
+                        Vec::new()
+                    } else {
+                        backend.get_edges_for_nodes(&node_ids, 0.0).await?
+                    };
+                    cartograph_core::error::Result::Ok((all_nodes, all_edges))
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         let nodes = raw_nodes
             .into_iter()
@@ -474,7 +497,14 @@ impl PyCodeGraph {
 
         let edges = raw_edges
             .into_iter()
-            .map(|e| (e.source_id, e.target_id, e.kind.as_str().to_string(), e.weight.unwrap_or(1.0)))
+            .map(|e| {
+                (
+                    e.source_id,
+                    e.target_id,
+                    e.kind.as_str().to_string(),
+                    e.weight.unwrap_or(1.0),
+                )
+            })
             .collect();
 
         Ok(PyGraphStreamer { nodes, edges })
@@ -485,17 +515,19 @@ impl PyCodeGraph {
         let backend = self.backend.clone();
         let rt = self.runtime.clone();
 
-        let nodes = py.allow_threads(move || {
-            rt.block_on(async move {
-                let files = backend.get_all_indexed_files().await?;
-                let mut all_nodes = Vec::new();
-                for file in &files {
-                    let nodes = backend.get_nodes_by_filepath(file).await?;
-                    all_nodes.extend(nodes);
-                }
-                cartograph_core::error::Result::Ok(all_nodes)
+        let nodes = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let files = backend.get_all_indexed_files().await?;
+                    let mut all_nodes = Vec::new();
+                    for file in &files {
+                        let nodes = backend.get_nodes_by_filepath(file).await?;
+                        all_nodes.extend(nodes);
+                    }
+                    cartograph_core::error::Result::Ok(all_nodes)
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         arrow_export::nodes_to_columnar_dict(py, &nodes)
     }
@@ -505,22 +537,24 @@ impl PyCodeGraph {
         let backend = self.backend.clone();
         let rt = self.runtime.clone();
 
-        let edges = py.allow_threads(move || {
-            rt.block_on(async move {
-                let files = backend.get_all_indexed_files().await?;
-                let mut all_nodes = Vec::new();
-                for file in &files {
-                    let nodes = backend.get_nodes_by_filepath(file).await?;
-                    all_nodes.extend(nodes);
-                }
-                let node_ids: Vec<String> = all_nodes.into_iter().map(|n| n.id).collect();
-                if node_ids.is_empty() {
-                    cartograph_core::error::Result::Ok(Vec::new())
-                } else {
-                    backend.get_edges_for_nodes(&node_ids, 0.0).await
-                }
+        let edges = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let files = backend.get_all_indexed_files().await?;
+                    let mut all_nodes = Vec::new();
+                    for file in &files {
+                        let nodes = backend.get_nodes_by_filepath(file).await?;
+                        all_nodes.extend(nodes);
+                    }
+                    let node_ids: Vec<String> = all_nodes.into_iter().map(|n| n.id).collect();
+                    if node_ids.is_empty() {
+                        cartograph_core::error::Result::Ok(Vec::new())
+                    } else {
+                        backend.get_edges_for_nodes(&node_ids, 0.0).await
+                    }
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         arrow_export::edges_to_columnar_dict(py, &edges)
     }
@@ -531,15 +565,17 @@ impl PyCodeGraph {
         let repo_root = self.repo_root.clone();
         let rt = self.runtime.clone();
 
-        let report = py.allow_threads(move || {
-            rt.block_on(async move {
-                let cfg = ComplexityConfig::default();
-                let mut opts = ComplexityAnalysisOptions::default();
-                opts.repo_root = repo_root;
-                opts.top_n = 500;
-                ComplexityEngine::analyze(backend.as_ref(), &cfg, &opts).await
+        let report = py
+            .allow_threads(move || {
+                rt.block_on(async move {
+                    let cfg = ComplexityConfig::default();
+                    let mut opts = ComplexityAnalysisOptions::default();
+                    opts.repo_root = repo_root;
+                    opts.top_n = 500;
+                    ComplexityEngine::analyze(backend.as_ref(), &cfg, &opts).await
+                })
             })
-        }).map_err(to_py_err)?;
+            .map_err(to_py_err)?;
 
         arrow_export::complexity_to_columnar_dict(py, &report.top_hotspots)
     }

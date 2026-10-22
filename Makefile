@@ -13,7 +13,7 @@ YELLOW := \033[1;33m
 RED := \033[1;31m
 NC := \033[0m
 
-.PHONY: all ci test lint fmt fmt-check build gates index lint-arch deadcode complexity config-validate clean help docs docs-serve docs-check docs-agent docs-man docs-clean
+.PHONY: all ci test lint fmt fmt-check build gates index lint-arch deadcode complexity config-validate clean help docs docs-serve docs-check docs-agent docs-man docs-clean python-build python-test python-publish
 
 all: ci
 
@@ -118,6 +118,25 @@ docs-man:
 docs-clean:
 	@echo -e "$(YELLOW)==> Cleaning documentation build artifacts...$(NC)"
 	rm -rf docs/_build/ docs/llms.txt docs/llms-full.txt
+
+## python-build: Build cartograph-python source distribution and release wheel
+python-build:
+	@echo -e "$(BLUE)==> Building cartograph-python sdist and wheel...$(NC)"
+	rm -rf dist/
+	.venv/bin/maturin sdist --manifest-path crates/cartograph-python/Cargo.toml --out dist
+	.venv/bin/maturin build --manifest-path crates/cartograph-python/Cargo.toml --release --out dist
+	@echo -e "$(GREEN)✔ Built artifacts in dist/$(NC)"
+
+## python-test: Run cartograph-python unit and integration test suite
+python-test:
+	@echo -e "$(BLUE)==> Running Python SDK tests...$(NC)"
+	.venv/bin/maturin develop --manifest-path crates/cartograph-python/Cargo.toml
+	.venv/bin/pytest crates/cartograph-python/tests
+
+## python-publish: Publish cartograph-python artifacts in dist/ to PyPI
+python-publish: python-build
+	@echo -e "$(BLUE)==> Publishing cartograph-python to PyPI...$(NC)"
+	.venv/bin/maturin publish --manifest-path crates/cartograph-python/Cargo.toml
 
 ## clean: Remove build artifacts, target folder, and local cartograph database
 clean:

@@ -81,9 +81,7 @@ impl DiagnoseEngine {
 
         // 4. Call-Path Reconstruction
         let reconstructor = CallPathReconstructor::new(self.backend.clone());
-        let (_transitions, _upstream) = reconstructor
-            .reconstruct(&frames, self.config.deep)
-            .await;
+        let (_transitions, _upstream) = reconstructor.reconstruct(&frames, self.config.deep).await;
 
         // 5. Semantic Fault Classification
         let category = FaultClassifier::classify(&crash_type, &crash_message);
@@ -183,9 +181,10 @@ impl DiagnoseEngine {
 
         // Apply patch if requested
         if self.config.apply_patch
-            && let Some(fix) = &suggested_fix {
-                let _ = self.apply_git_patch(&fix.unified_diff_patch);
-            }
+            && let Some(fix) = &suggested_fix
+        {
+            let _ = self.apply_git_patch(&fix.unified_diff_patch);
+        }
 
         let duration_ms = start_time.elapsed().as_millis() as u64;
         let report_id = format!("diag_{}", chrono::Utc::now().timestamp_millis());

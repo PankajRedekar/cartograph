@@ -2,9 +2,9 @@ use std::fs;
 use tempfile::tempdir;
 
 use cartograph_engine::skills::{
-    all_adapters, CheckStatus, InstallOptions,
-    SkillDoctor, SkillInstaller, SkillPreset, SkillRegistry, SkillUpdater, TargetIde,
-    TelemetryEvent, TelemetryRecorder, TemplateEngine, VerificationGateEngine,
+    CheckStatus, InstallOptions, SkillDoctor, SkillInstaller, SkillPreset, SkillRegistry,
+    SkillUpdater, TargetIde, TelemetryEvent, TelemetryRecorder, TemplateEngine,
+    VerificationGateEngine, all_adapters,
 };
 
 #[test]
@@ -34,9 +34,21 @@ fn test_skill_registry_all_canonical_skills() {
         assert_eq!(s.cartograph_version, "0.2.0");
         assert!(s.content_hash.starts_with("sha256:"));
         assert!(!s.triggers.is_empty(), "Skill {} must have triggers", id);
-        assert!(!s.cli_command.is_empty(), "Skill {} must have cli_command", id);
-        assert!(!s.template_content.is_empty(), "Skill {} template cannot be empty", id);
-        assert!(s.template_content.contains("---"), "Skill {} template must have frontmatter", id);
+        assert!(
+            !s.cli_command.is_empty(),
+            "Skill {} must have cli_command",
+            id
+        );
+        assert!(
+            !s.template_content.is_empty(),
+            "Skill {} template cannot be empty",
+            id
+        );
+        assert!(
+            s.template_content.contains("---"),
+            "Skill {} template must have frontmatter",
+            id
+        );
     }
 }
 
@@ -76,7 +88,10 @@ fn test_template_engine_atomic_write_and_backup() {
 
     // 3. Overwrite atomic
     TemplateEngine::write_file_atomic(&file_path, "overwritten content").unwrap();
-    assert_eq!(fs::read_to_string(&file_path).unwrap(), "overwritten content");
+    assert_eq!(
+        fs::read_to_string(&file_path).unwrap(),
+        "overwritten content"
+    );
     assert_eq!(fs::read_to_string(&bak_path).unwrap(), "initial content");
 }
 
@@ -96,7 +111,8 @@ fn test_template_engine_delimited_merging() {
     assert!(merged2.contains("Cartograph Rules v1"));
 
     // 3. Update existing delimited section in-place without altering user content
-    let merged3 = TemplateEngine::merge_delimited_content(&merged2, "Cartograph Rules v2 (Updated)");
+    let merged3 =
+        TemplateEngine::merge_delimited_content(&merged2, "Cartograph Rules v2 (Updated)");
     assert!(merged3.starts_with("# Existing User Guidelines\nDo not format code."));
     assert!(merged3.contains("Cartograph Rules v2 (Updated)"));
     assert!(!merged3.contains("Cartograph Rules v1"));
@@ -153,15 +169,28 @@ fn test_all_ide_adapters_scaffold_and_uninstall() {
         let written = adapter.install(root, &skills, false).unwrap();
         assert!(!written.is_empty(), "Adapter {:?} must write files", target);
         for p in &written {
-            assert!(p.exists(), "File {:?} written by {:?} must exist", p, target);
+            assert!(
+                p.exists(),
+                "File {:?} written by {:?} must exist",
+                p,
+                target
+            );
         }
 
         // 2. Detect
-        assert!(adapter.detect(root), "Adapter {:?} must detect workspace after install", target);
+        assert!(
+            adapter.detect(root),
+            "Adapter {:?} must detect workspace after install",
+            target
+        );
 
         // 3. Uninstall
         let removed = adapter.uninstall(root).unwrap();
-        assert!(!removed.is_empty(), "Adapter {:?} must remove files", target);
+        assert!(
+            !removed.is_empty(),
+            "Adapter {:?} must remove files",
+            target
+        );
     }
 }
 
@@ -183,8 +212,19 @@ fn test_skill_installer_and_universal_skills() {
 
     let report = SkillInstaller::install(&options).unwrap();
     assert_eq!(report.skills_written.len(), 11);
-    assert!(report.rules_written.iter().any(|p| p.ends_with("CLAUDE.md")));
-    assert!(root.join(".agent").join("skills").join("cartograph-locate").join("SKILL.md").exists());
+    assert!(
+        report
+            .rules_written
+            .iter()
+            .any(|p| p.ends_with("CLAUDE.md"))
+    );
+    assert!(
+        root.join(".agent")
+            .join("skills")
+            .join("cartograph-locate")
+            .join("SKILL.md")
+            .exists()
+    );
     assert!(root.join("CLAUDE.md").exists());
 
     // Check uninstall
@@ -221,7 +261,10 @@ content_hash: "sha256:old_hash"
 
     // Update with smart merge
     let update_report = SkillUpdater::update(root, false, false).unwrap();
-    assert_eq!(update_report.updated_skills, vec!["cartograph-locate".to_string()]);
+    assert_eq!(
+        update_report.updated_skills,
+        vec!["cartograph-locate".to_string()]
+    );
 
     let new_content = fs::read_to_string(&skill_file).unwrap();
     assert!(new_content.contains("cartograph_version: \"0.2.0\""));
@@ -244,7 +287,13 @@ fn test_skill_doctor_and_auto_remediation() {
     let fixed_report = SkillDoctor::diagnose(root, true);
     assert!(!fixed_report.auto_remediated.is_empty());
     // Skills should now be installed
-    assert!(root.join(".agent").join("skills").join("cartograph-verify").join("SKILL.md").exists());
+    assert!(
+        root.join(".agent")
+            .join("skills")
+            .join("cartograph-verify")
+            .join("SKILL.md")
+            .exists()
+    );
 }
 
 #[test]
@@ -297,10 +346,7 @@ async fn test_verification_gate_engine_structure() {
 
     let report = VerificationGateEngine::run_verification(
         None, // No backend in ephemeral test
-        root,
-        true,
-        None,
-        false,
+        root, true, None, false,
     )
     .await;
 

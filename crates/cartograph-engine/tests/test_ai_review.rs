@@ -404,7 +404,10 @@ fn test_iteration_review_delta_and_verify_fixes() {
 
     // Round 1: finding_1 and finding_2 are reported
     mem_mgr
-        .save_review_round(&[finding_1.clone(), finding_2.clone()], Some("sha1".to_string()))
+        .save_review_round(
+            &[finding_1.clone(), finding_2.clone()],
+            Some("sha1".to_string()),
+        )
         .unwrap();
 
     // Round 2: Author fixed finding_1, finding_2 remains, and finding_3 is a new regression

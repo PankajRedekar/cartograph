@@ -1,5 +1,5 @@
-use pyo3::prelude::*;
 use cartograph_core::model::{DeadCodeReport, DeadSymbolItem};
+use pyo3::prelude::*;
 
 #[pyclass(name = "DeadSymbolItem", frozen)]
 #[derive(Clone, Debug)]
@@ -109,9 +109,17 @@ impl PyDeadCodeReport {
 impl From<DeadCodeReport> for PyDeadCodeReport {
     fn from(r: DeadCodeReport) -> Self {
         let total_dead_loc = r.impact.total_dead_loc;
-        let dead_symbols = r.dead_symbols.into_iter().map(PyDeadSymbolItem::from).collect::<Vec<_>>();
+        let dead_symbols = r
+            .dead_symbols
+            .into_iter()
+            .map(PyDeadSymbolItem::from)
+            .collect::<Vec<_>>();
         let total_dead_symbols = dead_symbols.len();
-        let ghost_dependencies = r.ghost_dependencies.into_iter().map(|g| g.package_name).collect();
+        let ghost_dependencies = r
+            .ghost_dependencies
+            .into_iter()
+            .map(|g| g.package_name)
+            .collect();
         Self {
             total_scanned_symbols: r.total_scanned_symbols,
             total_dead_symbols,

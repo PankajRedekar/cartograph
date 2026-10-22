@@ -197,7 +197,10 @@ describe('Regression reproducer: {func}', () => {{
         line: usize,
     ) -> RegressionTestReproducer {
         let test_name = format!("TestRegression_{func}_{category}");
-        let stem = file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("service");
+        let stem = file_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("service");
         let target_file = PathBuf::from(format!("{stem}_regression_test.go"));
 
         let test_code = format!(
@@ -261,7 +264,13 @@ func {test_name}(t *testing.T) {{
 fn sanitize_identifier(raw: &str) -> String {
     let clean: String = raw
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     if clean.is_empty() || clean.starts_with(|c: char| c.is_ascii_digit()) {
         format!("sym_{clean}")

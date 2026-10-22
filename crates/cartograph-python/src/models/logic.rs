@@ -1,5 +1,5 @@
-use pyo3::prelude::*;
 use cartograph_core::logic::BusinessRule;
+use pyo3::prelude::*;
 
 #[pyclass(name = "BusinessRule", frozen)]
 #[derive(Clone, Debug)]
@@ -85,7 +85,10 @@ impl PyLogicReport {
 
 impl From<Vec<BusinessRule>> for PyLogicReport {
     fn from(rules: Vec<BusinessRule>) -> Self {
-        let py_rules = rules.into_iter().map(PyBusinessRule::from).collect::<Vec<_>>();
+        let py_rules = rules
+            .into_iter()
+            .map(PyBusinessRule::from)
+            .collect::<Vec<_>>();
         let total_rules = py_rules.len();
         Self {
             total_rules,

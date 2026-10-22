@@ -1,6 +1,6 @@
-use cartograph_core::diagram::{DiagramGraph, DiagramTheme};
 use super::mermaid::MermaidRenderer;
 use super::svg::SvgRenderer;
+use cartograph_core::diagram::{DiagramGraph, DiagramTheme};
 
 pub struct HtmlRenderer;
 
@@ -201,7 +201,8 @@ impl HtmlRenderer {
             nodes_count = graph.nodes.len(),
             edges_count = graph.edges.len(),
             svg_content = svg_content,
-            mermaid_json = serde_json::to_string(&mermaid_content).unwrap_or_else(|_| "\"\"".to_string()),
+            mermaid_json =
+                serde_json::to_string(&mermaid_content).unwrap_or_else(|_| "\"\"".to_string()),
         )
     }
 }

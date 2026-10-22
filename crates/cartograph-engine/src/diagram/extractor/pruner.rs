@@ -18,8 +18,14 @@ pub fn prune_graph_centrality(graph: &mut DiagramGraph, focus_id: Option<&str>, 
     for edge in &graph.edges {
         *out_degrees.entry(edge.source_id.clone()).or_insert(0) += 1;
         *in_degrees.entry(edge.target_id.clone()).or_insert(0) += 1;
-        adjacency.entry(edge.source_id.clone()).or_default().push(edge.target_id.clone());
-        adjacency.entry(edge.target_id.clone()).or_default().push(edge.source_id.clone());
+        adjacency
+            .entry(edge.source_id.clone())
+            .or_default()
+            .push(edge.target_id.clone());
+        adjacency
+            .entry(edge.target_id.clone())
+            .or_default()
+            .push(edge.source_id.clone());
     }
 
     // 2. Compute hop distance from focus node (if provided)
@@ -91,7 +97,9 @@ pub fn prune_graph_centrality(graph: &mut DiagramGraph, focus_id: Option<&str>, 
 
     // Retain nodes and edges
     graph.nodes.retain(|n| kept_ids.contains(&n.id));
-    graph.edges.retain(|e| kept_ids.contains(&e.source_id) && kept_ids.contains(&e.target_id));
+    graph
+        .edges
+        .retain(|e| kept_ids.contains(&e.source_id) && kept_ids.contains(&e.target_id));
 
     // Clean up empty clusters
     let active_cluster_ids: HashSet<String> = graph
@@ -99,14 +107,18 @@ pub fn prune_graph_centrality(graph: &mut DiagramGraph, focus_id: Option<&str>, 
         .iter()
         .filter_map(|n| n.cluster_id.clone())
         .collect();
-    graph.clusters.retain(|c| active_cluster_ids.contains(&c.id));
+    graph
+        .clusters
+        .retain(|c| active_cluster_ids.contains(&c.id));
 }
 
 /// Transitive reduction for clean DAG hierarchies: removes direct edge A -> C if path A -> B -> C exists
 pub fn transitive_reduction(edges: &[DiagramEdge]) -> Vec<DiagramEdge> {
     let mut adj: HashMap<String, Vec<String>> = HashMap::new();
     for e in edges {
-        adj.entry(e.source_id.clone()).or_default().push(e.target_id.clone());
+        adj.entry(e.source_id.clone())
+            .or_default()
+            .push(e.target_id.clone());
     }
 
     let mut reachable_2plus: HashSet<(String, String)> = HashSet::new();

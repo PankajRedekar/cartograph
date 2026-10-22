@@ -47,28 +47,44 @@ impl DiffImpactExtractor {
 
         // If no git changes detected, create representative demo nodes for PR review preview
         if all_diagram_nodes.is_empty() {
-            let mut mod_node = DiagramNode::new("modified_symbol", "calculate_tax (PR Change)", NodeKind::Function);
+            let mut mod_node = DiagramNode::new(
+                "modified_symbol",
+                "calculate_tax (PR Change)",
+                NodeKind::Function,
+            );
             mod_node.diff_status = Some(DiagramDiffStatus::Modified);
             mod_node.filepath = "src/pricing/tax.rs".to_string();
 
-            let mut caller_1 = DiagramNode::new("caller_1", "CheckoutAPI (1st-hop Blast Radius)", NodeKind::Function);
+            let mut caller_1 = DiagramNode::new(
+                "caller_1",
+                "CheckoutAPI (1st-hop Blast Radius)",
+                NodeKind::Function,
+            );
             caller_1.diff_status = Some(DiagramDiffStatus::BlastRadiusHazard);
             caller_1.filepath = "src/api/checkout.rs".to_string();
 
-            let mut caller_2 = DiagramNode::new("caller_2", "CartService (1st-hop Blast Radius)", NodeKind::Function);
+            let mut caller_2 = DiagramNode::new(
+                "caller_2",
+                "CartService (1st-hop Blast Radius)",
+                NodeKind::Function,
+            );
             caller_2.diff_status = Some(DiagramDiffStatus::BlastRadiusHazard);
             caller_2.filepath = "src/cart/service.rs".to_string();
 
-            let mut test_node = DiagramNode::new("test_1", "test_tax_calc [Covered]", NodeKind::Function);
+            let mut test_node =
+                DiagramNode::new("test_1", "test_tax_calc [Covered]", NodeKind::Function);
             test_node.filepath = "tests/tax_test.rs".to_string();
 
             graph.nodes = vec![mod_node, caller_1, caller_2, test_node];
 
-            let mut e1 = DiagramEdge::new("caller_1", "modified_symbol", EdgeKind::Calls).with_label("invokes");
+            let mut e1 = DiagramEdge::new("caller_1", "modified_symbol", EdgeKind::Calls)
+                .with_label("invokes");
             e1.style = DiagramEdgeStyle::BoldWarning;
-            let mut e2 = DiagramEdge::new("caller_2", "modified_symbol", EdgeKind::Calls).with_label("invokes");
+            let mut e2 = DiagramEdge::new("caller_2", "modified_symbol", EdgeKind::Calls)
+                .with_label("invokes");
             e2.style = DiagramEdgeStyle::BoldWarning;
-            let mut e3 = DiagramEdge::new("test_1", "modified_symbol", EdgeKind::Tests).with_label("verifies");
+            let mut e3 = DiagramEdge::new("test_1", "modified_symbol", EdgeKind::Tests)
+                .with_label("verifies");
             e3.style = DiagramEdgeStyle::Dashed;
 
             graph.edges = vec![e1, e2, e3];
@@ -82,11 +98,14 @@ impl DiffImpactExtractor {
         for mod_id in &modified_node_ids {
             let callers = backend.get_upstream_impact(mod_id, 1).await?;
             for caller in callers {
-                let mut edge = DiagramEdge::new(&caller.id, mod_id, EdgeKind::Calls).with_label("hazard blast path");
+                let mut edge = DiagramEdge::new(&caller.id, mod_id, EdgeKind::Calls)
+                    .with_label("hazard blast path");
                 edge.style = DiagramEdgeStyle::BoldWarning;
                 edges.push(edge);
 
-                if !modified_node_ids.contains(&caller.id) && hazard_node_ids.insert(caller.id.clone()) {
+                if !modified_node_ids.contains(&caller.id)
+                    && hazard_node_ids.insert(caller.id.clone())
+                {
                     let mut dnode = DiagramNode::new(&caller.id, &caller.name, caller.kind);
                     dnode.filepath = caller.filepath.clone();
                     dnode.diff_status = Some(DiagramDiffStatus::BlastRadiusHazard);
@@ -117,9 +136,7 @@ fn get_git_changed_files(branch: Option<&str>, staged: bool) -> Vec<String> {
         args.push("HEAD~1");
     }
 
-    let output = std::process::Command::new("git")
-        .args(&args)
-        .output();
+    let output = std::process::Command::new("git").args(&args).output();
 
     if let Ok(out) = output
         && out.status.success()

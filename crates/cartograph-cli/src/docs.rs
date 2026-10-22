@@ -24,7 +24,10 @@ pub fn generate_cli_reference<P: AsRef<Path>>(
             continue;
         }
 
-        let about = subcmd.get_about().map(|s| s.to_string()).unwrap_or_default();
+        let about = subcmd
+            .get_about()
+            .map(|s| s.to_string())
+            .unwrap_or_default();
         command_summaries.push((name.to_string(), about.clone()));
 
         let markdown = generate_subcommand_markdown("cartograph", subcmd);

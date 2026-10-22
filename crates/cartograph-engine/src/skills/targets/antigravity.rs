@@ -1,8 +1,8 @@
-use std::fs;
-use std::path::{Path, PathBuf};
 use crate::skills::registry::{SkillDefinition, TargetIde};
 use crate::skills::targets::IdeAdapter;
 use crate::skills::template::TemplateEngine;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct AntigravityAdapter;
 
@@ -15,7 +15,12 @@ impl IdeAdapter for AntigravityAdapter {
         root.join(".agent").is_dir() || root.join(".agents").is_dir()
     }
 
-    fn install(&self, root: &Path, skills: &[SkillDefinition], _force: bool) -> Result<Vec<PathBuf>, String> {
+    fn install(
+        &self,
+        root: &Path,
+        skills: &[SkillDefinition],
+        _force: bool,
+    ) -> Result<Vec<PathBuf>, String> {
         let mut written = Vec::new();
 
         // 1. Install individual skills in .agents/skills/<skill-id>/SKILL.md
@@ -23,7 +28,8 @@ impl IdeAdapter for AntigravityAdapter {
         for skill in skills {
             let skill_dir = base_skills_dir.join(&skill.id);
             let skill_file = skill_dir.join("SKILL.md");
-            TemplateEngine::write_file_atomic(&skill_file, skill.template_content).map_err(|e| e.to_string())?;
+            TemplateEngine::write_file_atomic(&skill_file, skill.template_content)
+                .map_err(|e| e.to_string())?;
             written.push(skill_file);
         }
 
@@ -57,7 +63,8 @@ Equips the agent with high-speed AST navigation, impact analysis, and closed-loo
 - Telemetry: `cartograph skills stats`
 "#;
 
-        TemplateEngine::write_file_atomic(&assistant_file, assistant_content).map_err(|e| e.to_string())?;
+        TemplateEngine::write_file_atomic(&assistant_file, assistant_content)
+            .map_err(|e| e.to_string())?;
         written.push(assistant_file);
 
         Ok(written)
@@ -66,16 +73,16 @@ Equips the agent with high-speed AST navigation, impact analysis, and closed-loo
     fn uninstall(&self, root: &Path) -> Result<Vec<PathBuf>, String> {
         let mut removed = Vec::new();
         let base_skills_dir = root.join(".agents").join("skills");
-        if base_skills_dir.exists() {
-            if let Ok(entries) = fs::read_dir(&base_skills_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir() {
-                        let name = path.file_name().unwrap_or_default().to_string_lossy();
-                        if name.starts_with("cartograph") {
-                            let _ = fs::remove_dir_all(&path);
-                            removed.push(path);
-                        }
+        if base_skills_dir.exists()
+            && let Ok(entries) = fs::read_dir(&base_skills_dir)
+        {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().unwrap_or_default().to_string_lossy();
+                    if name.starts_with("cartograph") {
+                        let _ = fs::remove_dir_all(&path);
+                        removed.push(path);
                     }
                 }
             }

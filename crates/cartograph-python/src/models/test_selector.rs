@@ -1,6 +1,6 @@
-use pyo3::prelude::*;
 use crate::models::node::PyNode;
 use cartograph_core::model::{SelectedTest, TestSelectionReport};
+use pyo3::prelude::*;
 
 #[pyclass(name = "SelectedTest", frozen)]
 #[derive(Clone, Debug)]
@@ -97,7 +97,11 @@ impl PyTestSelectorResult {
 
 impl From<TestSelectionReport> for PyTestSelectorResult {
     fn from(r: TestSelectionReport) -> Self {
-        let selected_tests = r.selected_tests.into_iter().map(PySelectedTest::from).collect();
+        let selected_tests = r
+            .selected_tests
+            .into_iter()
+            .map(PySelectedTest::from)
+            .collect();
         Self {
             total_tests_selected: r.total_tests_selected,
             total_test_files_count: r.total_test_files_count,

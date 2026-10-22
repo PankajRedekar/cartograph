@@ -1,5 +1,5 @@
-use pyo3::prelude::*;
 use cartograph_core::model::{ComplexityRecord, ComplexityReport};
+use pyo3::prelude::*;
 
 #[pyclass(name = "ComplexityRecord", frozen)]
 #[derive(Clone, Debug)]
@@ -99,7 +99,10 @@ impl PyComplexityReport {
     fn __repr__(&self) -> String {
         format!(
             "<ComplexityReport analyzed={} hotspots={} danger_zone={} avg_cog={:.1}>",
-            self.total_analyzed, self.critical_hotspots_count, self.danger_zone_count, self.avg_cognitive
+            self.total_analyzed,
+            self.critical_hotspots_count,
+            self.danger_zone_count,
+            self.avg_cognitive
         )
     }
 
@@ -123,7 +126,11 @@ impl PyComplexityReport {
 
 impl From<ComplexityReport> for PyComplexityReport {
     fn from(r: ComplexityReport) -> Self {
-        let top_hotspots = r.top_hotspots.into_iter().map(PyComplexityRecord::from).collect();
+        let top_hotspots = r
+            .top_hotspots
+            .into_iter()
+            .map(PyComplexityRecord::from)
+            .collect();
         Self {
             total_analyzed: r.total_analyzed,
             god_classes_detected: r.god_classes_detected,

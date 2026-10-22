@@ -1,3 +1,6 @@
+#![allow(unexpected_cfgs)]
+#![allow(clippy::all)]
+
 use pyo3::prelude::*;
 
 pub mod arrow_export;
@@ -15,7 +18,10 @@ use networkx_export::PyGraphStreamer;
 fn _cartograph(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Exceptions
     m.add("CartographError", py.get_type_bound::<CartographError>())?;
-    m.add("SymbolNotFoundError", py.get_type_bound::<SymbolNotFoundError>())?;
+    m.add(
+        "SymbolNotFoundError",
+        py.get_type_bound::<SymbolNotFoundError>(),
+    )?;
     m.add("DatabaseError", py.get_type_bound::<DatabaseError>())?;
     m.add("AnalysisError", py.get_type_bound::<AnalysisError>())?;
 

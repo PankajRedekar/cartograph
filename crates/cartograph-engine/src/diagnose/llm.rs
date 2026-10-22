@@ -37,7 +37,11 @@ impl DiagnosticLlmClient {
         provenance: Option<&ProvenanceSlice>,
         root_cause: Option<&FaultCandidate>,
         category: FaultCategory,
-    ) -> (Option<String>, Option<SuggestedFix>, DiagnosticExecutionMode) {
+    ) -> (
+        Option<String>,
+        Option<SuggestedFix>,
+        DiagnosticExecutionMode,
+    ) {
         if self.config.offline {
             return (None, None, DiagnosticExecutionMode::OfflineDeterministic);
         }
@@ -206,7 +210,9 @@ impl DiagnosticLlmClient {
                     .await
                     .map_err(|e| format!("Failed to parse response: {e}"))?;
 
-                let content = body["choices"][0]["message"]["content"].as_str().unwrap_or("{}");
+                let content = body["choices"][0]["message"]["content"]
+                    .as_str()
+                    .unwrap_or("{}");
                 Self::extract_json_response(content)
             }
             _ => Err(format!("Unsupported provider: {provider}")),
