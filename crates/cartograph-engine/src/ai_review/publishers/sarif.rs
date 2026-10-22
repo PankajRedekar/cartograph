@@ -58,7 +58,7 @@ impl SarifPublisher {
                     "tool": {
                         "driver": {
                             "name": "cartograph-ai-review",
-                            "semanticVersion": "0.2.0",
+                            "semanticVersion": "0.2.1",
                             "informationUri": "https://github.com/pankajredekar/cartograph",
                             "rules": [
                                 {

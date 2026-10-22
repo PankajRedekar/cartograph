@@ -9,7 +9,7 @@ from datetime import datetime
 project = "Cartograph"
 copyright = f"{datetime.now().year}, Cartograph Engineering Team"
 author = "Cartograph Engineering Team"
-release = "0.2.0"
+release = "0.2.1"
 version = "0.2"
 
 # General Sphinx Configuration

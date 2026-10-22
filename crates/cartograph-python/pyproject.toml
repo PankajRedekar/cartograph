@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "cartograph-python"
-version = "0.2.0"
+version = "0.2.1"
 description = "Ultra-Fast Native AST Code Graph & Graph Data Science SDK"
 authors = [{ name = "Pankaj Redekar" }]
 readme = "README.md"

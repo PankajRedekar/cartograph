@@ -159,7 +159,7 @@ pub enum SkillsCommands {
 #[derive(Parser, Debug)]
 #[command(name = "cartograph")]
 #[command(author = "Pankaj Redekar")]
-#[command(version = "0.2.0")]
+#[command(version = "0.2.1")]
 #[command(about = "Ultra-Fast Native AST Code Graph & Indexing Engine", long_about = None)]
 struct Cli {
     #[command(subcommand)]
